@@ -79,6 +79,8 @@ PROMO_MIN_POOL = 10
 # 平滑与持续性: EMA alpha≈1/3 (约 5 日), 阶段切换需连续 CONFIRM_DAYS 日同标签
 _EMA_ALPHA = 1.0 / 3.0
 _CONFIRM_DAYS = 2
+# 五档状态(regime_builder.smooth_state_series)的持续性确认天数; 同一语义, 共用同一常量
+_STATE_CONFIRM_DAYS = _CONFIRM_DAYS
 # 大盘弱档否决: 正面阶段(主升/高潮/启动)不允许出现在 5 档 state 为弱势/偏弱的日子。
 # 涨停梯队可能与大盘背离(如 2024-01 微盘崩期间中字头涨停生态走强), 该否决
 # 保证"主升"标签在大盘层面也成立; state 列缺失时(单元测试)不启用否决。

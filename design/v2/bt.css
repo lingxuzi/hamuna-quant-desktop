@@ -1,0 +1,59 @@
+/* frontend_v2 · 第三批公共层 —— 回测 6 页共用
+   回测的语言是「配置栏 + 结果区」：左 320px 配置，右结果；
+   结果区一律读数字带 → 图表 → 表格，三段顺序固定。 */
+
+/* 配置栏: 1px hairline, 不做卡片容器 */
+.cfg{border-right:1px solid var(--rule);padding:0 16px 16px 0;min-width:0}
+.cfg .grp{margin-top:14px}
+.cfg .grp > h4{margin:0 0 6px;font-size:9px;letter-spacing:.14em;color:var(--ink-3);font-weight:400}
+.cfg label{display:block;font-size:10.5px;color:var(--ink-2);margin-bottom:4px}
+.cfg .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cfg input[type=text],.cfg input[type=number],.cfg input[type=date],.cfg select{
+  width:100%;font:inherit;font-size:11px;background:var(--leaf);color:var(--ink);
+  border:1px solid var(--rule);padding:5px 7px;border-radius:0;outline:none}
+.cfg input:focus-visible,.cfg select:focus-visible{outline:2px solid var(--ochre);outline-offset:1px}
+.cfg .hint{font-size:9.5px;color:var(--ink-3);margin-top:4px;line-height:1.6}
+.cfg .run{width:100%;margin-top:16px}
+
+/* 两栏骨架 */
+.bt{display:grid;grid-template-columns:300px minmax(0,1fr);border-top:1px solid var(--rule-strong);margin-top:2px}
+.bt .main{padding-left:20px;min-width:0}
+
+/* 结果读数带: 6~8 格等宽, gap-px 手法 */
+.readout{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--rule);
+         border:1px solid var(--rule);margin-top:2px}
+.readout > div{background:var(--paper);padding:9px 11px 10px}
+.readout k{display:block;font-size:9px;letter-spacing:.1em;color:var(--ink-3)}
+.readout v{display:block;font-family:var(--mono);font-size:15px;margin-top:3px;font-variant-numeric:tabular-nums}
+.readout small{display:block;font-size:9.5px;color:var(--ink-3);margin-top:2px;font-family:var(--mono)}
+.readout .up v{color:var(--up)} .readout .down v{color:var(--down)}
+
+/* 页内分段 */
+.bt-seg{display:flex;align-items:center;gap:14px;padding:9px 0 0}
+.bt-seg .num-tabs{display:flex;border-bottom:1px solid var(--rule)}
+.bt-seg .num-tabs button{font:inherit;font-size:11px;background:none;border:0;padding:5px 11px;
+  color:var(--ink-3);border-bottom:2px solid transparent;cursor:pointer}
+.bt-seg .num-tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--ochre)}
+
+/* 通用名录表 */
+.bt-tbl{width:100%;font-size:11.5px;table-layout:fixed;margin-top:2px}
+.bt-tbl th{font-weight:400;font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+           padding:0 8px 7px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.bt-tbl th:first-child,.bt-tbl td:first-child{text-align:left}
+.bt-tbl td{padding:0 8px;height:29px;border-bottom:1px solid var(--rule);color:var(--ink-2);
+           text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-tbl td:first-child{font-family:var(--sans);color:var(--ink)}
+.bt-tbl tbody tr:hover{background:var(--ochre-wash)}
+.bt-tbl .up{color:var(--up)} .bt-tbl .down{color:var(--down)}
+
+/* 空态: 可执行, 不是装饰 */
+.bt-empty{padding:34px 0 30px;max-width:560px}
+.bt-empty .em{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--ochre)}
+.bt-empty h2{font-size:17px;font-weight:500;margin-top:10px;letter-spacing:-.01em}
+.bt-empty p{font-size:12px;line-height:1.85;color:var(--ink-2);margin-top:8px}
+
+/* 结果区里的图表行 */
+.chart-row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+.pending{display:flex;align-items:center;justify-content:center;text-align:center;
+         font-size:11px;line-height:1.9;color:var(--ink-3)}

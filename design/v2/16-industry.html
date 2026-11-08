@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 16 行业板块</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html" class="on"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">行业板块<i>SECTOR · INDUSTRY</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">行</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip">90 个行业</span><span class="tb-chip">收盘 11-06</span><span class="tb-chip warn">普跌 792 : 4,774</span></div>
+    <div class="tb-right"><button class="tb-btn">配置数据源</button></div>
+  </div>
+<div class="b4h"><div><k>上 涨 / 下 跌 家 数</k><v class="">792 / 4,774</v><div class="brd"><i class="u" style="width:14.2%"></i><i class="d" style="width:85.8%"></i></div><small>全部 5,571 只有价个股</small></div><div><k>行 业 中 位 涨 幅</k><v class="up">-1.62%</v><small>90 个同花顺一级行业</small></div><div><k>领 涨 行 业</k><v class="">种植业与林业</v><small>+1.67% · 18/29 只上涨</small></div><div><k>全 场 成 交 额</k><v class="">—</v><small>亿元 · 行业口径不覆盖全市场</small></div></div>
+<div class="b4s">
+  <div>
+    <div class="fig-h" style="margin-top:0">涨 幅 榜 · 前 16</div>
+    <table class="b4t"><colgroup><col><col style="width:66px"><col style="width:66px"><col style="width:48px"><col style="width:62px"><col style="width:70px"></colgroup>
+      <thead><tr><th scope="col">行业</th><th scope="col">均涨幅</th><th scope="col">中位</th><th scope="col">上涨占比</th><th scope="col">成交额(亿)</th><th scope="col">领涨股</th></tr></thead>
+      <tbody><tr class="on"><td><span class="rk">01</span>种植业与林业</td><td class="up">+1.67%</td><td>+0.72%</td><td>62%</td><td>94</td><td>+11.5%</td></tr><tr><td><span class="rk">02</span>银行</td><td class="up">+0.99%</td><td>+0.90%</td><td>88%</td><td>354</td><td>+4.3%</td></tr><tr><td><span class="rk">03</span>公路铁路运输</td><td class="up">+0.98%</td><td>+0.48%</td><td>72%</td><td>54</td><td>+10.1%</td></tr><tr><td><span class="rk">04</span>电力</td><td class="up">+0.76%</td><td>+0.23%</td><td>59%</td><td>349</td><td>+10.0%</td></tr><tr><td><span class="rk">05</span>农产品加工</td><td class="up">+0.04%</td><td>-0.28%</td><td>40%</td><td>106</td><td>+10.0%</td></tr><tr><td><span class="rk">06</span>养殖业</td><td class="up">+0.03%</td><td>-0.56%</td><td>28%</td><td>68</td><td>+12.7%</td></tr><tr><td><span class="rk">07</span>厨卫电器</td><td class="down">-0.03%</td><td>-0.69%</td><td>33%</td><td>10</td><td>+10.0%</td></tr><tr><td><span class="rk">08</span>燃气</td><td class="down">-0.32%</td><td>-0.00%</td><td>48%</td><td>24</td><td>+6.4%</td></tr><tr><td><span class="rk">09</span>保险</td><td class="down">-0.48%</td><td>-0.55%</td><td>20%</td><td>54</td><td>+0.3%</td></tr><tr><td><span class="rk">10</span>纺织制造</td><td class="down">-0.51%</td><td>-1.36%</td><td>27%</td><td>40</td><td>+10.0%</td></tr><tr><td><span class="rk">11</span>光伏设备</td><td class="down">-0.51%</td><td>-2.04%</td><td>25%</td><td>501</td><td>+20.0%</td></tr><tr><td><span class="rk">12</span>贸易</td><td class="down">-0.53%</td><td>-1.18%</td><td>14%</td><td>16</td><td>+10.0%</td></tr><tr><td><span class="rk">13</span>油气开采及服务</td><td class="down">-0.69%</td><td>-0.73%</td><td>32%</td><td>49</td><td>+1.7%</td></tr><tr><td><span class="rk">14</span>农化制品</td><td class="down">-0.73%</td><td>-0.90%</td><td>20%</td><td>90</td><td>+10.1%</td></tr><tr><td><span class="rk">15</span>煤炭开采加工</td><td class="down">-0.79%</td><td>-0.96%</td><td>18%</td><td>104</td><td>+3.1%</td></tr><tr><td><span class="rk">16</span>中药</td><td class="down">-0.80%</td><td>-1.09%</td><td>22%</td><td>92</td><td>+9.4%</td></tr></tbody></table>
+    <div class="fig-h">跌 幅 榜 · 末 8</div>
+    <table class="b4t"><colgroup><col><col style="width:66px"><col style="width:66px"><col style="width:48px"><col style="width:62px"><col style="width:70px"></colgroup>
+      <tbody><tr><td><span class="rk">01</span>游戏</td><td class="down">-2.90%</td><td>-2.42%</td><td>0%</td><td>113</td><td>-0.2%</td></tr><tr><td><span class="rk">02</span>其他电子</td><td class="down">-3.35%</td><td>-3.53%</td><td>6%</td><td>120</td><td>+10.1%</td></tr><tr><td><span class="rk">03</span>半导体</td><td class="down">-3.37%</td><td>-3.53%</td><td>10%</td><td>2,264</td><td>+6.9%</td></tr><tr><td><span class="rk">04</span>医疗服务</td><td class="down">-3.39%</td><td>-3.50%</td><td>7%</td><td>301</td><td>+10.1%</td></tr><tr><td><span class="rk">05</span>自动化设备</td><td class="down">-3.56%</td><td>-3.45%</td><td>3%</td><td>347</td><td>+3.6%</td></tr><tr><td><span class="rk">06</span>电子化学品</td><td class="down">-3.91%</td><td>-3.57%</td><td>0%</td><td>219</td><td>-0.4%</td></tr><tr><td><span class="rk">07</span>通信设备</td><td class="down">-3.92%</td><td>-3.73%</td><td>8%</td><td>966</td><td>+2.6%</td></tr><tr><td><span class="rk">08</span>元件</td><td class="down">-5.48%</td><td>-5.29%</td><td>2%</td><td>793</td><td>+0.1%</td></tr></tbody></table>
+  </div>
+  <div>
+    <div class="fig-h" style="margin-top:0">板 块 色 阶 · 前 36</div>
+    <div class="heat" style="grid-template-columns:repeat(4,minmax(0,1fr))"><a href="#" style="background:color-mix(in srgb, var(--up) 36%, var(--leaf));color:var(--ink)"><b>种植业与林业</b><em>+1.67%</em><small>29 只</small></a><a href="#" style="background:color-mix(in srgb, var(--up) 26%, var(--leaf));color:var(--ink)"><b>银行</b><em>+0.99%</em><small>42 只</small></a><a href="#" style="background:color-mix(in srgb, var(--up) 25%, var(--leaf));color:var(--ink)"><b>公路铁路运输</b><em>+0.98%</em><small>32 只</small></a><a href="#" style="background:color-mix(in srgb, var(--up) 22%, var(--leaf));color:var(--ink)"><b>电力</b><em>+0.76%</em><small>110 只</small></a><a href="#" style="background:color-mix(in srgb, var(--up) 18%, var(--leaf));color:var(--ink)"><b>农产品加工</b><em>+0.04%</em><small>43 只</small></a><a href="#" style="background:color-mix(in srgb, var(--up) 18%, var(--leaf));color:var(--ink)"><b>养殖业</b><em>+0.03%</em><small>36 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>厨卫电器</b><em>-0.03%</em><small>9 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>燃气</b><em>-0.32%</em><small>27 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>保险</b><em>-0.48%</em><small>5 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>纺织制造</b><em>-0.51%</em><small>33 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>光伏设备</b><em>-0.51%</em><small>71 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 18%, var(--leaf));color:var(--ink)"><b>贸易</b><em>-0.53%</em><small>14 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 21%, var(--leaf));color:var(--ink)"><b>油气开采及服务</b><em>-0.69%</em><small>19 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 22%, var(--leaf));color:var(--ink)"><b>农化制品</b><em>-0.73%</em><small>61 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 23%, var(--leaf));color:var(--ink)"><b>煤炭开采加工</b><em>-0.79%</em><small>34 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 23%, var(--leaf));color:var(--ink)"><b>中药</b><em>-0.80%</em><small>68 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 24%, var(--leaf));color:var(--ink)"><b>环境治理</b><em>-0.89%</em><small>110 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 24%, var(--leaf));color:var(--ink)"><b>机场航运</b><em>-0.91%</em><small>13 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 26%, var(--leaf));color:var(--ink)"><b>物流</b><em>-1.00%</em><small>50 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 26%, var(--leaf));color:var(--ink)"><b>证券</b><em>-1.04%</em><small>48 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 26%, var(--leaf));color:var(--ink)"><b>轨交设备</b><em>-1.04%</em><small>30 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 28%, var(--leaf));color:var(--ink)"><b>钢铁</b><em>-1.13%</em><small>44 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 28%, var(--leaf));color:var(--ink)"><b>食品加工制造</b><em>-1.14%</em><small>66 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 28%, var(--leaf));color:var(--ink)"><b>综合</b><em>-1.16%</em><small>18 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 28%, var(--leaf));color:var(--ink)"><b>港口航运</b><em>-1.17%</em><small>36 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 29%, var(--leaf));color:var(--ink)"><b>文化传媒</b><em>-1.19%</em><small>85 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 29%, var(--leaf));color:var(--ink)"><b>多元金融</b><em>-1.20%</em><small>26 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 29%, var(--leaf));color:var(--ink)"><b>影视院线</b><em>-1.21%</em><small>20 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 30%, var(--leaf));color:var(--ink)"><b>汽车整车</b><em>-1.28%</em><small>23 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 30%, var(--leaf));color:var(--ink)"><b>教育</b><em>-1.29%</em><small>15 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 30%, var(--leaf));color:var(--ink)"><b>军工装备</b><em>-1.30%</em><small>82 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 31%, var(--leaf));color:var(--ink)"><b>电网设备</b><em>-1.34%</em><small>140 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 32%, var(--leaf));color:var(--ink)"><b>医药商业</b><em>-1.37%</em><small>32 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 32%, var(--leaf));color:var(--ink)"><b>非金属材料</b><em>-1.38%</em><small>17 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 32%, var(--leaf));color:var(--ink)"><b>化学纤维</b><em>-1.41%</em><small>29 只</small></a><a href="#" style="background:color-mix(in srgb, var(--down) 32%, var(--leaf));color:var(--ink)"><b>化学原料</b><em>-1.42%</em><small>59 只</small></a></div>
+    <div class="fig-h">行 业 广 度</div>
+    <table class="b4t"><colgroup><col><col style="width:60px"><col style="width:70px"></colgroup>
+      <tbody>
+        <tr><td>平均上涨占比</td><td class="up">90</td><td>4 涨 / 86 跌</td></tr><tr><td>景气与广度背离</td><td class="up">90</td><td>2 涨 / 88 跌</td></tr>
+      </tbody></table>
+    <div class="note" style="margin-top:14px;border-top:0;padding-top:0">
+      圈层口径 · 同花顺一级行业 · 只计当日有成交价的个股。
+    </div>
+  </div>
+</div>
+<div class="note">
+<b>数据来源与口径</b><br>
+行业归属 ← <code>ext_hy_ths</code>（同花顺行业分类，5,579 行，字段「所属同花顺行业」形如 <code>家居用品-文娱用品</code>，取横杠前一级）。个股涨跌与成交额 ← <code>/api/screener/market-snapshot</code>，收盘 2026-11-06，5,572 行。<br>
+行业均值是<b>等权个股均值</b>，不是流通市值加权 —— 前者反映「普遍涨没涨」，后者被大票绑架。两个数在页面上并列，不做二选一。<br>
+<b>保留的功能</b>：行业列表与搜索、五种排序（热度 / 均涨幅 / 领涨股 / 成交额 / 跌幅）、层级切换（一级 / 二级）、板块色阶、单行业展开成分股与 K 线预览、区间统计（行业指数近 5/20/60 日）、维度成员弹窗、数据源配置与一键拉取、无数据时的获取入口。
+</div>
+</main>
+</div>
+</body>
+</html>

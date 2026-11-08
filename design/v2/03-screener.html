@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 03 策略选股</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<style>
+/* 选股: 左侧策略清单 + 右侧结果。策略卡片用竖条而非卡片容器(VISUAL_DENSITY 高) */
+.sc{display:grid;grid-template-columns:214px minmax(0,1fr);border-top:1px solid var(--rule-strong)}
+.sc-side{border-right:1px solid var(--rule);padding:0 0 16px}
+.sc-side .hd{font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);padding:8px 0 6px}
+.st{display:block;width:100%;text-align:left;background:none;border:0;border-left:2px solid transparent;
+    padding:8px 10px 8px 12px;cursor:pointer;font:inherit;color:var(--ink-2);
+    transition:background .16s ease,border-color .16s ease}
+.st:hover{background:rgba(26,24,22,.035);color:var(--ink)}
+.st.on{border-left-color:var(--ochre);background:var(--ochre-wash);color:var(--ochre)}
+.st b{display:block;font-size:12px;font-weight:500}
+.st span{display:block;font-family:var(--mono);font-size:9px;color:var(--ink-3);margin-top:2px}
+.st.on span{color:var(--ochre);opacity:.75}
+
+.sc-main{padding-left:20px;min-width:0}
+.sc-bar{display:flex;align-items:center;gap:8px;padding:9px 0 12px;border-bottom:1px solid var(--rule)}
+.sc-bar .term{font-size:10.5px;color:var(--ink-2);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-bar .term code{font-family:var(--mono);font-size:10px;background:var(--leaf-2);padding:1px 5px;color:var(--ink)}
+
+/* 空态: 有内容、能直接执行, 不是装饰 */
+.empty{padding:40px 0 44px;text-align:left;max-width:520px}
+.empty .em{font-size:11px;letter-spacing:.18em;color:var(--ochre);font-family:var(--mono)}
+.empty h2{font-size:17px;font-weight:500;margin-top:10px;letter-spacing:-.01em}
+.empty p{font-size:12px;line-height:1.85;color:var(--ink-2);margin-top:8px}
+.empty .acts{display:flex;gap:8px;margin-top:16px}
+
+/* 结果表: 与自选同构, 但带排名列与强票标记 */
+.res{width:100%;font-size:11.5px;margin-top:2px}
+.res th{font-weight:400;font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+        padding:6px 8px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.res th:first-child,.res th:nth-child(2){text-align:left;letter-spacing:0;font-size:10px}
+.res td{padding:0 8px;height:28px;text-align:right;border-bottom:1px solid var(--rule);
+        font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.res td:first-child,.res td:nth-child(2){text-align:left;font-family:var(--sans)}
+.res td:first-child{color:var(--ink-3);font-family:var(--mono);font-size:10px;width:28px}
+.res tbody tr{cursor:pointer;transition:background .15s ease}
+.res tbody tr:hover{background:var(--ochre-wash)}
+.res .sym{display:block;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.res .tag{font-family:var(--sans);font-size:9px;padding:0 4px;border:1px solid var(--rule);color:var(--ink-3);margin-left:5px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<nav class="toc" aria-label="功能目录">
+  <div class="toc-g"><div class="toc-g-name">每日</div>
+    <a href="01-dashboard.html"><span>看板</span></a><a href="02-watchlist.html"><span>自选</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">研究</div>
+    <a href="03-screener.html" class="on"><span>策略选股</span></a><a href="#"><span>因子</span></a><a href="#"><span>回测</span></a><a href="#"><span>个股分析</span></a><a href="#"><span>信号库</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">市场</div>
+    <a href="#"><span>市场环境</span></a><a href="#"><span>指数</span></a><a href="04-limit-ladder.html"><span>连板梯队</span></a><a href="#"><span>行业板块</span></a><a href="#"><span>概念板块</span></a><a href="#"><span>异动监控</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">交易</div>
+    <a href="#"><span>模拟盘</span></a><a href="#"><span>持仓提醒</span></a><a href="#"><span>监控中心</span></a><a href="#"><span>复盘</span></a><a href="#"><span>财务概况</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">系统</div>
+    <a href="#"><span>数据</span></a><a href="#"><span>设置</span></a><a href="#"><span>品牌</span></a><a href="#"><span>开发</span></a>
+  </div>
+  <div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+
+<main class="page">
+
+  <header class="inscription">
+    <h1 class="ins-title">策略选股<i>SCREENER</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta">
+        <span class="num">2026 · 11 · 06　周五</span>
+        <span class="live"><i></i><b>已收盘</b></span>
+      </div>
+      <div class="seal">策</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tb-left">
+      <span class="tb-chip warn">尚未运行</span>
+      <span class="tb-note">本日候选为空 · 上次更新 —</span>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn">全部策略</button>
+      <button class="tb-btn">列设置</button>
+      <button class="tb-btn primary">运行全部</button>
+    </div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-side">
+      <div class="hd">策 略 清 单</div>
+      <button class="st on"><b>全部策略</b><span>ALL</span></button>
+      <button class="st"><b>均线多头排列</b><span>MA STACK</span></button>
+      <button class="st"><b>放量突破</b><span>BREAKOUT</span></button>
+      <button class="st"><b>回调至 MA20</b><span>PULLBACK</span></button>
+      <button class="st"><b>低波动强势</b><span>LOW VOL</span></button>
+      <button class="st"><b>自建：缩量阴线</b><span>CUSTOM</span></button>
+    </div>
+
+    <div class="sc-main">
+      <div class="sc-bar">
+        <span class="term">当前 <code>全部策略</code> · 资产 股票 · 周期 1 分钟 · 剔除 ST 与停牌</span>
+        <button class="tb-btn">重跑</button>
+      </div>
+
+      <div class="empty">
+        <span class="em">NO RESULT · 2026-11-06</span>
+        <h2>今天还没有跑过选股</h2>
+        <p>选股结果按交易日缓存，跑一次大约几秒到一分钟，取决于策略数量和标的范围。跑完这里会按命中数排序列出候选，点任意一行可以看该股的当日分时和策略命中说明。</p>
+        <div class="acts">
+          <button class="btn">运行全部策略</button>
+          <button class="btn ghost">只跑均线多头排列</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="note">
+    <b>本屏由哪些真实模块填充</b><br>
+    策略清单 ← <code>api.screenerStrategies(undefined,'all')</code>；结果 ← <code>api.screenerCached()</code> / <code>api.screenerCachedResult(strategy)</code>；运行 ← <code>api.screenerRunAll()</code> / <code>api.screenerRunPreset()</code>，运行中由 <code>api.screenerCachedSummary(taskId)</code> 轮询进度。<br>
+    当前后端实测返回 <code>{"as_of":null,"results":{}}</code>，即今天尚未运行过，因此上屏是<b>真实空态</b>。<br>
+    <b>保留的功能</b>：多策略并行运行、资产类型切换（股票/ETF/指数）、周期切换、扩展列、结果加自选、命中说明、个股预览、列设置。<br>
+    <b>未画出的状态</b>：运行中进度条、部分策略失败、结果超过一屏时的虚拟滚动 —— 实现时按原页逻辑接入，不新增。
+  </div>
+
+</main>
+</div>
+</body>
+</html>

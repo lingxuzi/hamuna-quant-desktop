@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 20 监控中心</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.mn{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:12px}
+.mn .feed{border:1px solid var(--rule);background:var(--leaf);min-width:0}
+.mn .feed-hd{display:flex;align-items:center;gap:4px;padding:7px 10px;border-bottom:1px solid var(--rule);
+  flex-wrap:nowrap;overflow:hidden}
+.mn .feed-hd b{font-size:11.5px;font-weight:500;margin-right:6px;white-space:nowrap}
+.mn .feed-hd button{font:inherit;font-size:10px;padding:2px 7px;background:transparent;border:0;
+  color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.mn .feed-hd button[aria-pressed="true"]{background:var(--ochre-wash);color:var(--ochre)}
+.mn .feed-bd{min-height:238px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:28px 20px;text-align:center}
+.mn .feed-bd .em{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ochre)}
+.mn .feed-bd h2{font-family:var(--serif);font-size:16px;font-weight:500;margin:8px 0 6px}
+.mn .feed-bd p{font-size:11.5px;color:var(--ink-2);line-height:1.75;margin:0;max-width:38ch}
+
+.rule-t{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.rule-t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:left;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong)}
+.rule-t td{height:28px;border-bottom:1px solid var(--rule);color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rule-t td:first-child{color:var(--ink)}
+.pill{font-size:9px;padding:1px 5px;border:1px solid var(--rule);color:var(--ink-3)}
+.pill.on{border-color:var(--ochre);color:var(--ochre)}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html" class="on"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">监控中心<i>MONITOR</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">监</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">规则 0 条</span><span class="tb-chip">7 天告警 0 条</span><span class="tb-chip">实时行情 通达信</span></div>
+    <div class="tb-right"><button class="tb-btn primary">新建规则</button></div>
+  </div>
+<div class="mn">
+  <div class="feed">
+    <div class="feed-hd"><b>触发记录</b><button aria-pressed="true">全部</button><button aria-pressed="false">策略监控</button><button aria-pressed="false">信号</button><button aria-pressed="false">价格/涨跌</button><button aria-pressed="false">市场异动</button><button aria-pressed="false">板块监控</button><button aria-pressed="false">异动监控</button><button aria-pressed="false">轮询放量</button><button aria-pressed="false">日期提醒</button></div>
+    <div class="feed-bd">
+      <span class="em">NO ALERTS · 7 天</span>
+      <h2>近 7 天没有触发记录</h2>
+      <p>规则每 10 秒扫一遍实时行情，命中就写一条。现在一条规则都没有，所以这里空着 —— 不是加载失败。</p>
+    </div>
+  </div>
+  <div>
+    <div class="fig-h" style="margin-top:0">通 知 规 则 · 0 条</div>
+    <table class="rule-t"><colgroup><col><col style="width:72px"><col style="width:44px"></colgroup>
+      <thead><tr><th scope="col">规则</th><th scope="col">类型</th><th scope="col">状态</th></tr></thead>
+      <tbody><tr><td style="color:var(--ink-3)">尚无规则</td><td></td><td></td></tr></tbody></table>
+    <div class="fig-h">能 建 哪 些 规 则</div>
+    <table class="rule-t"><colgroup><col style="width:66px"><col></colgroup>
+      <tbody><tr><td>信号</td><td>自选池内个股出现指定信号时提醒</td></tr><tr><td>价格/涨跌</td><td>价格越过或涨跌幅超过阈值</td></tr><tr><td>市场异动</td><td>指数或全市场情绪指标越过阈值</td></tr><tr><td>策略监控</td><td>策略新入选 / 移出标的</td></tr><tr><td>板块监控</td><td>板块涨幅或广度越过阈值</td></tr><tr><td>异动监控</td><td>接近交易所异常波动阈值</td></tr><tr><td>轮询放量</td><td>两次轮询之间成交量放大</td></tr><tr><td>日期提醒</td><td>指定日期到点提醒</td></tr></tbody></table>
+  </div>
+</div>
+<div class="note">
+<b>这一屏的真实状态</b><br>
+<code>/api/monitor-rules</code> 实测 <code>{"rules": []}</code>；<code>/api/alerts?days=7&amp;limit=500</code> 实测 <code>{"alerts": [], "total": 0}</code>。规则 0 条、告警 0 条。<br>
+所以左上是一个真实的空触发记录（不是占位骨架），右侧列出可建的 8 类规则，让人知道空着能补什么。<br>
+<b>保留的功能</b>：8 类规则编辑器（信号 / 价格涨跌 / 市场异动 / 策略监控 / 板块监控 / 异动监控 / 轮询放量 / 日期提醒）、9 个来源过滤标签、告警列表（严重级别色条 / 时间 / 标的 / 消息 / 行业与概念标签）、未读徽标、清除全部记录、清除全部规则、规则启停、深链 <code>?new=abnormal</code> 直接弹异动规则、实时行情不可用提示、跳转个股分析。
+</div>
+</main>
+</div>
+</body>
+</html>

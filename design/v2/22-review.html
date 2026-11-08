@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 22 复盘</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:14px}
+.rv .main-col{min-width:0}
+.rv .aside{min-width:0;border-left:1px solid var(--rule);padding-left:20px}
+.rv h3{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px;font-weight:400}
+.rv h3:not(:first-child){margin-top:22px}
+.empty-rv{border:1px solid var(--rule);background:var(--leaf);padding:34px 24px;text-align:center}
+.empty-rv .em{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ochre)}
+.empty-rv h2{font-family:var(--serif);font-size:17px;font-weight:500;margin:9px 0 7px}
+.empty-rv p{font-size:11.5px;color:var(--ink-2);line-height:1.8;margin:0 auto;max-width:42ch}
+.empty-rv .acts{display:flex;gap:8px;justify-content:center;margin-top:16px}
+
+.radar6{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule)}
+.radar6 > div{background:var(--leaf);padding:7px 9px}
+.radar6 k{display:block;font-size:9px;letter-spacing:.1em;color:var(--ink-3)}
+.radar6 v{display:block;font-family:var(--mono);font-size:15px;margin:2px 0 3px}
+.radar6 i{display:block;height:3px;background:var(--rule)}
+.radar6 i b{display:block;height:100%;background:var(--ochre)}
+
+.dist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;background:var(--rule);
+  align-items:end;height:110px;border:1px solid var(--rule)}
+.dist > div{background:var(--leaf);display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;height:100%;padding:4px 2px 3px;position:relative}
+.dist .bar2{width:100%;background:var(--ochre);opacity:.7}
+.dist .bar2.d{background:var(--down)}
+.dist em{font-family:var(--mono);font-style:normal;font-size:8.5px;color:var(--ink-3);margin-top:3px}
+
+.lh-t{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.lh-t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.lh-t th:first-child{text-align:left}
+.lh-t th:nth-child(2){text-align:left}
+.lh-t td{height:29px;border-bottom:1px solid var(--rule);text-align:right;color:var(--ink-2);
+  font-family:var(--mono);font-size:10px;font-variant-numeric:tabular-nums;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lh-t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.lh-t td:nth-child(2){text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.lh-t tbody tr:hover{background:var(--ochre-wash)}
+.lh-t .up{color:var(--up)} .lh-t .down{color:var(--down)}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html" class="on"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">复盘<i>MARKET RECAP</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">复</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">情绪 24 冰点</span><span class="tb-chip warn">报告 0 篇</span><span class="tb-chip">龙虎榜 63 只</span></div>
+    <div class="tb-right"><button class="tb-btn primary">生成复盘</button></div>
+  </div>
+<div class="b4h"><div><k>情 绪 分</k><v class="up">24</v><small>冰点 · 六维加权</small></div><div><k>涨 跌 家 数</k><v class="">792 : 4,774</v><div class="brd"><i class="u" style="width:14.2%"></i><i class="d" style="width:85.8%"></i></div><small>平盘 6 只 · 上涨占比 14.2%</small></div><div><k>涨 停 / 跌 停</k><v class="">33 : 15</v><small>炸板 17 · 封板率 66% · 最高 5 板</small></div><div><k>成 交 额</k><v class="">16,716</v><small>亿元 · 均 3.00 亿/只</small></div></div>
+<div class="rv">
+  <div class="main-col">
+    <h3 style="margin-top:18px">今 日 复 盘 报 告</h3>
+    <div class="empty-rv">
+      <span class="em">NO REPORT</span>
+      <h2>还没有生成过复盘</h2>
+      <p>复盘以当日的指数、涨跌分布、连板梯队、龙虎榜与板块轮动为材料，交给大模型写成一份中立的市场记录。下面这些材料今天就绪了，等一次生成。</p>
+      <div class="acts"><button class="tb-btn primary">生成今日复盘</button><button class="tb-btn">查看提示词</button></div>
+    </div>
+
+    <h3>涨 跌 分 布 · 8 档</h3>
+    <div class="dist"><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">393</span><span class="bar2 d" style="height:10px"></span><em><-5%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">1,123</span><span class="bar2 d" style="height:29px"></span><em>-5~-3%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">2,426</span><span class="bar2 d" style="height:62px"></span><em>-3~-1%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">832</span><span class="bar2 d" style="height:21px"></span><em>-1~0%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">390</span><span class="bar2" style="height:10px"></span><em>0~1%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">262</span><span class="bar2" style="height:7px"></span><em>1~3%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">67</span><span class="bar2" style="height:2px"></span><em>3~5%</em></div><div><span style="font-family:var(--mono);font-size:8.5px;color:var(--ink-3)">78</span><span class="bar2" style="height:2px"></span><em>>5%</em></div></div>
+
+    <h3>龙 虎 榜 · 2026-11-06 · 63 只</h3>
+    <table class="lh-t"><colgroup><col style="width:96px"><col><col style="width:66px"><col style="width:72px"><col style="width:62px"><col style="width:40px"></colgroup>
+      <thead><tr><th scope="col">标的</th><th scope="col">上榜概念</th><th scope="col">涨跌幅</th><th scope="col">净买入(亿)</th><th scope="col">净买占比</th><th scope="col">人气</th></tr></thead>
+      <tbody><tr><td>东方海洋</td><td>幽门螺杆菌概念</td><td class="up">+9.97%</td><td class="up">+0.98</td><td>+1.79%</td><td>1</td></tr><tr><td>东方海洋</td><td>幽门螺杆菌概念</td><td class="up">+9.97%</td><td class="up">+0.00</td><td>+0.02%</td><td>1</td></tr><tr><td>阳光照明</td><td>氢能源</td><td class="up">+9.98%</td><td class="up">+0.35</td><td>+1.24%</td><td>2</td></tr><tr><td>东山精密</td><td>同花顺果指数</td><td class="down">-10.00%</td><td class="down">-2.22</td><td>-1.80%</td><td>4</td></tr><tr><td>金健米业</td><td>乳业</td><td class="up">+6.88%</td><td class="down">-1.05</td><td>-3.65%</td><td>5</td></tr><tr><td>东方日升</td><td>HJT电池</td><td class="up">+15.26%</td><td class="up">+1.60</td><td>+7.15%</td><td>6</td></tr><tr><td>冰山冷热</td><td>冰雪产业</td><td class="down">-3.76%</td><td class="down">-0.27</td><td>-1.69%</td><td>10</td></tr><tr><td>襄阳轴承</td><td>股权转让(并购重组)</td><td class="down">-9.98%</td><td class="down">-0.46</td><td>-2.89%</td><td>12</td></tr><tr><td>浙文影业</td><td>文化传媒概念</td><td class="up">+9.96%</td><td class="up">+0.95</td><td>+6.58%</td><td>13</td></tr><tr><td>万向德农</td><td>玉米</td><td class="up">+10.04%</td><td class="up">+0.31</td><td>+3.87%</td><td>15</td></tr><tr><td>万向德农</td><td>玉米</td><td class="up">+10.04%</td><td class="down">-1.01</td><td>-4.69%</td><td>15</td></tr><tr><td>皇台酒业</td><td>白酒概念</td><td class="down">-8.72%</td><td class="down">-0.98</td><td>-9.02%</td><td>18</td></tr></tbody></table>
+
+    <h3>连 板 梯 队</h3>
+    <table class="lh-t"><colgroup><col style="width:56px"><col style="width:56px"><col><col style="width:80px"></colgroup>
+      <thead><tr><th scope="col">高度</th><th scope="col">家数</th><th scope="col">领头</th><th scope="col">成交(亿)</th></tr></thead>
+      <tbody><tr><td>5 板</td><td>3</td><td>浙文影业</td><td>13.0</td></tr><tr><td>4 板</td><td>2</td><td>鲁阳节能</td><td>6.2</td></tr><tr><td>3 板</td><td>3</td><td>贝特利</td><td>6.3</td></tr><tr><td>2 板</td><td>4</td><td>润建股份</td><td>26.0</td></tr><tr><td>1板</td><td>21</td><td>龙江交通</td><td>10.5</td></tr></tbody></table>
+  </div>
+
+  <div class="aside">
+    <h3 style="margin-top:0">四 大 指 数</h3>
+    <table class="lh-t"><colgroup><col><col style="width:64px"><col style="width:64px"><col style="width:76px"></colgroup>
+      <thead><tr><th scope="col">指数</th><th scope="col">涨跌幅</th><th scope="col">涨跌</th><th scope="col">收</th></tr></thead>
+      <tbody><tr><td>上证指数</td><td class="down">-1.10%</td><td>-1.10</td><td>3,649.18</td></tr><tr><td>深证成指</td><td class="down">-2.57%</td><td>-2.57</td><td>11,175.78</td></tr><tr><td>创业板指</td><td class="down">-3.96%</td><td>-3.96</td><td>2,465.23</td></tr><tr><td>科创综指</td><td class="down">-3.24%</td><td>-3.24</td><td>1,496.36</td></tr></tbody></table>
+
+    <h3>六 维 情 绪</h3>
+    <div class="radar6"><div><k>指数</k><v>0</v><i><b style="width:0%"></b></i></div><div><k>赚钱</k><v>1</v><i><b style="width:1%"></b></i></div><div><k>量能</k><v>25</v><i><b style="width:25%"></b></i></div><div><k>投机</k><v>51</v><i><b style="width:51%"></b></i></div><div><k>抗跌</k><v>0</v><i><b style="width:0%"></b></i></div><div><k>主线</k><v>65</v><i><b style="width:65%"></b></i></div></div>
+
+    <h3>均 线 站 位</h3>
+    <table class="lh-t"><colgroup><col><col style="width:56px"><col style="width:56px"></colgroup>
+      <tbody>
+        <tr><td>站上 5 日线</td><td>3,539</td><td>63.5%</td></tr>
+        <tr><td>站上 20 日线</td><td>1,832</td><td>32.9%</td></tr>
+        <tr><td>站上 60 日线</td><td>1,127</td><td>20.2%</td></tr>
+        <tr><td>创 60 日新高</td><td>109</td><td>—</td></tr>
+        <tr><td>创 60 日新低</td><td>128</td><td>—</td></tr>
+      </tbody></table>
+
+    <h3>领 涨 概 念</h3>
+    <table class="lh-t"><colgroup><col><col style="width:64px"><col style="width:44px"></colgroup>
+      <thead><tr><th scope="col">概念</th><th scope="col">均涨幅</th><th scope="col">只</th></tr></thead>
+      <tbody><tr><td>转基因</td><td class="up">+2.01%</td><td>21</td></tr><tr><td>玉米</td><td class="up">+1.03%</td><td>34</td></tr><tr><td>大豆</td><td class="up">+0.82%</td><td>15</td></tr><tr><td>粮食概念</td><td class="up">+0.67%</td><td>49</td></tr><tr><td>证金持股</td><td class="up">+0.39%</td><td>33</td></tr></tbody></table>
+  </div>
+</div>
+<div class="note">
+<b>数据来源与口径</b><br>
+<code>/api/overview/market?as_of=2026-11-06</code> 一次给齐：四大指数、涨跌广度、8 档涨跌分布、涨停与梯队、均线站位、六维情绪、板块排名。全部是接口原值。<br>
+龙虎榜 ← <code>/api/market-recap/dragon-tiger</code>，当日返回 63 只 / 72 条记录，含净买入、净买占比、人气排名与涨停原因。<br>
+复盘报告 ← <code>/api/market-recap/reports</code> 实测 <code>{"reports": []}</code>，<b>一条都没有</b>。所以报告区是真实的空态，而材料区（分布 / 龙虎榜 / 梯队 / 六维）全是真数据 —— 这一屏本身就是「材料齐了、就差写」的状态。<br>
+<b>保留的功能</b>：生成 / 重新生成复盘、历史报告列表与删除、提示词查看与自定义（空串即恢复内置默认）、定时生成（开关 + 时 + 分）、推送渠道配置（手动 / 自动）、龙虎榜三榜切换（全部 / 机构 / 游资）、竞价基准、报告摘要与情绪打分、按交易日翻页。
+</div>
+</main>
+</div>
+</body>
+</html>

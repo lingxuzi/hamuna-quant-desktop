@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 18 异动监控</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.st1{font-size:9px;padding:1px 5px;background:var(--up);color:var(--paper);letter-spacing:.04em}
+.stw{font-size:9px;padding:1px 5px;border:1px solid var(--warn);color:var(--warn);letter-spacing:.04em}
+.st0{font-size:9px;padding:1px 5px;color:var(--ink-3);letter-spacing:.04em}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html" class="on"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">异动监控<i>ABNORMAL MOVES</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">异</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">触发 23</span><span class="tb-chip">临界 59</span><span class="tb-chip">观察 164</span><span class="tb-chip">当日已收盘</span></div>
+    <div class="tb-right"><button class="tb-btn">建告警规则</button></div>
+  </div>
+<div class="b4h"><div><k>已 触 发</k><v class="up">23</v><small>任一窗口达到交易所异常波动阈值</small></div><div><k>临 界</k><v class="">59</v><small>接近度 ≥ 50%，尚未越线</small></div><div><k>观 察</k><v class="">164</v><small>接近度 &lt; 50%</small></div><div><k>分 析 日 期</k><v class="">2026-11-06</v><small>缓存截面 · 共 200 只进入榜单</small></div></div>
+<div class="b4s">
+  <div>
+    <div class="fig-h" style="margin-top:0">已 触 发 · 前 10</div>
+    <table class="b4t"><colgroup><col style="width:auto"><col style="width:58px"><col style="width:56px"><col style="width:58px"><col style="width:58px"><col style="width:50px"><col style="width:46px"></colgroup>
+      <thead><tr><th scope="col">标的</th><th scope="col">当日</th><th scope="col">3 日</th><th scope="col">10 日</th><th scope="col">30 日</th><th scope="col">接近度</th><th scope="col">状态</th></tr></thead>
+      <tbody><tr><td><span class="rk">01</span><span class="nm"><span>C皇冠</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">001381.SZ</code></span></td><td class="down">-17.11%</td><td class="down">-47.0%</td><td class="">—</td><td class="">—</td><td>235%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">02</span><span class="nm"><span>贝特利</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">301697.SZ</code></span></td><td class="up">+20.00%</td><td class="up">+69.0%</td><td class="up">+63.8%</td><td class="up">+62.0%</td><td>230%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">03</span><span class="nm"><span>春光科技</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">603657.SH</code></span></td><td class="up">+10.00%</td><td class="up">+32.0%</td><td class="up">+11.1%</td><td class="up">+2.8%</td><td>160%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">04</span><span class="nm"><span>永臻股份</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">603381.SH</code></span></td><td class="up">+10.03%</td><td class="up">+32.0%</td><td class="up">+51.3%</td><td class="up">+50.2%</td><td>160%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">05</span><span class="nm"><span>*ST亿晶</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">600537.SH</code></span></td><td class="up">+10.22%</td><td class="up">+32.0%</td><td class="up">+39.6%</td><td class="up">+4.4%</td><td>160%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">06</span><span class="nm"><span>浙文影业</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">601599.SH</code></span></td><td class="up">+9.96%</td><td class="up">+31.9%</td><td class="up">+58.9%</td><td class="up">+62.6%</td><td>159%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">07</span><span class="nm"><span>闽发铝业</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">002578.SZ</code></span></td><td class="up">+10.11%</td><td class="up">+30.3%</td><td class="up">+56.7%</td><td class="up">+39.5%</td><td>151%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">08</span><span class="nm"><span>鲁阳节能</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">002088.SZ</code></span></td><td class="up">+10.02%</td><td class="up">+30.1%</td><td class="up">+46.6%</td><td class="up">+53.6%</td><td>151%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">09</span><span class="nm"><span>新亚制程</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">002388.SZ</code></span></td><td class="up">+10.07%</td><td class="up">+30.1%</td><td class="down">-6.0%</td><td class="up">+19.3%</td><td>151%</td><td><span class="st1">触发</span></td></tr><tr><td><span class="rk">10</span><span class="nm"><span>三星新材</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">603578.SH</code></span></td><td class="down">-10.00%</td><td class="down">-25.5%</td><td class="down">-31.8%</td><td class="down">-26.2%</td><td>127%</td><td><span class="st1">触发</span></td></tr></tbody></table>
+    <div class="fig-h">临 界 · 前 8</div>
+    <table class="b4t"><colgroup><col style="width:auto"><col style="width:58px"><col style="width:56px"><col style="width:58px"><col style="width:58px"><col style="width:50px"><col style="width:46px"></colgroup>
+      <tbody><tr><td><span class="rk">01</span><span class="nm"><span>阳光乳业</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">001318.SZ</code></span></td><td class="down">-6.78%</td><td class="down">-19.7%</td><td class="up">+23.5%</td><td class="up">+30.9%</td><td>98%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">02</span><span class="nm"><span>润建股份</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">002929.SZ</code></span></td><td class="up">+10.01%</td><td class="up">+19.6%</td><td class="up">+18.2%</td><td class="up">+38.0%</td><td>98%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">03</span><span class="nm"><span>有研新材</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">600206.SH</code></span></td><td class="down">-0.26%</td><td class="up">+19.5%</td><td class="down">-8.1%</td><td class="down">-18.4%</td><td>98%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">04</span><span class="nm"><span>京仪装备</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">688652.SH</code></span></td><td class="up">+5.99%</td><td class="up">+29.2%</td><td class="down">-1.0%</td><td class="down">-0.5%</td><td>97%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">05</span><span class="nm"><span>迈为股份</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">300751.SZ</code></span></td><td class="down">-2.42%</td><td class="up">+29.0%</td><td class="up">+22.7%</td><td class="up">+1.6%</td><td>97%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">06</span><span class="nm"><span>引力传媒</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">603598.SH</code></span></td><td class="down">-0.46%</td><td class="up">+19.3%</td><td class="up">+16.8%</td><td class="up">+31.3%</td><td>97%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">07</span><span class="nm"><span>天洋新材</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">603330.SH</code></span></td><td class="down">-6.59%</td><td class="down">-19.2%</td><td class="down">-13.0%</td><td class="up">+2.3%</td><td>96%</td><td><span class="stw">临界</span></td></tr><tr><td><span class="rk">08</span><span class="nm"><span>金刚光伏</span><code style="font-family:var(--mono);font-size:9px;color:var(--ink-3)">300093.SZ</code></span></td><td class="up">+4.50%</td><td class="up">+28.5%</td><td class="up">+10.6%</td><td class="up">+9.3%</td><td>95%</td><td><span class="stw">临界</span></td></tr></tbody></table>
+  </div>
+  <div>
+    <div class="fig-h" style="margin-top:0">判 定 阈 值</div>
+    <table class="b4t"><colgroup><col style="width:76px"><col><col><col></colgroup>
+      <thead><tr><th scope="col">板块</th><th scope="col">3 日</th><th scope="col">10 日</th><th scope="col">30 日</th></tr></thead>
+      <tbody><tr><td>主板</td><td>±20%</td><td>+100% / −50%</td><td>+200% / −70%</td></tr><tr><td>创业板/科创板</td><td>±30%</td><td>+100% / −50%</td><td>+200% / −70%</td></tr><tr><td>北交所</td><td>±40%</td><td>+100% / −50%</td><td>+200% / −70%</td></tr></tbody></table>
+    <div class="note" style="margin-top:10px;border-top:0;padding-top:0">3日±20% 异常波动; 严重异常波动 10日+100%(-50%) / 30日+200%(-70%), 负向更严; 2026-07-06 起风险警示(ST)股票同口径 (原±15%特别规定已废止)</div>
+    <div class="fig-h">竞 价 基 准 · 前 6</div>
+    <table class="b4t"><colgroup><col><col style="width:64px"><col style="width:64px"><col></colgroup>
+      <thead><tr><th scope="col">标的</th><th scope="col">竞价涨幅</th><th scope="col">当日</th><th scope="col">标签</th></tr></thead>
+      <tbody><tr><td><span class="rk">01</span>东方海洋</td><td class="up">+1.66%</td><td class="up">+9.97%</td><td>其他农产品加工 · 预制菜</td></tr><tr><td><span class="rk">02</span>阳光照明</td><td class="up">+5.09%</td><td class="up">+9.98%</td><td>LED · 高股息精选</td></tr><tr><td><span class="rk">03</span>皇台酒业</td><td class="up">+2.17%</td><td class="down">-8.72%</td><td>白酒Ⅲ · 白酒概念</td></tr><tr><td><span class="rk">04</span>有研新材</td><td class="down">-2.84%</td><td class="down">-0.26%</td><td>半导体材料 · 国家大基金持股</td></tr><tr><td><span class="rk">05</span>金螳螂</td><td class="down">-2.96%</td><td class="down">-6.13%</td><td>装饰园林 · 芯片概念</td></tr><tr><td><span class="rk">06</span>利欧股份</td><td class="">+0.00%</td><td class="down">-2.96%</td><td>其他通用设备 · 快手概念</td></tr></tbody></table>
+  </div>
+</div>
+<div class="note">
+<b>数据来源与口径</b><br>
+<code>/api/abnormal/overview?min_closeness=0.5&amp;limit=200</code> 实测返回 <code>triggered=23, edge=59, watch=164</code>，缓存截面 2026-11-06。阈值表是接口 <code>rules</code> 字段原样输出：主板 3 日 ±20%、10 日 +100%/−50%、30 日 +200%/−70%，负向更严；ST 同口径。<br>
+竞价基准 ← <code>/api/market-recap/auction-benchmark</code>，当日返回 6 条。<br>
+<b>当 日 栏 = 截 面 收 盘 涨 跌</b>，不是实时。页面标的显示「已收盘」，盘中这里会切到实时价并显示「盘中」。<br>
+<b>保留的功能</b>：竞价 / 盘中 / 偏移三路视图、接近度过滤、触发状态三档、三个窗口各自的值与阈值、板块与 ST 标记、竞价基准对照、盘中信号命中（涨停 / 炸板 / 翘板 / 跌停 / 新高 / 新低 / 放量）、跳转个股分析、按标的建异动告警规则（预置接近度 70%）、实时行情不可用时的顶部提示。
+</div>
+</main>
+</div>
+</body>
+</html>

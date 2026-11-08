@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 25 数据</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.set{display:grid;grid-template-columns:176px minmax(0,1fr);border-top:1px solid var(--rule-strong);
+  margin-top:2px}
+.set .tabs{border-right:1px solid var(--rule);padding:10px 14px 24px 0;min-width:0}
+.set .tabs a{display:block;text-decoration:none;color:var(--ink-2);font-size:11.5px;
+  padding:5px 0 5px 10px;border-left:2px solid transparent;line-height:1.4}
+.set .tabs a:hover{color:var(--ink)}
+.set .tabs a.on{color:var(--ochre);border-left-color:var(--ochre);background:var(--ochre-wash)}
+.set .tabs .grp{font-size:9px;letter-spacing:.14em;color:var(--ink-3);margin:14px 0 4px;padding-left:10px}
+.set .tabs .grp:first-child{margin-top:0}
+.set .pane{padding:14px 0 0 22px;min-width:0}
+.set .pane > h2{font-family:var(--serif);font-size:16px;font-weight:500;margin:0 0 4px}
+.set .pane > .lead{font-size:11px;color:var(--ink-2);line-height:1.75;margin:0 0 14px;max-width:64ch}
+
+/* 条目行: 左标题+说明, 右控件 —— 表单密度靠 1px 横线而不是卡片 */
+.rowset{border-top:1px solid var(--rule-strong)}
+.rowset .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--rule)}
+.rowset .r > .lab{min-width:0}
+.rowset .r b{display:block;font-size:11.5px;font-weight:500;color:var(--ink)}
+.rowset .r small{display:block;font-size:10px;color:var(--ink-3);line-height:1.65;margin-top:2px;max-width:58ch}
+.rowset .r > .ctl{display:flex;align-items:center;gap:8px;justify-self:end;flex-wrap:wrap;justify-content:flex-end}
+.rowset input[type=text]{font:inherit;font-size:11px;background:var(--leaf);color:var(--ink);
+  border:1px solid var(--rule);padding:5px 7px;border-radius:0;outline:none;width:180px}
+.rowset input[type=text]:focus-visible{outline:2px solid var(--ochre);outline-offset:1px}
+.rowset .v{font-family:var(--mono);font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums}
+.rowset .v.dim{color:var(--ink-3)}
+.rowset .sw{width:30px;height:16px;border:1px solid var(--rule);background:var(--leaf);
+  position:relative;display:block}
+.rowset .sw::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--ink-3)}
+.rowset .sw.on{border-color:var(--ochre);background:var(--ochre-wash)}
+.rowset .sw.on::after{left:16px;background:var(--ochre)}
+
+.mini{font:inherit;font-size:10.5px;background:var(--leaf);color:var(--ink);border:1px solid var(--rule);
+  padding:4px 10px;cursor:pointer;border-radius:0}
+.mini:hover{border-color:var(--ink)}
+.mini.pri{background:var(--ink);color:var(--leaf);border-color:var(--ink)}
+.mini.gh{border-color:transparent;color:var(--ochre)}
+.mini[disabled]{color:var(--ink-3);border-color:var(--rule);cursor:default}
+
+/* 数据表: 表名 + 行数 + 覆盖 + 日期 */
+.dt{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.dt th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 8px 5px 0;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.dt th:first-child{text-align:left;padding-left:0}
+.dt td{padding:0 8px 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink);padding-left:0}
+.dt td:first-child span{display:block;font-family:var(--mono);font-size:9px;color:var(--ink-3);margin-top:-1px}
+.dt tbody tr:hover{background:var(--ochre-wash)}
+.dt .z{color:var(--ink-3)}
+.dt .warnv{color:var(--warn)}
+
+/* 能力路由: 7 行, 每行「能力 ← 生效源 / 候选 / 待接入」 */
+.cap{display:grid;grid-template-columns:84px minmax(0,1fr) 150px 26px;gap:12px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--rule);font-size:11.5px}
+.cap:first-child{border-top:1px solid var(--rule-strong)}
+.cap b{font-weight:500;color:var(--ink)}
+.cap .cur{color:var(--ink-2);display:flex;align-items:center;gap:6px;min-width:0}
+.cap .cur span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap .cur i{font-style:normal;font-family:var(--mono);font-size:9px;color:var(--ochre);
+  border:1px solid var(--ochre);padding:0 3px;flex:0 0 auto}
+.cap .cands{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.cap .cands u{text-decoration:none;font-family:var(--mono);font-size:9px;color:var(--ink-3);
+  border:1px solid var(--rule);padding:1px 4px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap .cands u.ok{color:var(--ink-2);border-color:var(--rule-strong)}
+.cap .ok{font-family:var(--mono);font-size:10px;color:var(--down);justify-self:end}
+.cap .no{font-family:var(--mono);font-size:10px;color:var(--warn);justify-self:end}
+
+/* 引导页: 步骤条 + 左论题 / 右须知 */
+.stepbar{display:flex;align-items:center;gap:0;margin:0 0 20px;border-top:1px solid var(--rule-strong);padding-top:12px}
+.stepbar .s{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--ink-3);min-width:0}
+.stepbar .s + .s{margin-left:22px}
+.stepbar .s u{text-decoration:none;font-family:var(--mono);font-size:9px;width:18px;height:18px;
+  display:grid;place-items:center;border:1px solid var(--rule);flex:0 0 auto}
+.stepbar .s.on{color:var(--ink)}
+.stepbar .s.on u{border-color:var(--ochre);color:var(--ochre);background:var(--ochre-wash)}
+.stepbar .s.done u{border-color:var(--ink);background:var(--ink);color:var(--leaf)}
+
+.ob{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:44px;
+  border-top:1px solid var(--rule-strong);padding-top:26px}
+.ob .thesis h1{font-family:var(--serif);font-size:30px;line-height:1.32;font-weight:500;margin:0;letter-spacing:-.01em}
+.ob .thesis h1 em{font-style:normal;color:var(--ochre)}
+.ob .thesis > p{font-size:12.5px;line-height:1.9;color:var(--ink-2);margin:14px 0 0;max-width:34ch}
+.ob ol.flow{list-style:none;margin:26px 0 0;padding:0;border-top:1px solid var(--rule)}
+.ob ol.flow li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--rule)}
+.ob ol.flow li u{text-decoration:none;font-family:var(--mono);font-size:9.5px;color:var(--ochre);padding-top:2px}
+.ob ol.flow li b{display:block;font-size:11.5px;font-weight:500;color:var(--ink)}
+.ob ol.flow li small{display:block;font-size:10px;color:var(--ink-3);line-height:1.65;margin-top:2px}
+.ob .notice{border:1px solid var(--rule);background:var(--leaf);padding:18px 20px}
+.ob .notice > h2{font-size:11px;letter-spacing:.1em;color:var(--ink-2);font-weight:400;margin:0 0 10px}
+.ob .notice dl{margin:0}
+.ob .notice dl > div{padding:11px 0;border-top:1px solid var(--rule)}
+.ob .notice dt{font-size:11.5px;font-weight:500;color:var(--warn)}
+.ob .notice dd{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin:5px 0 0}
+.ob .notice dd p{margin:0 0 4px}
+.ob .foot{grid-column:1/-1;display:flex;align-items:center;gap:18px;margin-top:26px;
+  border-top:1px solid var(--rule-strong);padding-top:14px}
+.ob .foot p{font-size:11px;color:var(--warn);margin:0}
+.ob .foot .sp{flex:1}
+
+.tag-row{display:flex;gap:6px;flex-wrap:wrap}
+.tag-row span{font-family:var(--mono);font-size:9.5px;color:var(--ink-2);border:1px solid var(--rule);
+  padding:2px 6px}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html" class="on"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">数据<i>DATA</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">存</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">日K 行数为空</span><span class="tb-chip">指数 145,227 行</span><span class="tb-chip">占用 91.75 MB</span></div>
+    <div class="tb-right"><button class="mini">刷新状态</button><button class="mini pri">重跑日K</button></div>
+  </div>
+  <div class="toolbar" style="border-top:0"><div class="tag-row"><span>data/status · checked 2026-11-08 14:04</span><span>stats_pending = false</span><span>indicators_ready = true</span></div></div>
+<div class="set" style="grid-template-columns:minmax(0,1fr)">
+<div class="pane" style="padding-left:0">
+  <div class="readout" style="margin-top:0">
+    <div><k>最 新 交 易 日</k><v>2026-11-06</v><small>每周一至周五 15:35 例行入库</small></div>
+    <div><k>个 股 覆 盖</k><v>5,580</v><small>名录 5,580 · 有价 5,571</small></div>
+    <div><k>日 K 行 数</k><v class="down">0</v><small>分区存在 · 行数为空</small></div>
+    <div><k>指 数 日 K</k><v>145,227</v><small>607 个代码 · 243 个交易日</small></div>
+    <div><k>占 用 磁 盘</k><v>91.8 MB</v><small>729 个分区目录</small></div>
+    <div><k>指 标 就 绪</k><v>是</v><small>增强表可支撑因子计算</small></div>
+  </div>
+
+  <div class="fig-h" style="margin-top:24px">行 情 表 ｜ 六 张 主 表 的 覆 盖 与 日 期 范 围</div>
+  <table class="dt">
+    <colgroup><col style="width:132px"><col style="width:78px"><col style="width:66px"><col style="width:62px"><col style="width:52px"><col><col style="width:92px"></colgroup>
+    <thead><tr><th>表</th><th>行数</th><th>代码</th><th>交易日</th><th>字段</th><th></th><th>最新</th></tr></thead>
+    <tbody><tr><td>日K<span>kline_daily</span></td><td class="z">0</td><td>5,580</td><td>243</td><td>—</td><td>2025-11-06 →</td><td class="num">2026-11-06</td></tr><tr><td>日K·增强<span>kline_enriched</span></td><td class="z">0</td><td>5,580</td><td>243</td><td>15</td><td>2025-11-06 →</td><td class="num">2026-11-06</td></tr><tr><td>指数日K<span>index_daily</span></td><td class="">145,227</td><td>607</td><td>243</td><td>—</td><td>2025-11-06 →</td><td class="num">2026-11-06</td></tr><tr><td>指数·增强<span>index_enriched</span></td><td class="">145,227</td><td>607</td><td>243</td><td>11</td><td>2025-11-06 →</td><td class="num">2026-11-06</td></tr><tr><td>ETF 日K<span>etf_daily</span></td><td class="">406</td><td>8</td><td>61</td><td>—</td><td>2026-08-06 →</td><td class="num">2026-11-06</td></tr><tr><td>ETF·增强<span>etf_enriched</span></td><td class="">375</td><td>8</td><td>61</td><td>12</td><td>2026-08-06 →</td><td class="num">2026-11-06</td></tr><tr><td>除权因子<span>adj_factor</span></td><td class="">24</td><td>24</td><td>2</td><td>—</td><td>2025-11-06 →</td><td class="num">2026-11-06</td></tr></tbody>
+  </table>
+
+  <div class="fig-h">名 录 ｜ 用于选股与板块归属的静态表</div>
+  <table class="dt">
+    <colgroup><col style="width:132px"><col style="width:78px"><col style="width:66px"><col></colgroup>
+    <thead><tr><th>表</th><th>行数</th><th>代码</th><th></th></tr></thead>
+    <tbody><tr><td>A 股名录<span>instruments</span></td><td class="">5,580</td><td>5,580</td><td></td></tr><tr><td>指数名录<span>instruments_index</span></td><td class="">101</td><td>101</td><td></td></tr><tr><td>ETF 名录<span>instruments_etf</span></td><td class="">1,778</td><td>1,778</td><td></td></tr></tbody>
+  </table>
+
+  <div class="fig-h">存 储 ｜ 按 表 分 区 的 落 盘 体 积</div>
+  <table class="dt">
+    <colgroup><col><col style="width:78px"><col style="width:92px"></colgroup>
+    <thead><tr><th>分区</th><th>文件数</th><th>体积 MB</th></tr></thead>
+    <tbody><tr><td>日K<span>daily</span></td><td class="">243</td><td>28.06</td></tr><tr><td>日K·增强<span>enriched</span></td><td class="">243</td><td>50.21</td></tr><tr><td>指数日K<span>index_daily</span></td><td class="">243</td><td>5.07</td></tr><tr><td>指数·增强<span>index_enriched</span></td><td class="">243</td><td>7.47</td></tr><tr><td>ETF 日K<span>etf_daily</span></td><td class="">61</td><td>0.17</td></tr><tr><td>ETF·增强<span>etf_enriched</span></td><td class="">61</td><td>0.25</td></tr><tr><td>分钟K<span>minute</span></td><td class="z">0</td><td>0.00</td></tr><tr><td>除权因子<span>adj_factor</span></td><td class="">1</td><td>0.00</td></tr><tr><td>增强外数据<span>ext_data</span></td><td class="">5</td><td>0.34</td></tr><tr><td>财务<span>financials</span></td><td class="z">0</td><td>0.00</td></tr><tr><td><b>合计</b><span>total</span></td><td><b>1104</b></td><td><b>91.75</b></td></tr></tbody>
+  </table>
+
+  <div class="fig-h">调 度 ｜ 三 个 定 时 任 务</div>
+  <div class="rowset"><div class="r"><div class="lab"><b>名录刷新</b><small>每个交易日 09:10 拉取全市场代码表，覆盖沪深京</small></div><div class="ctl"><span class="v dim">上次 2026-11-06 09:10</span><span class="v">下次 2026-11-09 09:10</span></div></div><div class="r"><div class="lab"><b>日K 流水线</b><small>收盘后 15:35 拉取当日日K并生成增强表与除权因子</small></div><div class="ctl"><span class="v dim">上次 2026-11-07 22:13</span><span class="v">下次 2026-11-09 15:35</span></div></div><div class="r"><div class="lab"><b>五档定版</b><small>盘中 15:02 固化当日五档盘口快照，供封单监控复用</small></div><div class="ctl"><span class="v dim">已定版</span><span class="v">每个交易日</span></div></div></div>
+
+  
+  <div class="note"><b>这一屏的真实状态。</b> <code>/api/data/status</code> 显示 <code>daily.rows = 0</code> 而 <code>storage.daily_files = 243</code> —— 分区目录齐全、parquet 文件为空。同一时刻增强表 <code>enriched</code> 的行数也是 0，指数与 ETF 正常。看板上的价格来自增强表的内存缓存，因此数字本身不受影响，但 <b>日K 回查、因子重算、增量修复</b> 会拿不到底层行。数据页保留原版的全部功能：重跑流水线、修复指定区间、查看存储占用；此处只把「表有问题」如实放在最上面，不显示成「正常运行中」。</div>
+</div></div>
+</main>
+</div>
+</body>
+</html>

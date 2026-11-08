@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 11 回测 · 稳健优化</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">回测 · 稳健优化<i>ROBUST OPTIMIZE</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">稳</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">等待策略</span><span class="tb-chip">扫描上限未定</span></div>
+    <div class="tb-right"><button class="tb-btn">候选方案</button></div>
+  </div>
+  <div class="bt">
+    <div class="cfg">
+<div class="grp"><h4>策 略</h4><select><option>尚无已保存策略</option></select></div>
+<div class="grp"><h4>优 化 目 标</h4><select><option>索提诺比率</option><option>夏普比率</option><option>卡玛比率</option><option>超额收益</option></select><div class="hint">胜率、持仓天数等退化目标已排除 —— 交易少时会被运气推高。</div></div>
+<div class="grp"><h4>回 测 范 围</h4><div class="row"><div><label>起始</label><input type="date" value="2025-11-06"></div><div><label>结束</label><input type="date" value="2026-11-06"></div></div></div>
+<div class="grp"><h4>验 证 段</h4><div class="row"><div><label>段数 K</label><select><option>4 段</option><option>2 段</option><option>3 段</option><option>5 段</option><option>6 段</option></select></div><div><label>最小交易数</label><input type="number" value="30"></div></div></div>
+<div class="grp"><h4>参 数 扫 描</h4><div class="hint">选策略后列出可扫描参数，每项填最小值 / 最大值 / 步长。</div></div>
+<div class="grp"><h4>模 式</h4><select><option>组合仓位</option><option>全量独立</option></select></div>
+<div class="hint" style="margin-top:14px">每组跑 K 段验证 + 前 20 名全窗细化，耗时约为单次回测的 1.7 倍。</div>
+</div>
+    <div class="main">
+      <div class="bt-seg"><div class="num-tabs">
+        <button aria-pressed="true">稳健优化</button><button aria-pressed="false">滚动样本外检验</button><button aria-pressed="false">策略守护</button>
+      </div></div>
+      <div class="bt-empty"><span class="em">NO STRATEGY</span><h2>还没有可以优化的参数</h2><p>稳健优化把一组参数在 K 个互不重叠的验证段上各跑一遍，按「0.6 × 中位分 + 0.4 × 最差分」排名。只有在多段不同行情上都好的参数，才有资格当冠军。</p><div class="acts" style="display:flex;gap:8px;margin-top:16px"><button class="btn">去新建策略</button></div></div>
+      <div class="fig-h" style="margin-top:26px">结 果 表 · 有策略后长这样</div>
+      <table class="bt-tbl">
+        <thead><tr><th scope="col">#</th><th scope="col">参数</th><th scope="col">稳健分</th><th scope="col">中位</th><th scope="col">最差</th><th scope="col">离散</th><th scope="col">V1</th><th scope="col">V2</th><th scope="col">V3</th><th scope="col">V4</th><th scope="col">全窗 IS</th><th scope="col">退化</th><th scope="col">交易数</th></tr></thead>
+        <tbody><tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+      </table>
+      <div class="note">
+        <b>这一屏的真实状态</b><br>
+        <code>api.strategyList()</code> 返回空，<code>api.robustOptimizePreview()</code> 因此不发起（前端 <code>enabled: !!strategyId</code>）。表格保留表头是为了把字段位置定下来，内容为空。<br>
+        <b>保留的功能</b>：策略选择、优化目标白名单、区间、验证段数 K、最小交易数、参数网格（组合数上限校验）、模式（组合仓位 / 全量独立）、验证窗预览（每段起止与天数）、运行进度（阶段一 / 阶段二全窗细化）、结果表（稳健分 / 中位 / 最差 / 离散 / 各段分 / 全窗 IS / 退化 / 交易数）、收敛诊断（各段冠军一致 / 多数收敛 / 散落）、参数地形（高原 / 缓坡 / 孤峰）、除名原因、应用到策略配置（可还原）、停止与重连。
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+</body>
+</html>

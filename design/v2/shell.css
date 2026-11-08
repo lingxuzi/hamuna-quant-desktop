@@ -1,0 +1,104 @@
+/* frontend_v2 · 设计稿公共层
+   直接继承 design/full 的 token 与组件类, 只补三栏骨架。
+   这一层只做设计稿的框架示意; 真实实现落在 frontend_v2/src/index.css。 */
+
+/* 三栏: 目录 | 主栏 | 指标栏。指标栏只在首页用，其余页主栏撑满 */
+.app{grid-template-columns:168px minmax(0,1fr)}
+.app.with-rail{grid-template-columns:168px minmax(0,1fr) 272px}
+.rail{
+  border-left:1px solid var(--rule);
+  padding:34px 0 44px;
+  position:sticky;top:0;align-self:start;
+  max-height:100vh;overflow-y:auto;
+}
+.rail-b{padding:0 20px 18px}
+.rail-b + .rail-b{border-top:1px solid var(--rule);padding-top:18px}
+.rail-h{
+  display:flex;align-items:baseline;justify-content:space-between;
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;
+  color:var(--ink-3);margin-bottom:10px;
+}
+.rail-h b{font-family:var(--sans);font-size:11px;letter-spacing:0;color:var(--ink-2);font-weight:400}
+
+/* 指数: 名称 / 涨跌 / 迷你走势，三行一条 */
+.ix{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:6px 0}
+.ix + .ix{border-top:1px solid var(--rule)}
+.ix-n{font-size:11.5px;color:var(--ink)}
+.ix-v{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.ix-spark{grid-column:1/-1;height:16px}
+.ix-spark svg{display:block;width:100%;height:100%;overflow:visible}
+
+/* 分布: 八档横向条，零轴居中 */
+.dist{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;align-items:end;height:62px}
+.dist .bar{display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.dist .bar u{display:block;width:100%;min-height:1px;background:var(--down)}
+.dist .bar.u u{background:var(--up)}
+.dist .lbl{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin-top:4px}
+.dist .lbl span{font-family:var(--mono);font-size:7.5px;color:var(--ink-3);text-align:center;white-space:nowrap;letter-spacing:-.02em}
+
+/* 情绪: 六轴雷达 + 综合分 */
+.radar-wrap{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
+.radar-wrap svg{width:96px;height:96px;display:block;overflow:visible}
+.radar-leg{display:flex;flex-direction:column;gap:3px}
+.radar-leg span{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-2)}
+.radar-leg span b{font-family:var(--mono);font-weight:400;color:var(--ink)}
+
+/* 涨停梯队 */
+.ladder{display:flex;flex-direction:column;gap:3px}
+.ladder .r{display:grid;grid-template-columns:26px 1fr auto;gap:6px;align-items:center;font-size:10.5px}
+.ladder .r k{font-family:var(--mono);color:var(--ochre);font-size:10px;text-align:right}
+.ladder .r u{display:block;height:5px;background:var(--ochre);opacity:.75}
+.ladder .r b{font-family:var(--mono);font-weight:400;color:var(--ink-2)}
+
+/* 主栏两项读数: 成交额 / 涨跌家数 */
+.rail-kv{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule)}
+.rail-kv > div{background:var(--paper);padding:8px 10px}
+.rail-kv k{display:block;font-size:9px;color:var(--ink-3);letter-spacing:.06em}
+.rail-kv v{display:block;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;margin-top:2px}
+
+/* ---- 纪事栅格修正 ----
+   design/full 的 .chronicle 用 92px 1fr: 1fr 的最小内容尺寸来自长条目标题,
+   会把整条纪事撑出容器, 同时让没有 .e-tag 的条目标题被压成 3px 竖条。
+   改成 minmax(0,1fr) 让轨道可收缩, 标题才能正常换行。 */
+.chronicle{grid-template-columns:92px minmax(0,1fr)}
+/* 两列网格会自动排布: 第 2/4/6 个条目会掉进 92px 左列被压扁。
+   所有条目固定在第 2 列, 日期戳固定在第 1 列第 1 行。 */
+.entry{grid-column:2}
+.stamp{grid-column:1;grid-row:1}
+/* 起笔方块与脊线同心: 脊线在 91, 方块宽 7 → left = 91 + 0.5 - 3.5 = 88 */
+.chronicle::after{left:88px}
+/* 节点圆点在脊线上: 圆心应落在 91.5, 直径 5 → left = 91.5 - 2.5 - 92 = -3 */
+.entry::before{left:-3px;top:30px}
+.entry.key::before{width:7px;height:7px;left:-4px;top:29px}
+/* 不指定行, 每条自动落到下一行; 左列除第 1 行外留空即可 */
+.entry + .entry{grid-row:auto}
+.entry h2{flex-wrap:wrap}
+.entry h2 .e-t{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+
+/* 索引表: 固定列宽, 否则六列按内容撑开会让整张表溢出容器 */
+.idx{table-layout:fixed;width:100%}
+.idx col{width:auto}
+.idx col.c-n{width:30px}
+.idx col.c-p{width:136px}
+.idx col.c-r{width:132px}
+.idx col.c-l{width:46px}
+.idx col.c-s{width:62px}
+.idx td:nth-of-type(3),.idx td:nth-of-type(4){
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 卷首右侧: 印章与日期不许撑宽 */
+.ins-right{min-width:0}
+.ins-meta{min-width:0;overflow:hidden}
+.ins-meta .num{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+
+/* 纪事条目里的大型图表块: 复刻 layout-c 的四格读数 */
+.fig{margin-top:10px}
+.fig-h{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;color:var(--ink-3);margin-bottom:8px}
+
+/* 本页底部: 落地范围标注（设计稿专用，说明这一屏由哪些真实模块填充） */
+.note{
+  margin-top:22px;padding:12px 14px;border:1px dashed var(--rule);
+  font-size:10.5px;line-height:1.75;color:var(--ink-3);
+}
+.note b{color:var(--ink-2);font-weight:500}
+.note code{font-family:var(--mono);font-size:10px;color:var(--ink-2)}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 13 回测 · 策略守护</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">回测 · 策略守护<i>STRATEGY GUARDIAN</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">守</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">守护 0 个</span><span class="tb-chip warn">定时复验 关闭</span></div>
+    <div class="tb-right"><button class="tb-btn">批量扫描组合</button></div>
+  </div>
+  <div class="bt">
+    <div class="cfg">
+<div class="grp"><h4>守 护 范 围</h4><label>观察阈值</label><input type="text" value="退化 20% 进入观察" readonly><label style="margin-top:8px">退役阈值</label><input type="text" value="退化 50% 标记退役" readonly><div class="hint">这两个阈值来自守护配置，可在设置里改。</div></div>
+<div class="grp"><h4>定 时 复 验</h4><label>每日收盘后自动复验</label><select><option>关闭</option><option>开启</option></select></div>
+<div class="grp"><h4>手 动 加 入</h4><select><option>选择要守护的策略</option></select></div>
+</div>
+    <div class="main">
+      <div class="bt-seg"><div class="num-tabs">
+        <button aria-pressed="false">稳健优化</button><button aria-pressed="false">滚动样本外检验</button><button aria-pressed="true">策略守护</button>
+      </div></div>
+      <div class="bt-empty"><span class="em">NO STRATEGY · 0 UNDER GUARD</span><h2>守护名单是空的</h2><p>策略被发布时会自动建立守护基线。建立之后，每天收盘数据更新完，守护会用基线之后的新数据重新复验一次：退化到阈值就告警，退得太多就标记退役。</p><div class="acts" style="display:flex;gap:8px;margin-top:16px"><button class="btn">去新建策略</button><button class="btn ghost">批量扫描组合</button></div></div>
+      <table class="bt-tbl" style="margin-top:24px">
+        <thead><tr><th scope="col">策略</th><th scope="col">状态</th><th scope="col">基线</th><th scope="col">最近复验</th><th scope="col">退化</th><th scope="col">说明</th><th scope="col">操作</th></tr></thead>
+        <tbody><tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+      </table>
+      <div class="note">
+        <b>这一屏的真实状态</b><br>
+        <code>api.guardianOverview()</code> 实测返回 <code>{"items": [], "config": {"guardian_schedule_enabled": false, "guardian_watch_pct": 0.2, "guardian_retire_pct": 0.5, "guardian_k_max": 4, "lab_mined_slot_limit": 10}, "active_run": null, "combinations": null}</code>。<br>
+        所以上面两个阈值的 20% / 50% 是接口给的真实配置值，不是示意。守护名单为空，定时复验关闭。<br>
+        <b>保留的功能</b>：观察 / 退役阈值、定时复验开关、手动加入策略、批量扫描组合（守护名额上限 4）、状态（未复验 / 健康 / 观察 / 已退役）、基线类型（挖掘门槛 OOS / 尾随参考）、退化幅度与说明、采纳、移出守护、重跑。
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+</body>
+</html>

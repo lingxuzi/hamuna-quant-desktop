@@ -391,18 +391,18 @@ def _default_provider() -> str:
 
 
 def get_daily_data_provider() -> str:
-    provider = str(load().get("daily_data_provider", _default_provider()) or "tickflow").lower()
+    provider = str(load().get("daily_data_provider") or _default_provider()).lower()
     return _validated_provider(provider, "daily_data_provider")
 
 
 def get_adj_factor_provider() -> str:
     # 「跟随日K」(same_as_daily) 特殊值已下线: 存量配置里的旧值按非法值回退 tickflow
-    provider = str(load().get("adj_factor_provider", _default_provider()) or "tickflow").lower()
+    provider = str(load().get("adj_factor_provider") or _default_provider()).lower()
     return _validated_provider(provider, "adj_factor_provider")
 
 
 def get_minute_data_provider() -> str:
-    provider = str(load().get("minute_data_provider", _default_provider()) or "tickflow").lower()
+    provider = str(load().get("minute_data_provider") or _default_provider()).lower()
     return _validated_provider(provider, "minute_data_provider")
 
 
@@ -423,18 +423,17 @@ def _default_full_minute_provider() -> str:
 
 
 def get_full_minute_data_provider() -> str:
-    provider = str(load().get("full_minute_data_provider", _default_full_minute_provider())
-                   or "tickflow").lower()
+    provider = str(load().get("full_minute_data_provider") or _default_full_minute_provider()).lower()
     return _validated_provider(provider, "full_minute_data_provider")
 
 
 def get_depth5_data_provider() -> str:
-    provider = str(load().get("depth5_data_provider", _default_provider()) or "tickflow").lower()
+    provider = str(load().get("depth5_data_provider") or _default_provider()).lower()
     return _validated_provider(provider, "depth5_data_provider")
 
 
 def get_realtime_data_provider() -> str:
-    provider = str(load().get("realtime_data_provider", _default_provider()) or "tickflow").lower()
+    provider = str(load().get("realtime_data_provider") or _default_provider()).lower()
     return _validated_provider(provider, "realtime_data_provider")
 
 
@@ -456,7 +455,7 @@ def _default_financial_provider() -> str:
 
 
 def get_financial_provider() -> str:
-    provider = str(load().get("financial_data_provider", _default_financial_provider()) or "tickflow").lower()
+    provider = str(load().get("financial_data_provider") or _default_financial_provider()).lower()
     return _validated_provider(provider, "financial_data_provider")
 
 

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 21 持仓提醒</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.lt{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:12px}
+.lt .box{border:1px solid var(--rule);background:var(--leaf);min-height:200px;padding:26px 20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.lt .box .em{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ochre)}
+.lt .box h2{font-family:var(--serif);font-size:16px;font-weight:500;margin:8px 0 6px}
+.lt .box p{font-size:11.5px;color:var(--ink-2);line-height:1.75;margin:0;max-width:34ch}
+.lt .srch{display:flex;gap:6px}
+.lt .srch input{flex:1;font:inherit;font-size:11.5px;height:27px;padding:0 8px;border:1px solid var(--rule);
+  border-radius:0;background:var(--leaf);font-family:var(--mono)}
+.lt .srch input:focus-visible{outline:2px solid var(--ochre)}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html" class="on"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">持仓提醒<i>POSITION LOTS</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">批</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">批次 0 条</span><span class="tb-chip">手工记账</span></div>
+    <div class="tb-right"><button class="tb-btn primary">记一笔</button></div>
+  </div>
+<div class="lt">
+  <div class="box">
+    <span class="em">NO LOTS · 0</span>
+    <h2>还没有记录持仓批次</h2>
+    <p>把每一笔买入记成一批：买入价、股数、买入日。之后这里按批显示成本、现价、浮盈和持有天数，卖出时自动按先进先出核销。</p>
+  </div>
+  <div>
+    <div class="fig-h" style="margin-top:0">快 速 记 一 笔</div>
+    <div class="srch"><input type="text" placeholder="代码或名称"><button class="tb-btn">查</button></div>
+    <table class="b4t" style="margin-top:12px"><colgroup><col><col style="width:62px"><col style="width:56px"></colgroup>
+      <thead><tr><th scope="col">批次</th><th scope="col">浮盈</th><th scope="col">持有</th></tr></thead>
+      <tbody><tr><td style="color:var(--ink-3)">尚无批次</td><td></td><td></td></tr></tbody></table>
+    <div class="fig-h">为 什 么 记 批 次</div>
+    <p style="font-size:11px;color:var(--ink-2);line-height:1.8;margin:0">
+      券商只告诉你「持有 500 股、成本 12.30」。同一个标的你可能在 10.8 买过一次、13.2 补过一次 —— 两个批次的止损位不该一样。按批记账，才谈得上分批止盈。
+    </p>
+  </div>
+</div>
+<div class="note">
+<b>这一屏的真实状态</b><br>
+持仓批次存储在后端本地库里，实测为空。这是<b>手工记账工具</b>，不接券商、不自动同步 —— 记的是你自己的真实成交。<br>
+<b>保留的功能</b>：按标的记批次（价格 / 手数 / 日期 / 备注）、标的搜索与代码补全、现价与浮盈实时计算、持有天数、先进先出卖出核销、按标的小计（总股数 / 摊薄成本 / 总浮盈）、该标的的提醒位（跌破止损价 / 涨到目标价时在监控中心出告警）。
+</div>
+</main>
+</div>
+</body>
+</html>

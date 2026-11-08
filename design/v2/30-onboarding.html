@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 30 引导</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.set{display:grid;grid-template-columns:176px minmax(0,1fr);border-top:1px solid var(--rule-strong);
+  margin-top:2px}
+.set .tabs{border-right:1px solid var(--rule);padding:10px 14px 24px 0;min-width:0}
+.set .tabs a{display:block;text-decoration:none;color:var(--ink-2);font-size:11.5px;
+  padding:5px 0 5px 10px;border-left:2px solid transparent;line-height:1.4}
+.set .tabs a:hover{color:var(--ink)}
+.set .tabs a.on{color:var(--ochre);border-left-color:var(--ochre);background:var(--ochre-wash)}
+.set .tabs .grp{font-size:9px;letter-spacing:.14em;color:var(--ink-3);margin:14px 0 4px;padding-left:10px}
+.set .tabs .grp:first-child{margin-top:0}
+.set .pane{padding:14px 0 0 22px;min-width:0}
+.set .pane > h2{font-family:var(--serif);font-size:16px;font-weight:500;margin:0 0 4px}
+.set .pane > .lead{font-size:11px;color:var(--ink-2);line-height:1.75;margin:0 0 14px;max-width:64ch}
+
+/* 条目行: 左标题+说明, 右控件 —— 表单密度靠 1px 横线而不是卡片 */
+.rowset{border-top:1px solid var(--rule-strong)}
+.rowset .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--rule)}
+.rowset .r > .lab{min-width:0}
+.rowset .r b{display:block;font-size:11.5px;font-weight:500;color:var(--ink)}
+.rowset .r small{display:block;font-size:10px;color:var(--ink-3);line-height:1.65;margin-top:2px;max-width:58ch}
+.rowset .r > .ctl{display:flex;align-items:center;gap:8px;justify-self:end;flex-wrap:wrap;justify-content:flex-end}
+.rowset input[type=text]{font:inherit;font-size:11px;background:var(--leaf);color:var(--ink);
+  border:1px solid var(--rule);padding:5px 7px;border-radius:0;outline:none;width:180px}
+.rowset input[type=text]:focus-visible{outline:2px solid var(--ochre);outline-offset:1px}
+.rowset .v{font-family:var(--mono);font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums}
+.rowset .v.dim{color:var(--ink-3)}
+.rowset .sw{width:30px;height:16px;border:1px solid var(--rule);background:var(--leaf);
+  position:relative;display:block}
+.rowset .sw::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--ink-3)}
+.rowset .sw.on{border-color:var(--ochre);background:var(--ochre-wash)}
+.rowset .sw.on::after{left:16px;background:var(--ochre)}
+
+.mini{font:inherit;font-size:10.5px;background:var(--leaf);color:var(--ink);border:1px solid var(--rule);
+  padding:4px 10px;cursor:pointer;border-radius:0}
+.mini:hover{border-color:var(--ink)}
+.mini.pri{background:var(--ink);color:var(--leaf);border-color:var(--ink)}
+.mini.gh{border-color:transparent;color:var(--ochre)}
+.mini[disabled]{color:var(--ink-3);border-color:var(--rule);cursor:default}
+
+/* 数据表: 表名 + 行数 + 覆盖 + 日期 */
+.dt{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.dt th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 8px 5px 0;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.dt th:first-child{text-align:left;padding-left:0}
+.dt td{padding:0 8px 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink);padding-left:0}
+.dt td:first-child span{display:block;font-family:var(--mono);font-size:9px;color:var(--ink-3);margin-top:-1px}
+.dt tbody tr:hover{background:var(--ochre-wash)}
+.dt .z{color:var(--ink-3)}
+.dt .warnv{color:var(--warn)}
+
+/* 能力路由: 7 行, 每行「能力 ← 生效源 / 候选 / 待接入」 */
+.cap{display:grid;grid-template-columns:84px minmax(0,1fr) 150px 26px;gap:12px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--rule);font-size:11.5px}
+.cap:first-child{border-top:1px solid var(--rule-strong)}
+.cap b{font-weight:500;color:var(--ink)}
+.cap .cur{color:var(--ink-2);display:flex;align-items:center;gap:6px;min-width:0}
+.cap .cur span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap .cur i{font-style:normal;font-family:var(--mono);font-size:9px;color:var(--ochre);
+  border:1px solid var(--ochre);padding:0 3px;flex:0 0 auto}
+.cap .cands{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.cap .cands u{text-decoration:none;font-family:var(--mono);font-size:9px;color:var(--ink-3);
+  border:1px solid var(--rule);padding:1px 4px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap .cands u.ok{color:var(--ink-2);border-color:var(--rule-strong)}
+.cap .ok{font-family:var(--mono);font-size:10px;color:var(--down);justify-self:end}
+.cap .no{font-family:var(--mono);font-size:10px;color:var(--warn);justify-self:end}
+
+/* 引导页: 步骤条 + 左论题 / 右须知 */
+.stepbar{display:flex;align-items:center;gap:0;margin:0 0 20px;border-top:1px solid var(--rule-strong);padding-top:12px}
+.stepbar .s{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--ink-3);min-width:0}
+.stepbar .s + .s{margin-left:22px}
+.stepbar .s u{text-decoration:none;font-family:var(--mono);font-size:9px;width:18px;height:18px;
+  display:grid;place-items:center;border:1px solid var(--rule);flex:0 0 auto}
+.stepbar .s.on{color:var(--ink)}
+.stepbar .s.on u{border-color:var(--ochre);color:var(--ochre);background:var(--ochre-wash)}
+.stepbar .s.done u{border-color:var(--ink);background:var(--ink);color:var(--leaf)}
+
+.ob{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:44px;
+  border-top:1px solid var(--rule-strong);padding-top:26px}
+.ob .thesis h1{font-family:var(--serif);font-size:30px;line-height:1.32;font-weight:500;margin:0;letter-spacing:-.01em}
+.ob .thesis h1 em{font-style:normal;color:var(--ochre)}
+.ob .thesis > p{font-size:12.5px;line-height:1.9;color:var(--ink-2);margin:14px 0 0;max-width:34ch}
+.ob ol.flow{list-style:none;margin:26px 0 0;padding:0;border-top:1px solid var(--rule)}
+.ob ol.flow li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--rule)}
+.ob ol.flow li u{text-decoration:none;font-family:var(--mono);font-size:9.5px;color:var(--ochre);padding-top:2px}
+.ob ol.flow li b{display:block;font-size:11.5px;font-weight:500;color:var(--ink)}
+.ob ol.flow li small{display:block;font-size:10px;color:var(--ink-3);line-height:1.65;margin-top:2px}
+.ob .notice{border:1px solid var(--rule);background:var(--leaf);padding:18px 20px}
+.ob .notice > h2{font-size:11px;letter-spacing:.1em;color:var(--ink-2);font-weight:400;margin:0 0 10px}
+.ob .notice dl{margin:0}
+.ob .notice dl > div{padding:11px 0;border-top:1px solid var(--rule)}
+.ob .notice dt{font-size:11.5px;font-weight:500;color:var(--warn)}
+.ob .notice dd{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin:5px 0 0}
+.ob .notice dd p{margin:0 0 4px}
+.ob .foot{grid-column:1/-1;display:flex;align-items:center;gap:18px;margin-top:26px;
+  border-top:1px solid var(--rule-strong);padding-top:14px}
+.ob .foot p{font-size:11px;color:var(--warn);margin:0}
+.ob .foot .sp{flex:1}
+
+.tag-row{display:flex;gap:6px;flex-wrap:wrap}
+.tag-row span{font-family:var(--mono);font-size:9.5px;color:var(--ink-2);border:1px solid var(--rule);
+  padding:2px 6px}
+
+.app.solo{grid-template-columns:minmax(0,1fr)!important}
+</style>
+</head>
+<body>
+<div class="app solo">
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">引导<i>ONBOARDING</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">引</div>
+    </div>
+  </header>
+<div class="stepbar"><div class="s on"><u>1</u>使用须知</div><div class="s"><u>2</u>功能介绍</div><div class="s"><u>3</u>数据源</div><div class="s"><u>4</u>能力路由</div><div class="s"><u>5</u>完成</div></div>
+<div class="ob">
+  <section class="thesis">
+    <h1>TSP · 智能量化<br><em>工作台引擎</em></h1>
+    <p>接入行情与扩展数据，用开源引擎回测自己的策略，盘后复核结果。</p>
+    <ol class="flow">
+      <li><u>01</u><div><b>接入数据</b><small>连接已获授权的数据源，建立研究基础。</small></div></li>
+      <li><u>02</u><div><b>定义规则</b><small>创建或导入策略，将研究想法转为条件。</small></div></li>
+      <li><u>03</u><div><b>回测验证</b><small>检验历史表现，理解结果与局限。</small></div></li>
+    </ol>
+  </section>
+  <section class="notice">
+    <h2>开始前，请了解</h2>
+    <dl>
+      <div><dt>不内置策略</dt><dd>初次安装的策略库为空，策略由你自行创建或导入。第三方策略和 AI 生成内容均需自行审查与验证。</dd></div>
+      <div><dt>不荐股，不预测，不承诺收益</dt><dd>筛选、评分、监控和 AI 输出仅用于学习与研究，不构成投资建议。回测呈现历史表现，不代表未来收益。</dd></div>
+      <div><dt>遵守开源许可与服务协议</dt>
+        <dd><p>使用、修改或分发本项目须遵守 MIT 许可，保留版权与许可声明。软件按现状提供，不作保证。</p>
+        <p>数据源、插件与模型服务适用各自条款。请取得必要授权，遵守使用范围与访问限制；软件开源不等于数据开放授权。</p></dd></div>
+    </dl>
+  </section>
+  <div class="foot">
+    <p>独立判断，审慎使用。</p><span class="sp"></span>
+    <button class="mini pri" style="padding:7px 18px;font-size:11.5px">我已了解，继续</button>
+  </div>
+</div>
+<div class="note"><b>这是首次进入面板时的 5 步向导第 1 步。</b> 后面四步：功能介绍（9 项能力卡片）、数据源与 Key、能力路由检测（进入时自动按优先级改写路由并展示改了什么）、完成。此版保留两栏结构与全部文案，把右侧须知从卡片改成纸面清单，左下三步流程改成带序号的发丝线列表。</div>
+</main>
+</div>
+</body>
+</html>

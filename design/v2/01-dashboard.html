@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 01 看板</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<div class="app with-rail">
+
+<nav class="toc" aria-label="功能目录">
+  <div class="toc-g"><div class="toc-g-name">每日</div>
+    <a href="01-dashboard.html" class="on"><span>看板</span></a>
+    <a href="#"><span>自选</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">研究</div>
+    <a href="#"><span>策略选股</span></a>
+    <a href="#"><span>因子</span></a>
+    <a href="#"><span>回测</span></a>
+    <a href="#"><span>个股分析</span></a>
+    <a href="#"><span>信号库</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">市场</div>
+    <a href="#"><span>市场环境</span></a>
+    <a href="#"><span>指数</span></a>
+    <a href="#"><span>连板梯队</span></a>
+    <a href="#"><span>行业板块</span></a>
+    <a href="#"><span>概念板块</span></a>
+    <a href="#"><span>异动监控</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">交易</div>
+    <a href="#"><span>模拟盘</span></a>
+    <a href="#"><span>持仓提醒</span></a>
+    <a href="#"><span>监控中心</span></a>
+    <a href="#"><span>复盘</span></a>
+    <a href="#"><span>财务概况</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">系统</div>
+    <a href="#"><span>数据</span></a>
+    <a href="#"><span>设置</span></a>
+    <a href="#"><span>品牌</span></a>
+    <a href="#"><span>开发</span></a>
+  </div>
+  <div class="toc-tail">
+    <span>数据源<b>通达信</b></span>
+    <span>沪深京<b>5,572</b></span>
+  </div>
+</nav>
+
+<main class="page">
+
+  <header class="inscription">
+    <h1 class="ins-title">市场看板<i>MARKET BOARD</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta">
+        <span class="num">2026 · 11 · 06　周五</span>
+        <span class="live"><i></i><b>已收盘</b></span>
+      </div>
+      <div class="seal">盘</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tb-left">
+      <span class="tb-chip" style="color:var(--down);border-color:var(--down)">冰点 · 24</span>
+      <span class="tb-note">全市场 5,572 只 · 快照 3 秒前</span>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn">2026-11-06</button>
+      <button class="tb-btn">重载</button>
+      <button class="tb-btn">自定义布局</button>
+    </div>
+  </div>
+
+  <div class="headline four">
+    <div class="hl"><k>上涨 / 下跌</k><div class="hl-v">792<span style="color:var(--ink-3)"> / </span><span class="d">4,774</span></div><div class="hl-n">平盘 <em class="num">6</em></div></div>
+    <div class="hl"><k>两市成交</k><div class="hl-v">1.63<small>万亿</small></div><div class="hl-n">均额 <em class="num">29.3 亿</em></div></div>
+    <div class="hl"><k>涨停 / 跌停</k><div class="hl-v">33<span style="color:var(--ink-3)"> / </span><span class="d">15</span></div><div class="hl-n">炸板 <em class="num">17</em> · 封板率 <em class="num">66%</em></div></div>
+    <div class="hl"><k>最高连板</k><div class="hl-v">5<small>板</small></div><div class="hl-n">梯队 <em class="num">3 / 2 / 3 / 4 / 21</em></div></div>
+  </div>
+
+  <div class="chronicle">
+
+    <div class="stamp"><b>2026-11-06</b><span>周五 · 第 45 周</span></div>
+
+    <article class="entry key">
+      <h2><span class="e-t">全线收低，创业板领跌近 4%</span><span class="e-en">CLOSING</span><span class="e-tag">收盘</span></h2>
+      <p>四大指数集体下行，<b>上证 −1.10%</b>、深证 −2.57%、<b>创业板 −3.96%</b>、科创综指 −3.24%。全市场 5,572 只里 <b>下跌 4,774 只</b>，下跌家数占比 85.7%，仅 792 只上涨；跌幅超 5% 的有 393 只。</p>
+      <div class="fig">
+        <div class="fig-h">指 数 涨 跌</div>
+        <div class="strip-4">
+          <div class="c"><k>上证指数</k><div class="v num d">−1.10%</div></div>
+          <div class="c"><k>深证成指</k><div class="v num d">−2.57%</div></div>
+          <div class="c"><k>创业板指</k><div class="v num d">−3.96%</div></div>
+          <div class="c"><k>科创综指</k><div class="v num d">−3.24%</div></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="entry">
+      <h2><span class="e-t">涨跌分布：集中在 −3% 到 −1%</span><span class="e-en">BREADTH</span></h2>
+      <p><b>2,426 只</b>落在 −3%~−1% 区间，占 43.5%；−5%~−3% 有 1,123 只。上涨一侧总计不到 800 只，<b>涨幅超 5% 的只有 78 只</b>。</p>
+      <div class="fig">
+        <div class="fig-h">涨 跌 分 布 · 8 档</div>
+        <div class="dist">
+          <div class="bar"><u style="height:2.6%"></u></div>
+          <div class="bar"><u style="height:100%"></u></div>
+          <div class="bar"><u style="height:99%"></u></div>
+          <div class="bar"><u style="height:41%"></u></div>
+          <div class="bar u"><u style="height:20%"></u></div>
+          <div class="bar u"><u style="height:13%"></u></div>
+          <div class="bar u"><u style="height:3%"></u></div>
+          <div class="bar u"><u style="height:4%"></u></div>
+        </div>
+        <div class="lbl"><span>&lt;−5</span><span>−5~−3</span><span>−3~−1</span><span>−1~0</span><span>0~1</span><span>1~3</span><span>3~5</span><span>&gt;5</span></div>
+      </div>
+    </article>
+
+    <article class="entry">
+      <h2><span class="e-t">涨停 33 家，最高 5 板</span><span class="e-en">LIMIT LADDER</span></h2>
+      <p>涨停 33 只、跌停 15 只，<b>炸板 17 只</b>，封板率 66%。5 板 3 只、4 板 2 只、3 板 3 只、2 板 4 只、首板 21 只——梯队厚度尚在，但高位板数量偏少。</p>
+      <div class="fig">
+        <div class="fig-h">连 板 梯 队</div>
+        <div class="ladder">
+          <div class="r"><k>5</k><u style="width:14%"></u><b>3</b></div>
+          <div class="r"><k>4</k><u style="width:10%"></u><b>2</b></div>
+          <div class="r"><k>3</k><u style="width:14%"></u><b>3</b></div>
+          <div class="r"><k>2</k><u style="width:19%"></u><b>4</b></div>
+          <div class="r"><k>1</k><u style="width:100%"></u><b>21</b></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="entry">
+      <h2><span class="e-t">板块：全线走弱，无避风港</span><span class="e-en">SECTORS</span></h2>
+      <p>行业与概念两个榜单今日均以下跌为主。跌幅居前的集中在成长方向；防御方向相对抗跌但没有走出独立的上涨主线。</p>
+    </article>
+
+    <article class="entry key">
+      <h2><span class="e-t">监控触发 2 条异动</span><span class="e-en">ALERTS</span><span class="e-tag">需处理</span></h2>
+      <p>盘中观察名单触发<b>放量下跌</b>与<b>跌破 20 日均线</b>各一条。触发标的明细可点开个股预览查看当日分时与五档。</p>
+    </article>
+
+  </div>
+
+  <footer class="coda">
+    <span class="coda-mark">卷末</span>
+    <div class="coda-fin">
+      <button class="btn">开始复盘</button>
+      <button class="btn ghost">查看回测</button>
+      <span class="coda-meta">本地数据 · 5,572 只 · 最后写入 <span class="num">15:00:12</span></span>
+    </div>
+  </footer>
+
+  <div class="note">
+    <b>本屏由哪些真实模块填充</b><br>
+    卷首日期 ← <code>dateLabel(data.as_of)</code>；情绪徽标 ← <code>data.emotion</code>；四格读数 ← <code>data.breadth</code> / <code>data.amount</code> / <code>data.limit</code>；指数条目 ← <code>data.indices</code>；分布 ← <code>data.distribution</code>；梯队 ← <code>data.limit.tiers</code>；板块 ← <code>data.industry_rank</code> / <code>concept_rank</code>；监控 ← 告警流。<br>
+    右上指标栏四条 ← <code>data.indices</code> / <code>data.distribution</code> / <code>data.radar</code> / <code>data.limit.tiers</code>。<br>
+    <b>布局自定义</b>（拖拽 / 增删组件 / 恢复默认）与<b>历史日期切换</b>保留，入口在工具条右侧。
+  </div>
+
+</main>
+
+<aside class="rail" aria-label="市场指标">
+
+  <div class="rail-b">
+    <div class="rail-h"><b>指数</b><span>INDEX</span></div>
+    <div class="ix">
+      <span class="ix-n">上证指数</span><span class="ix-v d">−1.10%</span>
+      <div class="ix-spark"><svg viewBox="0 0 100 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--down)" stroke-width="1" points="0,3 12,5 24,4 36,8 48,7 60,11 72,10 84,13 100,15"/></svg></div>
+    </div>
+    <div class="ix">
+      <span class="ix-n">深证成指</span><span class="ix-v d">−2.57%</span>
+      <div class="ix-spark"><svg viewBox="0 0 100 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--down)" stroke-width="1" points="0,2 12,6 24,5 36,9 48,8 60,12 72,9 84,14 100,15"/></svg></div>
+    </div>
+    <div class="ix">
+      <span class="ix-n">创业板指</span><span class="ix-v d">−3.96%</span>
+      <div class="ix-spark"><svg viewBox="0 0 100 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--down)" stroke-width="1" points="0,2 12,7 24,6 36,10 48,9 60,13 72,11 84,15 100,15"/></svg></div>
+    </div>
+    <div class="ix">
+      <span class="ix-n">科创综指</span><span class="ix-v d">−3.24%</span>
+      <div class="ix-spark"><svg viewBox="0 0 100 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--down)" stroke-width="1" points="0,3 12,6 24,5 36,9 48,8 60,12 72,10 84,13 100,15"/></svg></div>
+    </div>
+  </div>
+
+  <div class="rail-b">
+    <div class="rail-h"><b>成交与广度</b><span>BREADTH</span></div>
+    <div class="rail-kv">
+      <div><k>两市成交</k><v>1.63 万亿</v></div>
+      <div><k>平均涨幅</k><v class="d">−1.88%</v></div>
+      <div><k>上涨</k><v class="u">792</v></div>
+      <div><k>下跌</k><v class="d">4,774</v></div>
+      <div><k>涨超 5%</k><v class="u">78</v></div>
+      <div><k>跌超 5%</k><v class="d">393</v></div>
+    </div>
+  </div>
+
+  <div class="rail-b">
+    <div class="rail-h"><b>涨跌分布</b><span>DISTRIBUTION</span></div>
+    <div class="dist">
+      <div class="bar"><u style="height:2.6%"></u></div>
+      <div class="bar"><u style="height:100%"></u></div>
+      <div class="bar"><u style="height:99%"></u></div>
+      <div class="bar"><u style="height:41%"></u></div>
+      <div class="bar u"><u style="height:20%"></u></div>
+      <div class="bar u"><u style="height:13%"></u></div>
+      <div class="bar u"><u style="height:3%"></u></div>
+      <div class="bar u"><u style="height:4%"></u></div>
+    </div>
+    <div class="lbl"><span>&lt;−5</span><span>−5~−3</span><span>−3~−1</span><span>−1~0</span><span>0~1</span><span>1~3</span><span>3~5</span><span>&gt;5</span></div>
+  </div>
+
+  <div class="rail-b">
+    <div class="rail-h"><b>情绪雷达</b><span>24 · 冰点</span></div>
+    <div class="radar-wrap">
+      <svg viewBox="0 0 100 100">
+        <polygon points="50,14 81,32 81,68 50,86 19,68 19,32" fill="none" stroke="var(--rule)"/>
+        <polygon points="50,26 72,39 72,61 50,74 28,61 28,39" fill="none" stroke="var(--rule)"/>
+        <polygon points="50,38 63,45 63,55 50,62 37,55 37,45" fill="none" stroke="var(--rule)"/>
+        <!-- 真实值: 指数0 赚钱1 量能25 投机51 抗跌0 主线65 -->
+        <polygon points="50,50 50.5,50.2 58,45.5 50,31.6 50,50 59.8,36.2"
+                 fill="var(--ochre)" fill-opacity=".14" stroke="var(--ochre)" stroke-width="1.2"/>
+      </svg>
+      <div class="radar-leg">
+        <span>指数<b>0</b></span>
+        <span>赚钱<b>1</b></span>
+        <span>量能<b>25</b></span>
+        <span>投机<b>51</b></span>
+        <span>抗跌<b>0</b></span>
+        <span>主线<b>65</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail-b">
+    <div class="rail-h"><b>涨停梯队</b><span>33 家</span></div>
+    <div class="ladder">
+      <div class="r"><k>5</k><u style="width:14%"></u><b>3</b></div>
+      <div class="r"><k>4</k><u style="width:10%"></u><b>2</b></div>
+      <div class="r"><k>3</k><u style="width:14%"></u><b>3</b></div>
+      <div class="r"><k>2</k><u style="width:19%"></u><b>4</b></div>
+      <div class="r"><k>1</k><u style="width:100%"></u><b>21</b></div>
+    </div>
+  </div>
+
+</aside>
+</div>
+</body>
+</html>

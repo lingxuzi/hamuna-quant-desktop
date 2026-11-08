@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 23 财务概况</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:14px}
+.rv .main-col{min-width:0}
+.rv .aside{min-width:0;border-left:1px solid var(--rule);padding-left:20px}
+.rv h3{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px;font-weight:400}
+.rv h3:not(:first-child){margin-top:22px}
+.empty-rv{border:1px solid var(--rule);background:var(--leaf);padding:34px 24px;text-align:center}
+.empty-rv .em{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ochre)}
+.empty-rv h2{font-family:var(--serif);font-size:17px;font-weight:500;margin:9px 0 7px}
+.empty-rv p{font-size:11.5px;color:var(--ink-2);line-height:1.8;margin:0 auto;max-width:42ch}
+.empty-rv .acts{display:flex;gap:8px;justify-content:center;margin-top:16px}
+
+.radar6{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule)}
+.radar6 > div{background:var(--leaf);padding:7px 9px}
+.radar6 k{display:block;font-size:9px;letter-spacing:.1em;color:var(--ink-3)}
+.radar6 v{display:block;font-family:var(--mono);font-size:15px;margin:2px 0 3px}
+.radar6 i{display:block;height:3px;background:var(--rule)}
+.radar6 i b{display:block;height:100%;background:var(--ochre)}
+
+.dist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;background:var(--rule);
+  align-items:end;height:110px;border:1px solid var(--rule)}
+.dist > div{background:var(--leaf);display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;height:100%;padding:4px 2px 3px;position:relative}
+.dist .bar2{width:100%;background:var(--ochre);opacity:.7}
+.dist .bar2.d{background:var(--down)}
+.dist em{font-family:var(--mono);font-style:normal;font-size:8.5px;color:var(--ink-3);margin-top:3px}
+
+.lh-t{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.lh-t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.lh-t th:first-child{text-align:left}
+.lh-t th:nth-child(2){text-align:left}
+.lh-t td{height:29px;border-bottom:1px solid var(--rule);text-align:right;color:var(--ink-2);
+  font-family:var(--mono);font-size:10px;font-variant-numeric:tabular-nums;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lh-t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.lh-t td:nth-child(2){text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.lh-t tbody tr:hover{background:var(--ochre-wash)}
+.lh-t .up{color:var(--up)} .lh-t .down{color:var(--down)}
+
+.fh{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.fh > div{background:var(--paper);padding:11px 14px 13px}
+.fh k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:3px}
+.fh v{display:block;font-family:var(--mono);font-size:19px;font-variant-numeric:tabular-nums}
+.fh small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.fh .zero v{color:var(--ink-3)}
+.srch-big{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border-top:1px solid var(--rule-strong);
+  padding:16px 0 4px;margin-top:2px}
+.srch-big input{font:inherit;font-size:13px;height:36px;padding:0 12px;border:1px solid var(--rule);
+  border-radius:0;background:var(--leaf);font-family:var(--sans)}
+.srch-big input:focus-visible{outline:2px solid var(--ochre);outline-offset:-1px}
+.srch-big button{font:inherit;font-size:12px;padding:0 22px;background:var(--ink);color:var(--paper);border:0;cursor:pointer}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html" class="on"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">财务概况<i>FINANCIALS</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">财</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip">数据源 可用</span><span class="tb-chip warn">五表全空</span><span class="tb-chip warn">未同步</span></div>
+    <div class="tb-right"><button class="tb-btn primary">同步财务数据</button></div>
+  </div>
+<div class="fh"><div class="zero"><k>核心指标</k><v>0</v><small>0 只标的</small></div><div class="zero"><k>利润表</k><v>0</v><small>0 只标的</small></div><div class="zero"><k>资产负债表</k><v>0</v><small>0 只标的</small></div><div class="zero"><k>现金流量表</k><v>0</v><small>0 只标的</small></div><div class="zero"><k>股本表</k><v>0</v><small>0 只标的</small></div></div>
+<div class="srch-big">
+  <input type="text" placeholder="输入代码或名称，如 600519 / 贵州茅台">
+  <button>查 看</button>
+</div>
+<div class="rv" style="border-top:0;padding-top:6px">
+  <div class="main-col">
+    <h3>财 务 面 板</h3>
+    <div class="empty-rv">
+      <span class="em">TABLES EMPTY</span>
+      <h2>五张财务表都是空的</h2>
+      <p>数据源能提供财务数据，但还没同步过。同步一次会把全市场的三张报表、核心指标和股本数据拉进本地库，之后搜任意一只就能看。</p>
+      <div class="acts"><button class="tb-btn primary">同步财务数据</button><button class="tb-btn">去配置数据源</button></div>
+    </div>
+    <h3>同 步 之 后 看 什 么</h3>
+    <table class="lh-t"><colgroup><col style="width:92px"><col></colgroup>
+      <tbody>
+        <tr><td>核心指标</td><td style="text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2)">ROE、毛利率、净利率、资产负债率、经营现金流 / 净利润</td></tr>
+        <tr><td>利润表</td><td style="text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2)">营业收入、营业成本、期间费用、归母净利润，逐季同比与环比</td></tr>
+        <tr><td>资产负债表</td><td style="text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2)">总资产、负债、商誉、有息负债，看结构是否在恶化</td></tr>
+        <tr><td>现金流量表</td><td style="text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2)">经营、投资、筹资三条线，重点是经营现金流是否跟得上利润</td></tr>
+        <tr><td>股本表</td><td style="text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2)">总股本与流通股本变化，配合市值与换手率看</td></tr>
+      </tbody></table>
+  </div>
+  <div class="aside">
+    <h3 style="margin-top:0">数 据 源</h3>
+    <table class="lh-t"><colgroup><col><col style="width:78px"></colgroup>
+      <tbody>
+        <tr><td>财务数据能力</td><td class="up">可用</td></tr>
+        <tr><td>提供方</td><td>fuyao</td></tr>
+        <tr><td>当前状态</td><td>空闲</td></tr>
+        <tr><td>上次同步</td><td>从未</td></tr>
+        <tr><td>覆盖标的</td><td>0 只</td></tr>
+      </tbody></table>
+    <h3>同 步 说 明</h3>
+    <p style="font-size:11px;color:var(--ink-2);line-height:1.85;margin:0">
+      五张表可以单独同步，也可以一次全量。每张表完成后左上角对应格子的数量会变，不用等全部结束。<br>
+      同步是后台任务，关掉页面也会继续跑。
+    </p>
+    <h3>AI 财 务 分 析</h3>
+    <p style="font-size:11px;color:var(--ink-2);line-height:1.85;margin:0">
+      同步完成后，选中一只股票可以让 AI 读它的五张表写一段分析。分析结果单独存，不写回财务表。
+    </p>
+  </div>
+</div>
+<div class="note">
+<b>这一屏的真实状态</b><br>
+<code>/api/financials/status</code> 实测：<code>available: true</code>（能力路由判定 fuyao 可提供财务数据），但 <code>metrics / income / balance_sheet / cash_flow / shares</code> <b>五张表 rows 与 symbols 全是 0</b>，<code>last_sync: {}</code>，<code>syncing: false</code>。<br>
+<code>/api/financials/metrics?symbol=600519.SH</code> 实测 <code>{"data": []}</code>。<br>
+所以这一屏是「接通了、没同步」，不是「不可用」—— 两者在页面上要分开：能力不可用时显示锁定提示，能力可用但表空时显示同步入口。这两条分支在 <code>Page.tsx</code> 里本来就分开写。<br>
+<b>保留的功能</b>：能力门控（不可用时的锁定页）、五张表的行数与覆盖标的、全量 / 单表同步、同步进度（逐表完成即更新）、个股搜索与记忆上次查看、五表详情面板、报告历史、AI 财务分析、跳转数据源配置。
+</div>
+</main>
+</div>
+</body>
+</html>

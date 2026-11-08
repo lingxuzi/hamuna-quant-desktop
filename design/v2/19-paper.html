@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 19 模拟盘</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.pf{display:grid;grid-template-columns:340px minmax(0,1fr);border-top:1px solid var(--rule-strong);margin-top:2px}
+.pf .form{padding:14px 20px 18px 0;border-right:1px solid var(--rule);min-width:0}
+.pf .side{padding:14px 0 18px 20px;min-width:0}
+.pf h3{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px;font-weight:400}
+.pf h3:not(:first-child){margin-top:20px}
+.fld{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 10px;align-items:center}
+.fld label{font-size:11px;color:var(--ink-2)}
+.fld input,.fld select{font:inherit;font-size:11.5px;width:100%;height:27px;padding:0 8px;
+  border:1px solid var(--rule);border-radius:0;background:var(--leaf);color:var(--ink);
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
+.fld input[type=text]::-webkit-input-placeholder{color:var(--ink-3)}
+.fld input:focus-visible,.fld select:focus-visible{outline:2px solid var(--ochre);outline-offset:0}
+.fld .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fld .unit{position:relative}
+.fld .unit i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-style:normal;
+  font-family:var(--sans);font-size:9.5px;color:var(--ink-3);pointer-events:none}
+.fld .unit input{padding-right:26px}
+.seg{display:flex;border:1px solid var(--rule);width:100%}
+.seg button{flex:1;font:inherit;font-size:11px;padding:5px 0;background:transparent;border:0;
+  border-left:1px solid var(--rule);color:var(--ink-2);cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.go{margin-top:20px;width:100%;height:34px;font:inherit;font-size:12.5px;letter-spacing:.06em;
+  background:var(--ochre);color:var(--paper);border:0;cursor:pointer}
+.go:active{transform:translateY(1px)}
+.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.ledger{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule)}
+.ledger > div{background:var(--leaf);padding:9px 12px}
+.ledger k{display:block;font-size:9px;letter-spacing:.1em;color:var(--ink-3);margin-bottom:3px}
+.ledger v{display:block;font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+.steps{counter-reset:s;margin:0;padding:0;list-style:none}
+.steps li{counter-increment:s;display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;
+  padding:9px 0;border-bottom:1px solid var(--rule);font-size:11.5px;line-height:1.6;color:var(--ink-2)}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:9px;color:var(--ochre);padding-top:3px}
+.steps b{color:var(--ink);font-weight:500}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html" class="on"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">模拟盘<i>PAPER TRADING</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">模</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">账户 0 个</span><span class="tb-chip warn">未初始化</span><span class="tb-chip">费用 2‱ / 1‰ / 5bp</span></div>
+    <div class="tb-right"><button class="tb-btn">多账户对比</button></div>
+  </div>
+<div class="pf">
+  <div class="form">
+  <h3>账 户</h3>
+  <div class="fld">
+    <label>账户名</label><div><input type="text" placeholder="留空则自动命名"></div>
+    <label>初始资金</label><div><div class="unit"><input type="number" value="1000000"><i>元</i></div></div>
+    <label>账户编号</label><div><input type="text" placeholder="可选 · 默认 default"></div>
+  </div>
+  <h3>交 易 费 用</h3>
+  <div class="fld">
+    <label>佣金</label><div><div class="unit"><input type="number" value="2"><i>‱</i></div></div>
+    <label>印花税</label><div><div class="unit"><input type="number" value="1"><i>‰</i></div></div>
+    <label>滑点</label><div><div class="unit"><input type="number" value="5"><i>bp</i></div></div>
+  </div>
+  <h3>跟 单（可 跳 过）</h3>
+  <div class="fld">
+    <label>跟随来源</label><div><div class="seg" role="group"><button aria-pressed="true">策略</button><button aria-pressed="false">监控规则</button></div></div>
+    <label>选择</label><div><select><option>策略库为空</option></select></div>
+    <label>方向</label><div><div class="seg" role="group"><button aria-pressed="true">自动</button><button aria-pressed="false">买</button><button aria-pressed="false">卖</button></div></div>
+    <label>下单数量</label><div><div class="two"><select><option>按权益比</option><option>固定金额</option></select><div class="unit"><input type="number" value="10"><i>%</i></div></div></div>
+    <label>成交方式</label><div><select><option>次日开盘</option><option>当日收盘</option><option>市价</option></select></div>
+    <label>冷却天数</label><div><input type="number" value="1"></div>
+    <label>最大持仓</label><div><input type="number" value="0" placeholder="0 = 不限"></div>
+  </div>
+  <button class="go">开 立 账 户</button>
+</div>
+  <div class="side">
+  <h3>开 户 后 会 发 生 什 么</h3>
+  <ol class="steps">
+    <li><b>按真实收盘价记账。</b>买入按当日收盘价成交，加滑点与佣金；卖出再加印花税。价格来自本地日线，不是你输入的价格。</li>
+    <li><b>隔日才可用。</b>T 日买入的份额 T+1 日才能卖出，现金 T+0 可用于再买入 —— 与 A 股实际一致。</li>
+    <li><b>涨跌停不成交。</b>下一开盘价已封板时，订单排队或作废，不会被记成成交。</li>
+    <li><b>跟单可选。</b>选一个策略或监控规则，它出新信号时账户自动下单；不选则纯手工操作。</li>
+  </ol>
+  <h3>多 账 户 对 比</h3>
+  <div class="ledger">
+    <div><k>账 户 数</k><v>0</v></div>
+    <div><k>合 计 净 值</k><v>—</v></div>
+    <div><k>最 优 账 户</k><v>—</v></div>
+    <div><k>最 大 回 撤</k><v>—</v></div>
+  </div>
+  <p style="font-size:11px;color:var(--ink-3);margin:8px 0 0;line-height:1.7">
+    每个账户独立记账、独立费用、独立跟单。建两个账户各跟不同策略，收盘后在这里看谁更能扛。
+  </p></div>
+</div>
+<div class="note">
+<b>这一屏的真实状态</b><br>
+<code>/api/paper/accounts</code> 实测返回 <code>{"accounts": []}</code>，<code>/api/paper/overview</code> 返回 <code>{"initialized": false, "account_id": "default"}</code>。账户一个都没有，所以首屏就是开户表单，不是净值曲线。<br>
+开户默认值取自 <code>NEW_ACCOUNT_DEFAULTS_KEY</code> 的首次默认：佣金 2‱、印花税 1‰、滑点 5bp；界面里的 100 万初始资金与上表一致。<br>
+<b>有账户之后</b>换成账户视图：左侧持仓表（成本 / 现价 / 浮盈 / 权重），右侧净值曲线与回撤带，下方订单 / 成交台账 / 回合明细三表切换，顶部账户切换器与冻结开关。<br>
+<b>保留的功能</b>：多账户建删改、初始资金与三项费用、冻结账户、手工下单（市价 / 次日开盘 / 收盘，按股数或按金额）、挂单撤销、涨停排队开关、跟单规则（跟策略 / 跟监控规则，自动 / 买 / 卖，按权益比或固定金额，冷却天数，最大持仓）、净值与回撤、回合统计（胜率 / 盈亏比 / 平均持有天数 / 已实现盈亏 / 最大回撤）、多账户对比、策略执行面板。
+</div>
+</main>
+</div>
+</body>
+</html>

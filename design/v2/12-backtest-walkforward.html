@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 12 回测 · 滚动样本外</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">回测 · 滚动样本外<i>WALK-FORWARD</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">滚</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip warn">等待策略</span><span class="tb-chip">训练 250 / 测试 60</span></div>
+    <div class="tb-right"><button class="tb-btn">候选方案</button></div>
+  </div>
+  <div class="bt">
+    <div class="cfg">
+<div class="grp"><h4>策 略</h4><select><option>尚无已保存策略</option></select></div>
+<div class="grp"><h4>优 化 目 标</h4><select><option>索提诺比率</option><option>夏普比率</option><option>卡玛比率</option></select></div>
+<div class="grp"><h4>回 测 范 围</h4><div class="row"><div><label>起始</label><input type="date" value="2023-11-06"></div><div><label>结束</label><input type="date" value="2026-11-06"></div></div></div>
+<div class="grp"><h4>窗 口</h4><div class="row"><div><label>训练（天）</label><input type="number" value="250"></div><div><label>测试（天）</label><input type="number" value="60"></div></div><div class="row" style="margin-top:8px"><div><label>步进（天）</label><input type="number" value="60"></div><div></div></div></div>
+<div class="grp"><h4>模 式</h4><select><option>组合仓位</option><option>全量独立</option></select></div>
+<div class="hint" style="margin-top:14px">每折用训练窗选参数、测试窗只做验证。所有 OOS 段首尾相接拼成一条净值，这是唯一不看未来的收益曲线。</div>
+</div>
+    <div class="main">
+      <div class="bt-seg"><div class="num-tabs">
+        <button aria-pressed="false">稳健优化</button><button aria-pressed="true">滚动样本外检验</button><button aria-pressed="false">策略守护</button>
+      </div></div>
+      <div class="bt-empty"><span class="em">NO STRATEGY</span><h2>还没有策略可以滚动检验</h2><p>滚动样本外检验按「训练 250 天 → 测试 60 天」向前滑动，每折在训练窗里挑参数、在测试窗里验。把每折的测试段收益按顺序拼起来，就是一条没有看过未来的净值。</p><div class="acts" style="display:flex;gap:8px;margin-top:16px"><button class="btn">去新建策略</button></div></div>
+      <div class="chart-row" style="margin-top:24px">
+        <div class="plot" style="margin-top:0"><div class="plot-hd"><b>OOS 拼接净值</b><span>WALK-FORWARD</span></div>
+          <div class="plotbody pending" style="height:170px">每折测试段的收益按顺序复利拼接</div></div>
+        <div class="plot" style="margin-top:0"><div class="plot-hd"><b>逐折表现</b><span>BY FOLD</span></div>
+          <div class="plotbody pending" style="height:170px">IS 目标 vs OOS 目标，差值即退化</div></div>
+      </div>
+      <table class="bt-tbl" style="margin-top:14px">
+        <thead><tr><th scope="col">折</th><th scope="col">测试区间</th><th scope="col">最优参数</th><th scope="col">IS 目标</th><th scope="col">OOS 目标</th><th scope="col">OOS 收益</th></tr></thead>
+        <tbody><tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+      </table>
+      <div class="note">
+        <b>这一屏的真实状态</b><br>
+        策略库为空，<code>api.walkforwardPreview()</code> 不发起，结果区为空。<br>
+        <b>保留的功能</b>：策略选择、优化目标、三年区间与自定义、训练 / 测试 / 步进天数、模式、运行与停止、重连未完成任务、OOS 复利收益、IS→OOS 退化、一致性（OOS 盈利折占比）、有效折与跳过折、逐折表（测试区间 / 最优参数 / IS 目标 / OOS 目标 / OOS 收益）、把参数应用到策略。
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+</body>
+</html>

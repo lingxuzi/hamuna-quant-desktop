@@ -570,6 +570,56 @@ def refresh_phase_labels(data_dir: Path, *, start: date | None = None) -> int:
     return labeled.height
 
 
+def smooth_state_series(df: pl.DataFrame) -> pl.DataFrame:
+    """对全量 regime 时序重标五档状态: 连续 _STATE_CONFIRM_DAYS 日同档才切换。
+
+    日频综合分在强弱之间大幅摆动(实测 243 天切换 181 次), 直接落五档状态没有
+    持续性, 分布图与走势带不可读。照 market_phase 的做法做持续性确认:
+    切换需连续 _STATE_CONFIRM_DAYS 日提出同档, 否则维持上一状态。
+    score 保持日频原值不动(它是读数, 不是标签)。
+    缺 state 列时原样返回。
+    """
+    from app.services.market_phase import _STATE_CONFIRM_DAYS
+
+    if df.is_empty() or "state" not in df.columns:
+        return df
+    rows = df.sort("date")
+    raw = rows["state"].to_list()
+    smooth: list[str] = []
+    current = None
+    pending: str | None = None
+    pending_run = 0
+    for r in raw:
+        if current is None:
+            current = r
+            smooth.append(current)
+            continue
+        if r == current:
+            smooth.append(current)
+            pending, pending_run = None, 0
+            continue
+        if r == pending:
+            pending_run += 1
+        else:
+            pending, pending_run = r, 1
+        if pending_run >= _STATE_CONFIRM_DAYS:
+            current = r
+            smooth.append(current)
+            pending, pending_run = None, 0
+        else:
+            smooth.append(current)
+    return rows.with_columns(pl.Series("state", smooth, dtype=pl.Utf8)).sort("date")
+
+
+def refresh_state_labels(data_dir: Path) -> int:
+    """对全量 regime 时序重标五档状态(持续性确认)。返回行数; 空表返回 0。"""
+    df = load_regime_history(data_dir)
+    if df.is_empty():
+        return 0
+    atomic_write_parquet(smooth_state_series(df), regime_path(data_dir))
+    return df.height
+
+
 def replace_regime_range(data_dir: Path, start: date, end: date, new_rows: pl.DataFrame) -> None:
     """历史修正允许删除已不再存在的统计行, 不保留旧的假结果。"""
     old = load_regime_history(data_dir)

@@ -487,3 +487,34 @@ def test_build_regime_mask_first_formal_day_requires_warmup_predecessor(tmp_path
     )
     assert mask is not None
     assert mask.tolist() == [True, False, True]
+
+
+def test_smooth_state_series_requires_confirmation():
+    """五档状态抖动: 单日跳档不切, 连续两日同档才切; 单日闪回不打断。"""
+    df = pl.DataFrame({
+        "date": [date(2026, 1, d) for d in range(1, 8)],
+        "state": ["strong", "weak", "weak", "strong", "weak", "weak", "weak"],
+        "score": [80, 10, 12, 78, 9, 8, 7],
+    })
+    out = regime_builder.smooth_state_series(df)
+    # 去抖只延长在途时长, 不改变最终归属, 因此结果即多数分档。
+    # 01 strong; 02 首次 weak(待定); 03 连续第二日 weak → 切; 04 单日 strong 待定;
+    # 05 weak 打断待定, 维持 weak; 06/07 仍 weak
+    assert out["state"].to_list() == ["strong", "strong", "weak", "weak", "weak", "weak", "weak"]
+    # score 是日频读数, 不参与平滑
+    assert out["score"].to_list() == [80, 10, 12, 78, 9, 8, 7]
+
+
+def test_smooth_state_series_single_flip_reverts():
+    """一日闪回: 无连续两日, 状态不变。"""
+    df = pl.DataFrame({
+        "date": [date(2026, 2, d) for d in range(1, 5)],
+        "state": ["range", "weak", "range", "weak"],
+        "score": [50, 10, 52, 11],
+    })
+    assert regime_builder.smooth_state_series(df)["state"].to_list() == ["range"] * 4
+
+
+def test_smooth_state_series_empty_passthrough():
+    empty = pl.DataFrame({"date": [], "state": [], "score": []})
+    assert regime_builder.smooth_state_series(empty).is_empty()

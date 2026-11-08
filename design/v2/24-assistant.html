@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>v2 · 24 AI 助手</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="plots.css">
+<link rel="stylesheet" href="bt.css">
+<style>
+
+.b4h{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);
+  border-top:1px solid var(--rule-strong);margin-top:2px}
+.b4h > div{background:var(--paper);padding:10px 14px 12px;min-width:0}
+.b4h k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:4px}
+.b4h v{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.b4h small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--ink-3);margin-top:3px}
+.brd{display:flex;height:5px;margin-top:6px}
+.brd i{display:block;height:100%}
+.brd .u{background:var(--up)} .brd .f{background:var(--rule)} .brd .d{background:var(--down)}
+
+.b4s{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.b4t{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.b4t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.b4t th:first-child{text-align:left}
+.b4t td{padding:0 0 0 0;height:30px;border-bottom:1px solid var(--rule);text-align:right;
+  font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b4t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.b4t tbody tr:hover{background:var(--ochre-wash)}
+.b4t tr.on td{background:var(--ochre-wash)}
+.b4t tr.on td:first-child{color:var(--ochre)}
+.b4t .rk{display:inline-block;width:16px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.b4t td .bar{display:inline-block;height:6px;vertical-align:middle;margin-right:5px;background:var(--ochre);opacity:.55}
+.b4t td.up{color:var(--up)} .b4t td.down{color:var(--down)}
+.b4t .nm{display:flex;align-items:center;gap:6px}
+.b4t .nm span{overflow:hidden;text-overflow:ellipsis}
+
+.fig-h{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:24px 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px}
+
+.heat{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.heat a{display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px;min-width:0;
+  text-decoration:none;color:var(--paper);background:var(--ink)}
+.heat a b{font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat a em{font-family:var(--mono);font-style:normal;font-size:11px;font-variant-numeric:tabular-nums}
+.heat a small{font-family:var(--mono);font-size:8.5px;opacity:.72}
+
+.note{font-size:10.5px;line-height:1.75;color:var(--ink-2);margin-top:22px;
+  border-top:1px solid var(--rule);padding-top:10px}
+.note b{font-weight:500;color:var(--ink)}
+.note code{font-family:var(--mono);font-size:9.5px;background:var(--leaf-2);padding:1px 4px}
+
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:14px}
+.rv .main-col{min-width:0}
+.rv .aside{min-width:0;border-left:1px solid var(--rule);padding-left:20px}
+.rv h3{font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 8px;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:5px;font-weight:400}
+.rv h3:not(:first-child){margin-top:22px}
+.empty-rv{border:1px solid var(--rule);background:var(--leaf);padding:34px 24px;text-align:center}
+.empty-rv .em{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ochre)}
+.empty-rv h2{font-family:var(--serif);font-size:17px;font-weight:500;margin:9px 0 7px}
+.empty-rv p{font-size:11.5px;color:var(--ink-2);line-height:1.8;margin:0 auto;max-width:42ch}
+.empty-rv .acts{display:flex;gap:8px;justify-content:center;margin-top:16px}
+
+.radar6{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule)}
+.radar6 > div{background:var(--leaf);padding:7px 9px}
+.radar6 k{display:block;font-size:9px;letter-spacing:.1em;color:var(--ink-3)}
+.radar6 v{display:block;font-family:var(--mono);font-size:15px;margin:2px 0 3px}
+.radar6 i{display:block;height:3px;background:var(--rule)}
+.radar6 i b{display:block;height:100%;background:var(--ochre)}
+
+.dist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;background:var(--rule);
+  align-items:end;height:110px;border:1px solid var(--rule)}
+.dist > div{background:var(--leaf);display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;height:100%;padding:4px 2px 3px;position:relative}
+.dist .bar2{width:100%;background:var(--ochre);opacity:.7}
+.dist .bar2.d{background:var(--down)}
+.dist em{font-family:var(--mono);font-style:normal;font-size:8.5px;color:var(--ink-3);margin-top:3px}
+
+.lh-t{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.lh-t th{font-weight:400;font-size:9px;letter-spacing:.1em;color:var(--ink-3);text-align:right;
+  padding:0 0 5px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.lh-t th:first-child{text-align:left}
+.lh-t th:nth-child(2){text-align:left}
+.lh-t td{height:29px;border-bottom:1px solid var(--rule);text-align:right;color:var(--ink-2);
+  font-family:var(--mono);font-size:10px;font-variant-numeric:tabular-nums;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lh-t td:first-child{text-align:left;font-family:var(--sans);font-size:11.5px;color:var(--ink)}
+.lh-t td:nth-child(2){text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.lh-t tbody tr:hover{background:var(--ochre-wash)}
+.lh-t .up{color:var(--up)} .lh-t .down{color:var(--down)}
+
+.ai{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;margin-top:2px;
+  border-top:1px solid var(--rule-strong);padding-top:12px}
+.drv{border:1px solid var(--rule);background:var(--leaf);display:flex;flex-direction:column;min-height:430px}
+.drv-hd{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rule)}
+.drv-hd b{font-size:12px;font-weight:500}
+.drv-hd .mdl{font-family:var(--mono);font-size:9px;color:var(--ink-3);padding:1px 6px;border:1px solid var(--rule)}
+.drv-hd .ok{margin-left:auto;font-size:9px;letter-spacing:.1em;color:var(--down)}
+.drv-bd{flex:1;padding:16px 20px;min-width:0}
+.drv-bd .hello{font-family:var(--serif);font-size:16px;margin:0 0 4px}
+.drv-bd .hello-sub{font-size:11.5px;color:var(--ink-2);margin:0 0 16px;line-height:1.7}
+.sg-g{margin-top:14px}
+.sg-g h4{font-size:9px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 6px;font-weight:400}
+.sg-list{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.sg-list button{font:inherit;font-size:11px;text-align:left;padding:8px 10px;background:var(--paper);
+  border:0;color:var(--ink-2);cursor:pointer;line-height:1.4}
+.sg-list button:hover{background:var(--ochre-wash);color:var(--ochre)}
+.drv-ft{border-top:1px solid var(--rule);padding:8px 12px;display:flex;align-items:center;gap:8px}
+.drv-ft .inp{flex:1;font:inherit;font-size:11.5px;height:30px;padding:0 10px;border:1px solid var(--rule);
+  border-radius:0;background:var(--paper);color:var(--ink-3)}
+.drv-ft .send{font:inherit;font-size:11.5px;padding:0 16px;height:30px;background:var(--ink);color:var(--paper);border:0;cursor:pointer}
+.drv-ft kbd{font-family:var(--mono);font-size:9px;color:var(--ink-3);border:1px solid var(--rule);padding:1px 4px}
+
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="toc" aria-label="功能目录">
+<div class="toc-g"><div class="toc-g-name">每日</div>
+<a href="01-dashboard.html"><span>看板</span></a>
+<a href="02-watchlist.html"><span>自选</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">研究</div>
+<a href="03-screener.html"><span>策略选股</span></a>
+<a href="05-factors.html"><span>因子</span></a>
+<a href="10-backtest-strategy.html"><span>回测</span></a>
+<a href="06-stock-analysis.html"><span>个股分析</span></a>
+<a href="07-signals.html"><span>信号库</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">市场</div>
+<a href="08-regime.html"><span>市场环境</span></a>
+<a href="09-indices.html"><span>指数</span></a>
+<a href="04-limit-ladder.html"><span>连板梯队</span></a>
+<a href="16-industry.html"><span>行业板块</span></a>
+<a href="17-concept.html"><span>概念板块</span></a>
+<a href="18-abnormal.html"><span>异动监控</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">交易</div>
+<a href="19-paper.html"><span>模拟盘</span></a>
+<a href="21-lots.html"><span>持仓提醒</span></a>
+<a href="20-monitor.html"><span>监控中心</span></a>
+<a href="22-review.html"><span>复盘</span></a>
+<a href="23-financials.html"><span>财务概况</span></a>
+</div>
+<div class="toc-g"><div class="toc-g-name">系统</div>
+<a href="25-data.html"><span>数据</span></a>
+<a href="26-settings-pages.html"><span>设置</span></a>
+<a href="28-branding.html"><span>品牌</span></a>
+<a href="29-dev.html"><span>开发</span></a>
+</div>
+<div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+<main class="page">
+  <header class="inscription">
+    <h1 class="ins-title">AI 助手<i>ASSISTANT</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">2026 · 11 · 06　周五</span><span class="live"><i></i><b>已收盘</b></span></div>
+      <div class="seal">助</div>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tb-left"><span class="tb-chip">已连接</span><span class="tb-chip">agnes-3.0-flash</span><span class="tb-chip">18 条快捷指令</span></div>
+    <div class="tb-right"><button class="tb-btn">新对话</button></div>
+  </div>
+<div class="ai">
+  <div class="drv">
+    <div class="drv-hd"><b>AI 助手</b><span class="mdl">agnes-3.0-flash</span><span class="ok">● 已连接</span></div>
+    <div class="drv-bd">
+      <p class="hello">问一句，它自己去查。</p>
+      <p class="hello-sub">助手能调用本地数据与工具：拉行情、查财务、跑回测、看数据完整性。执行有副作用的操作（下单、建策略）会先弹确认卡，你点了才动。</p>
+      <div class="sg-g"><h4>行情与大盘</h4><div class="sg-list"><button title="帮我看看今天的市场总览: 涨跌家数、成交额、涨停与连板梯队、情绪雷达, 以及领涨领跌板块。">今天市场怎么样？</button><button title="看看今天概念/行业板块的轮动: 领涨领跌板块、盘中切换事件和资金排名, 简要总结主线。">板块在怎么轮动</button><button title="今天市场上有哪些异动? 快速拉升、大笔买卖、涨跌停开板等都列一下, 按重要程度总结。">今天有什么异动</button><button title="最近一个月市场环境(regime)状态如何演变？今天是强势还是弱势, 情绪周期处于什么阶段？">当前市场环境</button><button title="查一下主要指数今天的行情: 上证指数、深证成指、创业板指的涨跌幅与成交额, 对比一下谁强谁弱。">主要指数表现</button></div></div><div class="sg-g"><h4>我的与个股</h4><div class="sg-list"><button title="查一下我的自选列表, 按今日涨跌幅排序, 标出表现最好和最差的, 并简要点评。">我的自选表现如何</button><button title="帮我分析 600519.SH: 结合分时与日K看最新走势, 给出关键价位(支撑/压力)、趋势状态和量价特征。">分析一只个股</button><button title="横向对比 600519.SH、000858.SZ、603288.SH: 实时行情与换手率放一张表, 结合关键价位分析说说各自强弱和更适合关注哪只。">横向对比几只股票</button><button title="查一下 600519.SH、000001.SZ、300750.SZ 的实时行情快照, 按涨跌幅排序并点评一句。">查几只股票的行情</button><button title="看看 600519.SH 的财务: 最新一期的营收、净利润与同比变化, ROE 和毛利率处于什么水平。">个股财务速览</button></div></div><div class="sg-g"><h4>策略与信号</h4><div class="sg-list"><button title="我目前有哪些策略？分别简述每个策略是做什么的、适用什么资产。">我有哪些策略？</button><button title="列出我的策略, 挑两个有代表性的各回测最近一年(每次执行前请在确认卡上点「确认」), 然后横向对比收益、回撤、夏普、胜率, 给出各自适合的市场场景。">对比两个策略</button><button title="执行我的第一个策略, 看看按最新数据选出哪些标的, 并简要点评排在前面的几只。">跑一个策略</button><button title="先用工具看看我有哪些策略, 然后挑一个回测最近半年(执行前请在确认卡上点「确认」), 给出收益、回撤、夏普和胜率的解读。">回测我的策略</button><button title="帮我在信号库里创建一个「放量站上20日线」的信号: 收盘价高于 ma20、1 日前收盘价不高于 1 日前的 ma20, 且成交量高于 5 日均量的 1.5 倍。">帮我生成一个信号</button></div></div><div class="sg-g"><h4>数据与扩展</h4><div class="sg-list"><button title="帮我检查本地数据完整性: 日线/指标/分钟K/财务是不是最新、有没有缺口, 有问题告诉我怎么补全, 需要执行时先给我确认。">数据是最新的吗</button><button title="列出我配置的扩展数据表: 每张表的模式、字段和数据日期; 挑数据最新的一张看看前 10 行内容。">我的扩展数据表</button><button title="现在有数据同步任务在跑吗? 有的话看看是什么任务、进度到哪了, 顺便告诉我数据是否完整。">有没有任务在跑</button></div></div>
+    </div>
+    <div class="drv-ft"><span class="inp">问点什么，或者选上面一条</span><button class="send">发 送</button><kbd>⌘K</kbd></div>
+  </div>
+  <div>
+    <div class="fig-h" style="margin-top:0">连 接 状 态</div>
+    <table class="lh-t"><colgroup><col><col style="width:120px"></colgroup>
+      <tbody>
+        <tr><td>状态</td><td class="up">已配置</td></tr>
+        <tr><td>供应商</td><td>openai_compat</td></tr>
+        <tr><td>模型</td><td>agnes-3.0-flash</td></tr>
+        <tr><td>工具调用</td><td class="up">支持</td></tr>
+        <tr><td>快捷指令</td><td>18 条 / 4 组</td></tr>
+      </tbody></table>
+    <div class="fig-h">几 个 边 界</div>
+    <table class="lh-t"><colgroup><col style="width:76px"><col></colgroup>
+      <tbody>
+        <tr><td>能读</td><td style="text-align:left;font-family:var(--sans);font-size:10.5px;color:var(--ink-2)">行情、财务、板块、策略、回测结果、数据状态</td></tr>
+        <tr><td>能写</td><td style="text-align:left;font-family:var(--sans);font-size:10.5px;color:var(--ink-2)">建信号、下单、跑回测 —— 都要确认</td></tr>
+        <tr><td>不碰</td><td style="text-align:left;font-family:var(--sans);font-size:10.5px;color:var(--ink-2)">不改你的密钥；不替你决定买卖</td></tr>
+      </tbody></table>
+    <div class="fig-h">调 用 方 式</div>
+    <p style="font-size:11px;color:var(--ink-2);line-height:1.85;margin:0">
+      右下角浮标、顶部入口、或 ⌘K 都能呼出。抽屉可以左缘拖拽调宽，会话按标题存档，退出后还在。
+    </p>
+  </div>
+</div>
+<div class="note">
+<b>这一屏的真实状态</b><br>
+<code>/api/custom/assistant/status</code> 实测 <code>{"configured": true, "provider": "openai_compat", "model": "agnes-3.0-flash", "supports_tools": true}</code> —— 助手是<b>已配置、可用</b>的，不是占位。<br>
+<code>/api/custom/assistant/suggests</code> 实测 18 条，分 5 组（行情与大盘 / 我的与个股 / 策略与信号 / 数据与扩展）。上面每个按钮的文字都是接口原样返回。<br>
+<b>保留的功能</b>：流式回复（NDJSON）、工具调用过程可见（调用名 / 参数 / 耗时 / 结果摘要）、真实数据回传的 K 线与分时图卡、动作确认卡（超时即拒绝）、轮次上限确认、推理内容折叠、多会话（新建 / 切换 / 命名 / 删除 / 本地持久化）、页面上下文注入（当前页与标的）、⌘K 呼出、浮标显示开关、左缘拖拽调宽、工具调用能力门控（模型不支持时提示切换）。
+</div>
+</main>
+</div>
+</body>
+</html>

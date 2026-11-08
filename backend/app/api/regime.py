@@ -161,6 +161,7 @@ def regime_recompute(request: Request, start: date | None = None, end: date | No
     if not new_rows.is_empty():
         regime_builder.upsert_regime_history(data_dir, new_rows)
     phase_days = regime_builder.refresh_phase_labels(data_dir)
+    state_days = regime_builder.refresh_state_labels(data_dir)
 
     from app.services import market_mainline
 

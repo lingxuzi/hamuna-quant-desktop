@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>frontend_v2 · 页面索引</title>
+<link rel="stylesheet" href="../../design/full/tokens.css">
+<link rel="stylesheet" href="../../design/full/app.css">
+<link rel="stylesheet" href="shell.css">
+<style>
+.idx{width:100%;font-size:11.5px;margin-top:6px}
+.idx th{font-weight:400;font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);text-align:left;
+        padding:0 10px 7px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.idx td{padding:0 10px;height:29px;border-bottom:1px solid var(--rule);color:var(--ink-2);vertical-align:middle}
+.idx td.n{font-family:var(--mono);font-size:10px;color:var(--ink-3);width:26px}
+.idx td.p{color:var(--ink);font-size:12px}
+.idx td.l{font-family:var(--mono);font-size:10px;color:var(--ink-3);text-align:right;white-space:nowrap}
+.idx td.s{white-space:nowrap}
+.idx a{color:var(--ochre);text-decoration:none;border-bottom:1px solid var(--ochre)}
+.st1{font-family:var(--sans);font-size:9.5px;padding:1px 6px;background:var(--ochre);color:var(--leaf)}
+.st2{font-family:var(--sans);font-size:9.5px;padding:1px 6px;border:1px solid var(--rule);color:var(--ink-3)}
+.st3{font-family:var(--sans);font-size:9.5px;padding:1px 6px;border:1px dashed var(--rule);color:var(--ink-3)}
+.grp td{background:var(--leaf-2);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);height:24px}
+.batch{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);margin-top:20px}
+.batch > div{background:var(--paper);padding:12px 14px}
+.batch k{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--ochre)}
+.batch b{display:block;font-size:12px;font-weight:500;margin-top:5px}
+.batch span{display:block;font-size:10.5px;color:var(--ink-3);line-height:1.7;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<nav class="toc" aria-label="功能目录">
+  <div class="toc-g"><div class="toc-g-name">每日</div>
+    <a href="01-dashboard.html"><span>看板</span></a><a href="02-watchlist.html"><span>自选</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">研究</div>
+    <a href="03-screener.html"><span>策略选股</span></a><a href="05-factors.html"><span>因子</span></a><a href="10-backtest-strategy.html"><span>回测</span></a><a href="06-stock-analysis.html"><span>个股分析</span></a><a href="07-signals.html"><span>信号库</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">市场</div>
+    <a href="08-regime.html"><span>市场环境</span></a><a href="09-indices.html"><span>指数</span></a><a href="04-limit-ladder.html"><span>连板梯队</span></a><a href="16-industry.html"><span>行业板块</span></a><a href="17-concept.html"><span>概念板块</span></a><a href="18-abnormal.html"><span>异动监控</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">交易</div>
+    <a href="19-paper.html"><span>模拟盘</span></a><a href="21-lots.html"><span>持仓提醒</span></a><a href="20-monitor.html"><span>监控中心</span></a><a href="22-review.html"><span>复盘</span></a><a href="23-financials.html"><span>财务概况</span></a>
+  </div>
+  <div class="toc-g"><div class="toc-g-name">系统</div>
+    <a href="#"><span>数据</span></a><a href="#"><span>设置</span></a><a href="#"><span>品牌</span></a><a href="#"><span>开发</span></a>
+  </div>
+  <div class="toc-tail"><span>数据源<b>通达信</b></span><span>沪深京<b>5,572</b></span></div>
+</nav>
+
+<main class="page">
+
+  <header class="inscription">
+    <h1 class="ins-title">页面索引<i>PAGE INDEX</i></h1>
+    <div class="ins-right">
+      <div class="ins-meta"><span class="num">33 页</span><span class="live"><i></i><b>全站已出</b></span></div>
+      <div class="seal">目</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tb-left">
+      <span class="tb-chip">已出 29</span>
+      <span class="tb-chip warn">未出稿 1</span>
+      <span class="tb-note">功能清单以 frontend/src/router.tsx 与各 extension.tsx 为准</span>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn">按批次查看</button>
+    </div>
+  </div>
+
+  <table class="idx">
+    <colgroup><col class="c-n"><col class="c-p"><col class="c-r"><col class="c-f"><col class="c-l"><col class="c-s"></colgroup>
+    <thead><tr>
+      <th scope="col">#</th><th scope="col">页面</th><th scope="col">路由</th>
+      <th scope="col">源文件</th><th scope="col">行数</th><th scope="col">状态</th>
+    </tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="6">每 日</td></tr>
+      <tr><td class="n">01</td><td class="p"><a href="01-dashboard.html">看板</a></td><td>/</td><td>pages/Dashboard.tsx</td><td class="l">524</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">02</td><td class="p"><a href="02-watchlist.html">自选</a></td><td>/watchlist</td><td>pages/Watchlist.tsx</td><td class="l">2,177</td><td class="s"><span class="st1">已出</span></td></tr>
+
+      <tr class="grp"><td colspan="6">研 究</td></tr>
+      <tr><td class="n">03</td><td class="p"><a href="03-screener.html">策略选股</a></td><td>/screener</td><td>pages/Screener.tsx</td><td class="l">1,462</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">04</td><td class="p"><a href="05-factors.html">因子</a></td><td>/factors</td><td>pages/Factors.tsx + factors/×4</td><td class="l">1,994</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">05</td><td class="p"><a href="10-backtest-strategy.html">回测</a></td><td>/backtest</td><td>pages/backtest/×12 → 6 屏</td><td class="l">7,572</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="11-backtest-robust.html">· 稳健优化</a></td><td>tab=robustness</td><td>RobustOptimize</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="12-backtest-walkforward.html">· 滚动样本外</a></td><td>tab=robustness</td><td>WalkForward</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="13-backtest-guardian.html">· 策略守护</a></td><td>tab=robustness</td><td>StrategyGuardian</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="14-backtest-factor.html">· 因子回测</a></td><td>/backtest/factor</td><td>FactorBacktest</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="15-backtest-mining.html">· 挖掘与候选</a></td><td>/factors?tab=mining</td><td>MiningWorkbench + 候选弹窗</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">06</td><td class="p"><a href="06-stock-analysis.html">个股分析</a></td><td>/stock-analysis</td><td>custom/stock-analysis</td><td class="l">370</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">07</td><td class="p"><a href="07-signals.html">信号库</a></td><td>/signals</td><td>custom/signals</td><td class="l">211</td><td class="s"><span class="st1">已出</span></td></tr>
+
+      <tr class="grp"><td colspan="6">市 场</td></tr>
+      <tr><td class="n">08</td><td class="p"><a href="04-limit-ladder.html">连板梯队</a></td><td>/limit-ladder</td><td>custom/limit-ladder</td><td class="l">1,860</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">09</td><td class="p"><a href="08-regime.html">市场环境</a></td><td>/regime</td><td>pages/Regime.tsx</td><td class="l">1,350</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">10</td><td class="p"><a href="09-indices.html">指数</a></td><td>/indices</td><td>pages/Indices.tsx</td><td class="l">295</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">11</td><td class="p"><a href="16-industry.html">行业板块</a></td><td>/industry-analysis</td><td>custom/industry-analysis</td><td class="l">905</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">12</td><td class="p"><a href="17-concept.html">概念板块</a></td><td>/concept-analysis</td><td>custom/concept-analysis</td><td class="l">836</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">13</td><td class="p"><a href="18-abnormal.html">异动监控</a></td><td>/abnormal</td><td>custom/abnormal</td><td class="l">1,145</td><td class="s"><span class="st1">已出</span></td></tr>
+
+      <tr class="grp"><td colspan="6">交 易</td></tr>
+      <tr><td class="n">14</td><td class="p"><a href="19-paper.html">模拟盘</a></td><td>/paper</td><td>custom/paper</td><td class="l">2,538</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">15</td><td class="p"><a href="21-lots.html">持仓提醒</a></td><td>/lots</td><td>custom/lots</td><td class="l">417</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">16</td><td class="p"><a href="20-monitor.html">监控中心</a></td><td>/monitor</td><td>custom/monitor</td><td class="l">1,273</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">17</td><td class="p"><a href="22-review.html">复盘</a></td><td>/review</td><td>custom/review</td><td class="l">1,497</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">18</td><td class="p"><a href="23-financials.html">财务概况</a></td><td>/financials</td><td>custom/financials</td><td class="l">345</td><td class="s"><span class="st1">已出</span></td></tr>
+
+      <tr class="grp"><td colspan="6">系 统</td></tr>
+      <tr><td class="n">19</td><td class="p"><a href="25-data.html">数据</a></td><td>/data</td><td>pages/Data.tsx</td><td class="l">1,371</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">20</td><td class="p"><a href="26-settings-pages.html">设置 · 页面管理</a></td><td>/settings?tab=pages</td><td>pages/settings/×17</td><td class="l">8,264</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n"></td><td class="p"><a href="27-settings-sources.html">· 设置 · 数据源</a></td><td>tab=data-sources</td><td>DataSourceEditor + source-packages</td><td class="l"></td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">21</td><td class="p"><a href="28-branding.html">品牌</a></td><td>/branding</td><td>pages/Branding.tsx</td><td class="l">203</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">22</td><td class="p"><a href="29-dev.html">开发工具</a></td><td>/dev</td><td>pages/Dev.tsx</td><td class="l">495</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">23</td><td class="p"><a href="24-assistant.html">AI 助手</a></td><td>抽屉 · ⌘K</td><td>custom/assistant</td><td class="l">—</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">24</td><td class="p"><a href="30-onboarding.html">引导</a></td><td>/onboarding</td><td>pages/Onboarding.tsx</td><td class="l">967</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">25</td><td class="p"><a href="31-login.html">登录</a></td><td>/login</td><td>pages/Auth.tsx</td><td class="l">195</td><td class="s"><span class="st1">已出</span></td></tr>
+      <tr><td class="n">26</td><td class="p">动态菜单页</td><td>/analysis/:menuId</td><td>pages/AnalysisDetail.tsx</td><td class="l">—</td><td class="s"><span class="st3">未出稿</span></td></tr>
+
+      <tr class="grp"><td colspan="6">壳 层 · 不属于页面，但每页都要改</td></tr>
+      <tr><td class="n">A</td><td class="p">壳层（导航 / 顶栏 / 皮肤）</td><td>Layout</td><td>components/Layout.tsx</td><td class="l">1,202</td><td class="s"><span class="st2">随各批</span></td></tr>
+      <tr><td class="n">C</td><td class="p">数据源插件面板</td><td>设置内</td><td>custom/source-packages</td><td class="l">217</td><td class="s"><span class="st1">已出</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="batch">
+    <div><k>BATCH 1 · 已出</k><b>看板 · 自选 · 策略选股 · 连板梯队</b><span>建立全站骨架：三栏栅格、卷首、工具条、名录表、空态。<b>其它 29 页从这里继承。</b></span></div>
+    <div><k>BATCH 2 · 已出</k><b>因子 · 个股分析 · 信号库 · 市场环境 · 指数</b><span>研究类页面。图表用 ECharts + lightweight-charts，画布统一 1px hairline + 纸底。</span></div>
+    <div><k>BATCH 3 · 已出</k><b>回测 6 屏（覆盖 12 个子页）</b><span>左侧参数栏 + 右侧结果区。<b>策略库实为空</b>，全部按真空白态出稿。</span></div>
+    <div><k>BATCH 4 · 已出</k><b>行业 · 概念 · 异动 · 模拟盘 · 持仓提醒 · 监控中心</b><span>交易与板块类。<b>行业/概念/异动用真实的 11-06 收盘算</b>；模拟盘与监控为空态。</span></div>
+    <div><k>BATCH 5 · 已出</k><b>复盘 · 财务概况 · AI 助手</b><span>文本 + 图表混排，纪事体最适合这里。</span></div>
+    <div><k>BATCH 6 · 已出</k><b>数据 · 设置（含数据源能力路由）· 品牌 · 开发 · 引导 · 登录</b><span>表单密集体：条目行 + 控件，不用卡片。设置 10 个页签全部保留。<b>动态菜单页</b>（空白状态，无固定内容）不出稿。</span></div>
+  </div>
+
+  <div class="note">
+    <b>这一批的三个决定，会影响后面 29 页</b><br>
+    1. <b>三栏</b>：目录 168px + 主栏 + 指标栏 272px，指标栏<b>只出现在看板</b>，其余页主栏撑满。<br>
+    2. <b>条目语言</b>：看板用「纪事」（时间线 + 戳记），自选/选股/连板用「名录」（表格 / 横带）。同一套 hairline 与数字排版。<br>
+    3. <b>空态与降级如实呈现</b>：选股今天没跑就显示「今天还没有跑过选股」+ 一个运行按钮；连板封板状态未修正就挂徽标。不伪造成填充好的样子。
+  </div>
+
+</main>
+</div>
+</body>
+</html>

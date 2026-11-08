@@ -1,0 +1,5 @@
+# 把 frontend/ 声明为独立 pnpm workspace 根, 阻止 pnpm 向上搜索到 $HOME 下的
+# pnpm-workspace.yaml(若存在, 整个家目录会被当成 workspace 并被全量扫描)。
+# 只包含根包本身, page-pack-template 是独立模板, 不参与 workspace 依赖安装。
+packages:
+  - '.'

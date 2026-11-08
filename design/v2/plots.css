@@ -1,0 +1,76 @@
+/* frontend_v2 · 第二批公共层
+   因子 / 个股分析 / 信号库 / 市场环境 / 指数 五页共用。
+   图表在这个文件里只做「画布骨架」（坐标轴、网格、图例），真实曲线由
+   ECharts / lightweight-charts 渲染 —— 设计稿里用同色系 SVG 示意。 */
+
+/* ---- 图表画布: 统一 1px hairline 边框 + 纸底, 不做卡片圆角 ---- */
+.plot{position:relative;border:1px solid var(--rule);background:var(--leaf);margin-top:10px}
+.plot-hd{display:flex;align-items:baseline;gap:10px;padding:7px 10px;border-bottom:1px solid var(--rule)}
+.plot-hd b{font-size:11.5px;font-weight:500;color:var(--ink)}
+.plot-hd span{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--ink-3)}
+.plot-hd .leg{margin-left:auto;display:flex;gap:12px}
+.plot-hd .leg i{font-style:normal;font-family:var(--sans);font-size:9.5px;color:var(--ink-2);
+                display:inline-flex;align-items:center;gap:4px}
+.plot-hd .leg i::before{content:"";width:9px;height:2px;background:currentColor;display:block}
+.plot-hd .leg .u{color:var(--up)} .plot-hd .leg .d{color:var(--down)}
+.plot-hd .leg .a{color:var(--ochre)} .plot-hd .leg .m{color:var(--ink-3)}
+.plot body,.plotbody{display:block;width:100%}
+.plot svg{display:block;width:100%;height:auto;overflow:visible}
+/* 坐标刻度: 等宽 8px, 只在轴端 */
+.plot .ax{font-family:var(--mono);font-size:8px;fill:var(--ink-3)}
+.plot .grid{stroke:var(--rule);stroke-width:.5;fill:none}
+.plot .band{fill:var(--ochre-wash)}
+
+/* ---- 分段控件 (页内子视图切换) ---- */
+.seg3{display:flex;border:1px solid var(--rule);align-self:flex-start}
+.seg3 button{font:inherit;font-size:11px;padding:4px 13px;background:transparent;border:0;
+             border-left:1px solid var(--rule);color:var(--ink-2);cursor:pointer;
+             transition:background .14s ease,color .14s ease}
+.seg3 button:first-child{border-left:0}
+.seg3 button:hover{background:rgba(26,24,22,.035);color:var(--ink)}
+.seg3 button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+
+/* ---- 左栏 + 右栏 (指数/个股这类「选择 + 详情」页) ---- */
+.split{display:grid;grid-template-columns:206px minmax(0,1fr);border-top:1px solid var(--rule-strong);margin-top:2px}
+.split .side{border-right:1px solid var(--rule);padding:8px 0 14px;min-width:0}
+.split .side .q{width:100%;display:grid;grid-template-columns:1fr auto;gap:1px 6px;text-align:left;
+                background:none;border:0;border-left:2px solid transparent;
+                padding:6px 10px 6px 11px;cursor:pointer;font:inherit;color:var(--ink-2);
+                transition:background .14s ease,border-color .14s ease}
+.split .side .q:hover{background:rgba(26,24,22,.035)}
+.split .side .q.on{border-left-color:var(--ochre);background:var(--ochre-wash);color:var(--ochre)}
+.split .side .q b{font-size:11.5px;font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.split .side .q em{font-family:var(--mono);font-style:normal;font-size:10.5px;font-variant-numeric:tabular-nums}
+.split .side .q span{grid-column:1/-1;font-family:var(--mono);font-size:8.5px;color:var(--ink-3)}
+.split .main{padding-left:20px;min-width:0}
+
+/* ---- 关键读数条 (个股/指数详情顶部) ---- */
+.kv5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--rule);
+     border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);margin-top:14px}
+.kv5 > div{background:var(--paper);padding:9px 12px 10px}
+.kv5 k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:3px}
+.kv5 v{display:block;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kv5 small{font-family:var(--sans);font-size:10px;color:var(--ink-3);margin-left:3px}
+
+/* ---- 状态带: 信号库的启停 ---- */
+.sig{width:100%;font-size:11.5px}
+.sig th{font-weight:400;font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);text-align:left;
+        padding:0 8px 7px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.sig td{padding:0 8px;height:32px;border-bottom:1px solid var(--rule);color:var(--ink-2)}
+.sig td.n{color:var(--ink);font-size:12px}
+.sig td.c{font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+.sig tbody tr:hover{background:var(--ochre-wash)}
+.sig .sw{width:26px;height:14px;border:1px solid var(--rule);position:relative;display:inline-block;
+         background:var(--leaf-2);vertical-align:middle}
+.sig .sw i{position:absolute;top:1px;left:1px;width:10px;height:10px;background:var(--ink-3);transition:left .16s ease}
+.sig .sw[aria-checked="true"]{background:var(--ochre-wash);border-color:var(--ochre)}
+.sig .sw[aria-checked="true"] i{left:13px;background:var(--ochre)}
+.sig .cond{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);background:var(--leaf-2);padding:1px 5px;margin-right:3px}
+
+/* ---- 环境状态带 (市场环境页) ---- */
+.regime-band{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);
+             border:1px solid var(--rule);margin-top:12px}
+.regime-band > div{background:var(--leaf);padding:10px 12px}
+.regime-band k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink-3)}
+.regime-band v{display:block;font-family:var(--serif);font-size:20px;font-weight:600;margin-top:4px}
+.regime-band small{display:block;font-size:10px;color:var(--ink-3);margin-top:2px;font-family:var(--mono)}
