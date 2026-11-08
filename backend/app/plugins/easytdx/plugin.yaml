@@ -1,0 +1,23 @@
+# easy-tdx-plus — 通达信 MAC 协议直连插件 (https://github.com/N2XK/easy-tdx-plus)
+# 无需 Key/计费; 依赖 easy-tdx-plus (import 名 easy_tdx), 未装时灰显并提供一键安装。
+#
+# 通道说明: easy_tdx 有两条协议族 —— TdxClient(标准协议) 与 MacClient(MAC 协议)。
+# 本机实测标准协议 K 线/行情命令在可用节点上恒返回 2 字节残缺响应(2003),
+# 而 MAC 协议日K/分钟K/全市场快照/指数全部正常。故本插件只走 MacClient,
+# 除权事件走标准协议 TdxClient.get_xdxr_info(该命令两族都正常)。
+
+name: easytdx
+display_name: "通达信直连 (easy-tdx-plus)"
+runtime: python
+entry: app.plugins.easytdx.provider:EasyTdxProvider
+check: app.plugins.easytdx.provider:availability
+datasets: [daily, adj_factor, realtime, minute, depth5]
+description: "easy-tdx-plus 通达信 MAC 协议直连: 日K(原始价)、除权因子、全市场实时快照、分钟K、五档盘口五项能力; 覆盖沪深京 A 股与指数, 无需 Key 与计费。未接入财务与全量分钟, 自动回退 TickFlow。"
+usage_notes:
+  - "实时快照: 全市场一次拉取(约 5600 只 / 6 秒), 含北交所与 ETF"
+  - "日K: 单标的每页 700 根自动翻页, 深度仅受服务端历史长度限制(实测回溯 2014 年)"
+  - "除权因子: 取除权除息事件, 按交易所公式推导单事件 ex_factor, 带涨跌停自检"
+  - "分钟K: 1m 逐标的, 240 根/日, 服务端保留约 20 个交易日"
+  - "五档盘口: 上游仅提供买一/卖一, 第 2-5 档留空"
+install_hint: "点击「安装依赖」从 GitHub 拉取 easy-tdx-plus (仅需 click/pandas/tzdata); 或 uv sync --extra easytdx"
+homepage: "https://github.com/N2XK/easy-tdx-plus"

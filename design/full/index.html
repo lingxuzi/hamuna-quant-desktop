@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>量化工作台 · 逐日记事</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="app"
+     x-data="workbench()" x-init="init()"
+     x-effect="document.documentElement.dataset.theme = theme"
+     :class="{ 'font-sans': numFont === 'sans', 'no-motion': reduceMotion }">
+
+  <!-- ================= 目录 ================= -->
+  <nav class="toc" aria-label="功能目录">
+    <template x-for="g in groups" :key="g.name">
+      <div class="toc-g">
+        <div class="toc-g-name" x-text="g.name"></div>
+        <template x-for="p in g.pages" :key="p.id">
+          <a :href="'?page=' + p.id + (state === 'ready' ? '' : '&state=' + state)"
+             :class="{ on: page === p.id }"
+             @click.prevent="go(p)">
+            <span x-text="p.label"></span>
+          </a>
+        </template>
+      </div>
+    </template>
+    <div class="toc-tail">
+      <span>数据源<b>通达信</b></span>
+      <span>沪深京<b>5,580</b></span>
+    </div>
+  </nav>
+
+  <!-- ================= 正文 ================= -->
+  <main class="page" :aria-busy="state === 'loading'">
+
+    <!-- 卷首 -->
+    <header class="inscription">
+      <h1 class="ins-title">
+        <span x-text="current.title"></span>
+        <i x-text="current.en"></i>
+      </h1>
+      <div class="ins-right">
+        <div class="ins-meta">
+          <span class="num">2026 · 11 · 06　周五</span>
+          <span class="live"><i></i><b x-text="session.text"></b></span>
+        </div>
+        <div class="seal" x-text="current.seal"></div>
+      </div>
+    </header>
+
+    <!-- 工具条 -->
+    <div class="toolbar">
+      <div class="tb-left">
+        <span class="tb-chip" x-show="state === 'loading'">读取中</span>
+        <span class="tb-chip warn" x-show="state === 'error'">数据源异常</span>
+        <span class="tb-chip" x-show="state === 'empty'">无记录</span>
+        <span class="tb-note" x-text="current.note"></span>
+      </div>
+      <div class="tb-right">
+        <button class="tb-btn" :aria-pressed="keyOnly" @click="keyOnly = !keyOnly"
+                title="只保留带关键标记的条目">
+          <span x-text="keyOnly ? '显示全部' : '只看关键'"></span>
+        </button>
+        <button class="tb-btn" @click="toggleState()">切换状态</button>
+      </div>
+    </div>
+
+    <!-- ============ 载入骨架 ============ -->
+    <div class="skeleton" x-show="state === 'loading'" x-cloak>
+      <div class="sk-head"><i></i><i></i><i></i></div>
+      <template x-for="i in 3" :key="i">
+        <div class="sk-row"><span></span><div><b></b><u></u><u></u></div></div>
+      </template>
+    </div>
+
+    <!-- ============ 错误 ============ -->
+    <div class="fail" x-show="state === 'error'" x-cloak>
+      <div class="fail-mark">!</div>
+      <h2>行情源未响应</h2>
+      <p>通达信服务器在 12 秒内没有返回快照，页面保持上次成功读取的数值并标记为过期。</p>
+      <div class="fail-act">
+        <button class="btn" @click="retry()">重试</button>
+        <button class="btn ghost" @click="goSource()">检查数据源</button>
+      </div>
+    </div>
+
+    <!-- ============ 空 ============ -->
+    <div class="fail" x-show="state === 'empty'" x-cloak>
+      <div class="fail-mark flat">○</div>
+      <h2>今日无记录</h2>
+      <p>尚未导入 2026-11-06 的行情数据。导入后这里会按时间顺序生成条目。</p>
+      <div class="fail-act">
+        <button class="btn" @click="goData()">前往数据页</button>
+      </div>
+    </div>
+
+    <!-- ============ 正文: 由 app.js 按页渲染 ============ -->
+    <section x-show="state === 'ready'" x-html="body" x-cloak></section>
+
+    <!-- ============ 全量落位图 ============ -->
+    <details class="place" x-show="state === 'ready'" x-cloak>
+      <summary><span class="pl-t">全量落位图</span><span class="pl-s">25 个功能页 · 14 个看板模块</span></summary>
+
+      <div class="pl-grid">
+        <div class="pl-col">
+          <div class="pl-h">功能页 → 条目类型</div>
+          <table class="dtable">
+            <thead><tr><th scope="col">编号</th><th scope="col">页面</th><th scope="col">分组</th><th scope="col">条目类型</th></tr></thead>
+            <tbody>
+              <template x-for="p in placement" :key="p.no">
+                <tr>
+                  <td class="num" x-text="p.no"></td>
+                  <td><a class="pl-link" @click.prevent="goId(p.id)" x-text="p.label"></a></td>
+                  <td x-text="p.group"></td>
+                  <td><em class="pl-type" x-text="p.type"></em></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pl-col">
+          <div class="pl-h">看板模块 → 落位</div>
+          <table class="dtable">
+            <thead><tr><th scope="col">模块</th><th scope="col">默认尺寸</th><th scope="col">落在哪</th></tr></thead>
+            <tbody>
+              <tr><td>大盘指标</td><td class="num">12 × 2</td><td>卷首三字读数</td></tr>
+              <tr><td>指数行情</td><td class="num">12 × 2</td><td>看板「此刻」名录</td></tr>
+              <tr><td>涨跌分布 / 广度</td><td class="num">4 × 8</td><td>看板名录条目</td></tr>
+              <tr><td>情绪雷达</td><td class="num">4 × 8</td><td>看板长条条目</td></tr>
+              <tr><td>趋势强度</td><td class="num">4 × 8</td><td>市场环境页</td></tr>
+              <tr><td>行业热度</td><td class="num">6 × 8</td><td>行业板块页</td></tr>
+              <tr><td>概念热度</td><td class="num">6 × 8</td><td>概念板块页</td></tr>
+              <tr><td>涨幅榜</td><td class="num">3 × 10</td><td>榜单表格</td></tr>
+              <tr><td>跌幅榜</td><td class="num">3 × 10</td><td>榜单表格</td></tr>
+              <tr><td>成交额榜</td><td class="num">3 × 10</td><td>榜单表格</td></tr>
+              <tr><td>活跃换手</td><td class="num">3 × 10</td><td>榜单表格</td></tr>
+              <tr><td>涨停梯队</td><td class="num">4 × 8</td><td>连板梯队页</td></tr>
+              <tr><td>监控中心</td><td class="num">4 × 10</td><td>监控中心页</td></tr>
+              <tr><td>外部链接</td><td class="num">6 × 10</td><td>目录尾部</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <!-- 卷末 -->
+    <footer class="coda">
+      <span class="coda-mark">卷末</span>
+      <div class="coda-fin">
+        <button class="btn" @click="goId('review')">开始复盘</button>
+        <button class="btn ghost" @click="goId('backtest')">查看回测</button>
+        <span class="coda-meta">本地数据 · 沪深京 5,580 只 · 最后写入 <span class="num">15:00:12</span></span>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- ================= 助手抽屉 ================= -->
+  <button class="assist-fab" @click="assist = true" aria-label="打开智能助手" title="智能助手 (⌘K)">助</button>
+
+  <aside class="assist" x-show="assist" x-cloak aria-label="智能助手">
+    <div class="assist-h">
+      <b>智能助手</b>
+      <span>ASSISTANT</span>
+      <button @click="assist = false" aria-label="关闭">✕</button>
+    </div>
+    <div class="assist-ctx">已注入当前页面上下文 · <span x-text="current.title"></span></div>
+    <div class="assist-body">
+      <template x-for="(m, i) in msgs" :key="i">
+        <div class="assist-msg" :class="{ me: m.me }">
+          <span class="who" x-text="m.who"></span>
+          <span x-text="m.text"></span>
+        </div>
+      </template>
+    </div>
+    <div class="assist-in">
+      <textarea x-model="assistInput" rows="2" placeholder="问点什么…" @keydown.enter.prevent="send()"></textarea>
+      <div class="row">
+        <button class="btn" @click="send()">发送</button>
+        <button class="btn ghost" @click="assist = false">收起</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script defer src="vendor/alpine.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

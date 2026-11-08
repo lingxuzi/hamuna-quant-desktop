@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>方案 C · 逐日记事</title>
+<style>
+  :root{
+    --paper:#F4EFE6; --leaf:#FAF6EC; --ink:#1A1816; --ink2:#5C544C; --ink3:#8A8078;
+    --ochre:#B7410E; --rule:#C9BFAE; --rule-strong:#1A1816;
+    --up:#9B2C2C; --down:#2C5F4A;
+    --serif:"Noto Serif CJK SC", serif;
+    --sans:"Noto Sans CJK SC", sans-serif;
+    --mono:"JetBrains Mono", monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:12px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(26,24,22,.018) 0 1px, transparent 1px 4px),
+      radial-gradient(900px 700px at 90% 0%, rgba(183,65,14,.045), transparent 65%);
+  }
+  .page{max-width:1180px;margin:0;padding:24px 40px 52px 36px}
+
+  /* ============ 卷外目录: 窄竖栏, 只有编号与页名 ============ */
+  .app{display:grid;grid-template-columns:150px minmax(0,1fr);max-width:1500px;margin:0 auto}
+  .toc{border-right:1px solid var(--rule);padding:26px 0 40px;align-self:start;
+       max-height:100vh;overflow-y:auto;position:sticky;top:0}
+  .toc .t-h{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--ink3);
+            padding:0 16px 10px}
+  .toc a{display:block;padding:3.5px 16px;text-decoration:none;color:var(--ink2);font-size:11.5px}
+  .toc a u{font-family:var(--mono);font-size:8.5px;color:var(--ink3);text-decoration:none;
+           font-style:normal;margin-right:7px}
+  .toc a.on{color:var(--ink);box-shadow:inset 2px 0 0 var(--ochre);background:rgba(183,65,14,.055)}
+  .toc a.on u{color:var(--ochre)}
+  .toc .t-g{font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--ink3);
+            padding:11px 16px 3px;margin-top:6px;border-top:1px solid var(--rule)}
+
+  /* ---------- 卷首: 竖排书名感 ---------- */
+  .inscription{
+    display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:end;
+    padding-bottom:12px;border-bottom:1px solid var(--rule-strong);
+  }
+  .inscription .title{
+    font-family:var(--serif);font-size:34px;font-weight:600;letter-spacing:.16em;line-height:1.1;
+  }
+  .inscription .title i{display:block;font-style:normal;font-size:11px;letter-spacing:.42em;
+                        color:var(--ink3);font-family:var(--mono);font-weight:400;margin-top:6px}
+  .inscription .right{display:flex;align-items:flex-end;gap:22px;justify-content:flex-end;
+                      font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.1em}
+  .inscription .right b{color:var(--ink);font-weight:500}
+  .seal{width:30px;height:30px;border:1.5px solid var(--ochre);color:var(--ochre);
+        display:grid;place-items:center;font-family:var(--serif);font-size:15px;font-weight:600;
+        line-height:1;padding-top:1px}
+  .live{display:inline-flex;align-items:center;gap:5px;color:var(--ochre)}
+  .live i{width:5px;height:5px;border-radius:50%;background:var(--ochre);display:block}
+
+  /* ---------- 首行: 三个大字, 横排但左对齐偏置(非居中) ---------- */
+  .headline{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:0;margin-top:16px;
+            border-bottom:1px solid var(--rule);padding-bottom:14px}
+  .headline .h{padding-right:20px}
+  .headline .h+.h{border-left:1px solid var(--rule);padding-left:20px}
+  .headline .h k{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;
+                 color:var(--ink3);margin-bottom:1px}
+  .headline .h .v{font-family:var(--serif);font-size:52px;font-weight:600;line-height:.98;letter-spacing:-.02em}
+  .headline .h .v small{font-family:var(--sans);font-size:12px;font-weight:400;color:var(--ink2);margin-left:4px;letter-spacing:0}
+  .headline .h .n{font-family:var(--mono);font-size:10.5px;color:var(--ink2);margin-top:9px;display:flex;gap:12px}
+  .headline .h .n em{font-style:normal}
+  .u{color:var(--up)} .d{color:var(--down)}
+
+  /* ================= 主体: 左侧竖轴时间脊, 右侧连续条目 ================= */
+  .chronicle{position:relative;margin-top:6px;display:grid;grid-template-columns:96px 1fr;gap:0}
+
+  /* 脊线: 贯穿整个文档的一根竖线 + 顶端的赭石起点标记 */
+  .chronicle:before{
+    content:"";position:absolute;left:95px;top:0;bottom:0;width:1px;background:var(--rule);
+  }
+  .chronicle:after{
+    content:"";position:absolute;left:92px;top:0;width:7px;height:7px;background:var(--ochre);
+  }
+
+  .stampcol{padding:14px 16px 0 0;text-align:right}
+  .stampcol span{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.04em;display:block}
+  .stampcol b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--ink);letter-spacing:-.01em}
+
+  .entry{padding:12px 0 0 22px;position:relative}
+  /* 每个条目在脊线上一个小结点 */
+  .entry:before{
+    content:"";position:absolute;left:-4px;top:19px;width:5px;height:5px;
+    background:var(--paper);border:1px solid var(--ink3);border-radius:50%;
+  }
+  .entry.key:before{background:var(--ochre);border-color:var(--ochre);width:7px;height:7px;left:-5px;top:18px}
+  .entry h4{font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.03em;
+            display:flex;align-items:baseline;gap:10px;margin-bottom:5px}
+  .entry h4 span{font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--ink3);font-weight:400}
+  .entry h4 .tag{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ochre);
+                 border:1px solid var(--ochre);padding:0 6px;letter-spacing:.08em;font-weight:400}
+  .entry p{font-size:12px;line-height:1.7;color:var(--ink2);max-width:62ch}
+  .entry p b{color:var(--ink);font-weight:500}
+
+  /* 条目内嵌数据: 用小的虚线三列, 不是卡片 */
+  .inline-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+               background:var(--rule);margin-top:9px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .inline-data .d{background:var(--paper);padding:7px 10px 8px}
+  .inline-data .d k{display:block;font-size:9px;letter-spacing:.12em;color:var(--ink3);margin-bottom:2px}
+  .inline-data .d .v{font-family:var(--mono);font-size:15px;font-weight:500;letter-spacing:-.01em}
+  .inline-data .d .v.u{color:var(--up)} .inline-data .d .v.d{color:var(--down)}
+
+  /* 连板梯队: 横向长条, 每板一行, 长度=家数 */
+  .rungs{margin-top:10px}
+  .rungs .r{display:grid;grid-template-columns:44px 1fr 34px;align-items:center;gap:9px;padding:2.5px 0}
+  .rungs .r k{font-family:var(--mono);font-size:10px;color:var(--ink2);text-align:right}
+  .rungs .r .track{height:9px;background:transparent;position:relative}
+  .rungs .r .track u{position:absolute;left:0;top:0;bottom:0;background:var(--ochre);opacity:.85}
+  .rungs .r .track s{position:absolute;left:0;top:0;bottom:0;background:repeating-linear-gradient(90deg,rgba(26,24,22,.13) 0 3px,transparent 3px 6px)}
+  .rungs .r v{font-family:var(--mono);font-size:10px;color:var(--ink3);text-align:left;font-style:normal}
+
+  /* 名录条目: 两栏横排, 行优先 (不用 columns —— 它竖切, 阅读顺序会乱) */
+  .roster{display:grid;grid-template-columns:1fr 1fr;column-gap:26px;margin-top:8px}
+  .roster .it{display:flex;align-items:baseline;gap:8px;
+              padding:5px 0;border-bottom:1px dotted var(--rule);font-size:11.5px}
+  .roster .it .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .roster .it .p{font-family:var(--mono);font-size:11px}
+
+  /* 结尾标记: 卷末的收束短横 */
+  .coda{display:grid;grid-template-columns:96px 1fr;gap:0;margin-top:10px}
+  .coda .mark{text-align:right;padding-right:16px;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .coda .fin{margin-left:22px;padding-top:4px;border-top:2px solid var(--rule-strong);
+             display:flex;align-items:center;gap:14px;padding-bottom:0}
+  .coda button{font-family:var(--sans);font-size:12px;padding:6px 20px;border:1px solid var(--ink);
+               background:var(--ink);color:var(--leaf);cursor:default;letter-spacing:.05em}
+  .coda button.g{background:transparent;color:var(--ink)}
+  .coda .m{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink3);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <nav class="toc">
+    <div class="t-h">目录 · CONTENTS</div>
+    <div class="t-g">每日</div>
+    <a class="on"><u>01</u>看板</a>
+    <a><u>02</u>自选</a>
+    <div class="t-g">研究</div>
+    <a><u>03</u>策略选股</a>
+    <a><u>04</u>因子</a>
+    <a><u>05</u>回测</a>
+    <a><u>06</u>个股分析</a>
+    <a><u>07</u>信号库</a>
+    <div class="t-g">市场</div>
+    <a><u>08</u>市场环境</a>
+    <a><u>09</u>指数</a>
+    <a><u>10</u>连板梯队</a>
+    <a><u>11</u>行业板块</a>
+    <a><u>12</u>概念板块</a>
+    <a><u>13</u>异动监控</a>
+    <div class="t-g">交易</div>
+    <a><u>14</u>模拟盘</a>
+    <a><u>15</u>持仓提醒</a>
+    <a><u>16</u>监控中心</a>
+    <a><u>17</u>复盘</a>
+    <a><u>18</u>财务概况</a>
+    <div class="t-g">系统</div>
+    <a><u>19</u>数据</a>
+    <a><u>20</u>设置</a>
+    <a><u>21</u>品牌</a>
+    <a><u>22</u>引导</a>
+    <a><u>23</u>授权</a>
+    <a><u>24</u>开发</a>
+    <a><u>25</u>源包</a>
+  </nav>
+
+<div class="page">
+
+  <!-- ===== 卷首 ===== -->
+  <div class="inscription">
+    <div class="title">逐日记事<i>DAILY CHRONICLE</i></div>
+    <div class="right">
+      <div class="seal">量</div>
+      <div>
+        2026 · 11 · 06　周五<br>
+        <span class="live"><i></i></span> <b>盘中</b> · 距收盘 2 小时 14 分
+      </div>
+    </div>
+  </div>
+
+  <div class="headline">
+    <div class="h">
+      <k>涨停家数</k>
+      <div class="v">3,287<small>家</small></div>
+      <div class="n"><em class="u">连板 41</em><em>首板 3,246</em><em class="d">炸板 96</em></div>
+    </div>
+    <div class="h">
+      <k>情绪读数</k>
+      <div class="v">58<small>/100</small></div>
+      <div class="n"><em class="d">较昨日 −7</em><em>偏冷</em></div>
+    </div>
+    <div class="h">
+      <k>北向净流入</k>
+      <div class="v">42.6<small>亿</small></div>
+      <div class="n"><em class="u">沪 28.1</em><em class="u">深 14.5</em></div>
+    </div>
+  </div>
+
+  <!-- ===== 竖轴时间纪事 ===== -->
+  <div class="chronicle">
+
+    <div class="stampcol"><b>9:25</b><span>集合竞价</span></div>
+    <div class="entry key">
+      <h4>竞价撮合完毕，昨日高位板普遍低开<span>AUCTION</span><span class="tag">关键</span></h4>
+      <p>昨日 5 板以上标的今日平均低开 <b>−1.8%</b>，封单撤单率 <b>38%</b>。资金方向自电子设备切向公用事业，开盘前 15 分钟累积净流入 <b>11.2 亿</b>。</p>
+      <div class="inline-data">
+        <div class="d"><k>高开家数</k><div class="v u">1,204</div></div>
+        <div class="d"><k>低开家数</k><div class="v d">2,641</div></div>
+        <div class="d"><k>平开家数</k><div class="v">1,735</div></div>
+        <div class="d"><k>撤单率</k><div class="v">38.0%</div></div>
+      </div>
+    </div>
+
+    <div class="stampcol"><b>10:30</b><span>早盘</span></div>
+    <div class="entry">
+      <h4>连板梯队高度维持，但晋级率下滑<span>LADDER</span></h4>
+      <p>最高板仍停在 5 板，6 板无标的。二板晋级三板仅 <b>4 家</b>，较昨日 9 家减半。</p>
+      <div class="rungs">
+        <div class="r"><k>5 板</k><div class="track"><u style="width:4%"></u></div><v>1</v></div>
+        <div class="r"><k>4 板</k><div class="track"><u style="width:8%"></u></div><v>2</v></div>
+        <div class="r"><k>3 板</k><div class="track"><u style="width:16%"></u></div><v>4</v></div>
+        <div class="r"><k>2 板</k><div class="track"><u style="width:48%"></u></div><v>12</v></div>
+        <div class="r"><k>首板</k><div class="track"><u style="width:88%"></u></div><v>22</v></div>
+        <div class="r"><k>炸板</k><div class="track"><s style="width:100%"></s></div><v>96</v></div>
+      </div>
+    </div>
+
+    <div class="stampcol"><b>11:30</b><span>午间</span></div>
+    <div class="entry">
+      <h4>两市半日成交 1.66 万亿，缩量 8.2%<span>TURNOVER</span></h4>
+      <p>沪市 <b>7,726 亿</b>、深市 <b>8,852 亿</b>。四大指数两涨两跌：上证 <b class="u">+0.62%</b>、深成 <b class="d">−0.34%</b>、创业板 <b class="d">−1.08%</b>、科创 50 <b class="u">+0.11%</b>。</p>
+    </div>
+
+    <div class="stampcol"><b>13:45</b><span>午后</span></div>
+    <div class="entry key">
+      <h4>茅台放量突破前高，成交额放大 2.4 倍<span>ANOMALY</span><span class="tag">异动</span></h4>
+      <p>贵州茅台 <b>600519.SH</b> 午后放量突破前高，成交额较 5 日均值放大 <b>2.4 倍</b>，带动白酒板块由跌转平。同期北向资金单笔大额买入。</p>
+      <div class="inline-data">
+        <div class="d"><k>现价</k><div class="v u">1,842.30</div></div>
+        <div class="d"><k>涨跌幅</k><div class="v u">+0.07%</div></div>
+        <div class="d"><k>成交额</k><div class="v">84.6 亿</div></div>
+        <div class="d"><k>量比</k><div class="v">2.4×</div></div>
+      </div>
+    </div>
+
+    <div class="stampcol"><b>此刻</b><span>板块</span></div>
+    <div class="entry">
+      <h4>行业与概念热度<span>ROSTER</span></h4>
+      <div class="roster">
+        <div class="it"><span class="n">电子设备</span><span class="p u">+3.42%</span></div>
+        <div class="it"><span class="n">公用事业</span><span class="p u">+2.15%</span></div>
+        <div class="it"><span class="n">电力设备</span><span class="p u">+1.86%</span></div>
+        <div class="it"><span class="n">医药生物</span><span class="p u">+1.08%</span></div>
+        <div class="it"><span class="n">房地产</span><span class="p d">−1.24%</span></div>
+        <div class="it"><span class="n">白酒</span><span class="p d">−0.88%</span></div>
+        <div class="it"><span class="n">固态电池</span><span class="p u">+5.61%</span></div>
+        <div class="it"><span class="n">算力租赁</span><span class="p u">+4.03%</span></div>
+        <div class="it"><span class="n">可控核聚变</span><span class="p u">+2.77%</span></div>
+        <div class="it"><span class="n">光模块</span><span class="p u">+2.41%</span></div>
+      </div>
+    </div>
+
+    <div class="stampcol"></div>
+    <div class="entry">
+      <h4>自选标的<span>WATCHLIST</span></h4>
+      <div class="roster">
+        <div class="it"><span class="n">贵州茅台 600519.SH</span><span class="p u">+0.07%</span></div>
+        <div class="it"><span class="n">平安银行 000001.SZ</span><span class="p u">+1.46%</span></div>
+        <div class="it"><span class="n">宁德时代 300750.SZ</span><span class="p d">−2.31%</span></div>
+        <div class="it"><span class="n">紫金矿业 601899.SH</span><span class="p">—</span></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== 卷末: 全量落位 ===== -->
+  <div style="margin-top:26px;padding-top:14px;border-top:2px solid var(--rule-strong)">
+    <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.08em">
+      条目类型 <span style="font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--ink3);font-weight:400">ENTRY KINDS</span>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink2);max-width:68ch;line-height:1.7;margin:5px 0 10px">
+      全站只有 4 种条目类型。25 个功能页各自归入一类，页面之间靠时间点、名录和表格区分，不靠卡片风格。</p>
+    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+      <thead><tr>
+        <th style="text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink3);font-weight:400;letter-spacing:.1em;padding:6px 8px;border-bottom:1px solid var(--rule-strong)">类型</th>
+        <th style="text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink3);font-weight:400;letter-spacing:.1em;padding:6px 8px;border-bottom:1px solid var(--rule-strong)">用于</th>
+        <th style="text-align:left;font-family:var(--sans);font-size:10px;color:var(--ink3);font-weight:400;letter-spacing:.1em;padding:6px 8px;border-bottom:1px solid var(--rule-strong)">构件</th>
+      </tr></thead>
+      <tbody style="font-family:var(--mono)">
+        <tr><td style="padding:6px 8px;border-bottom:1px dotted var(--rule)">纪事条目</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">看板 / 复盘 / 异动监控 / 信号库 / 监控中心</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">时间点 + 标题 + 内嵌数据带</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px dotted var(--rule)">名录条目</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">自选 / 策略选股 / 行业板块 / 概念板块 / 连板梯队 / 指数</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">两栏横排 名称—价格</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px dotted var(--rule)">长条条目</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">因子 / 回测 / 市场环境 / 财务概况 / 个股分析</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px dotted var(--rule)">轨道 + 长度 = 数值</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid var(--rule-strong)">表单条目</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px solid var(--rule-strong)">模拟盘 / 持仓提醒 / 数据 / 设置 / 品牌 / 引导 / 授权 / 开发 / 源包</td><td style="text-align:left;font-family:var(--sans);border-bottom:1px solid var(--rule-strong)">标签—值 逐行，右侧动作</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6">
+      14 个看板模块按同口径归入前两类：指数行情 / 大盘指标 / 涨跌分布 / 情绪雷达 / 趋势强度 / 涨停梯队 进纪事条目；
+      涨幅榜 / 跌幅榜 / 成交额榜 / 活跃换手 / 概念热度 / 行业热度 / 监控中心 / 外部链接 进名录条目。</p>
+  </div>
+
+  <!-- ===== 卷末 ===== -->
+  <div class="coda">
+    <div class="mark">卷末</div>
+    <div class="fin">
+      <button>开始复盘</button>
+      <button class="g">查看回测</button>
+      <span class="m">本地数据 · 沪深京 5,580 只 · 最后写入 15:00:12</span>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

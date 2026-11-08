@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>方案 B · 公报版式</title>
+<style>
+  :root{
+    --paper:#F4EFE6; --leaf:#FAF6EC; --ink:#1A1816; --ink2:#5C544C; --ink3:#8A8078;
+    --ochre:#B7410E; --rule:#C9BFAE; --rule-strong:#1A1816;
+    --up:#9B2C2C; --down:#2C5F4A;
+    --serif:"Noto Serif CJK SC", serif;
+    --sans:"Noto Sans CJK SC", sans-serif;
+    --mono:"JetBrains Mono", monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:12px; line-height:1.45; -webkit-font-smoothing:antialiased;
+    background-image:repeating-linear-gradient(90deg, rgba(26,24,22,.02) 0 1px, transparent 1px 4px);
+  }
+  .page{max-width:1440px;margin:0 auto;padding:20px 34px 44px}
+
+  /* ============ 栏目导航条: 报头之下的横排目录 ============ */
+  .cols-bar{display:flex;align-items:stretch;border-bottom:1px solid var(--rule-strong);
+            font-size:11px;overflow-x:auto}
+  .cols-bar a{display:flex;align-items:baseline;gap:5px;padding:6px 11px 7px;color:var(--ink2);
+              text-decoration:none;white-space:nowrap;border-right:1px solid var(--rule)}
+  .cols-bar a u{font-family:var(--mono);font-size:8.5px;color:var(--ink3);text-decoration:none;font-style:normal}
+  .cols-bar a.on{color:var(--leaf);background:var(--ink)}
+  .cols-bar a.on u{color:var(--ochre)}
+  .cols-bar .rest{margin-left:auto;padding:6px 0 7px 14px;font-family:var(--mono);font-size:9px;
+                  color:var(--ink3);letter-spacing:.1em;white-space:nowrap}
+
+  /* ================= 报头: 通栏, 居中, 三条横线夹住 ================= */
+  .masthead{border-top:3px double var(--rule-strong);border-bottom:1px solid var(--rule-strong);
+            padding:10px 0 8px}
+  .mast-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:20px}
+  .mast-left{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.1em;line-height:1.7}
+  .mast-left b{color:var(--ink);font-weight:500}
+  .mast-c{text-align:center}
+  .mast-c h1{font-family:var(--serif);font-size:38px;font-weight:600;letter-spacing:.22em;
+             line-height:1.15;text-indent:.22em}
+  .mast-c .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.34em;color:var(--ink3);
+               margin-top:3px;text-indent:.34em}
+  .mast-right{text-align:right;font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.1em;line-height:1.7}
+  .live{display:inline-flex;align-items:center;gap:5px;color:var(--ochre);font-weight:500}
+  .live i{width:5px;height:5px;border-radius:50%;background:var(--ochre);display:block}
+
+  /* 导语: 通栏一段, 宋体, 首字下沉 */
+  .lede{font-family:var(--serif);font-size:15px;line-height:1.85;color:var(--ink2);
+        padding:12px 0;border-bottom:1px solid var(--rule);text-align:justify}
+  .lede b{color:var(--ink);font-weight:600}
+  .lede .drop{float:left;font-size:44px;line-height:.92;padding:2px 8px 0 0;color:var(--ochre);font-weight:600}
+
+  /* ================= 指标条: gap-px 单元格, 无卡片 ================= */
+  .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--rule);
+         border-bottom:1px solid var(--rule);margin-top:0}
+  .cell{background:var(--paper);padding:9px 12px 11px}
+  .cell k{display:block;font-size:10px;letter-spacing:.13em;color:var(--ink3);margin-bottom:3px}
+  .cell .v{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1}
+  .cell .v small{font-family:var(--sans);font-size:10px;font-weight:400;color:var(--ink2);margin-left:3px;letter-spacing:0}
+  .cell .d{font-family:var(--mono);font-size:10.5px;color:var(--up);margin-top:5px}
+  .cell .d.dn{color:var(--down)}
+  .cell .d.n{color:var(--ink3)}
+
+  /* ================= 正文: 左宽右窄, 但右栏是"名录"而非批注 ================= */
+  .body-grid{display:grid;grid-template-columns:1fr 348px;gap:0;margin-top:0}
+  .main{padding:16px 28px 0 0;border-right:1px solid var(--rule)}
+  .side{padding:16px 0 0 26px}
+
+  .h2{font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.1em;
+      padding-bottom:6px;border-bottom:2px solid var(--rule-strong);margin-bottom:0;
+      display:flex;align-items:baseline;gap:9px}
+  .h2 span{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--ink3);font-weight:400}
+
+  /* 全框线表格: 公报表 */
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+  thead th{font-family:var(--sans);font-size:10px;font-weight:400;letter-spacing:.12em;
+           color:var(--ink3);text-align:right;padding:6px 8px;border-bottom:1px solid var(--rule-strong)}
+  thead th:first-child{text-align:left}
+  tbody td{padding:6px 8px;text-align:right;border-bottom:1px dotted var(--rule)}
+  tbody td:first-child{text-align:left;font-family:var(--sans)}
+  tbody td .code{font-family:var(--mono);font-size:9.5px;color:var(--ink3);margin-left:6px}
+  tbody tr:nth-child(5) td{border-bottom:1px solid var(--rule-strong)}
+  .u{color:var(--up)} .d{color:var(--down)}
+  /* 涨跌用符号 + 色条长度双重编码 */
+  .sign{display:inline-block;width:9px;text-align:center;color:var(--ink3)}
+  .bar-cell{position:relative}
+  .bar-cell u{position:absolute;left:8px;top:50%;transform:translateY(-50%);height:3px;background:currentColor;opacity:.55}
+
+  /* 情绪尺: 全宽横向 */
+  .ruler{margin-top:16px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+  .ruler .row{display:flex;align-items:flex-end;gap:0;height:56px}
+  .ruler .b{flex:1;background:var(--ink);opacity:.75;margin-right:2px}
+  .ruler .b.u{background:var(--up);opacity:.7}
+  .ruler .b.d{background:var(--down);opacity:.7}
+  .ruler .x{display:flex;margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--ink3)}
+  .ruler .x span{flex:1;text-align:center}
+
+  /* ================= 右栏: 名录式列表 ================= */
+  .side .h3{font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:.08em;
+            padding-bottom:5px;border-bottom:1px solid var(--rule-strong);display:flex;gap:8px;align-items:baseline}
+  .side .h3 em{font-family:var(--mono);font-style:normal;font-size:9px;color:var(--ink3);letter-spacing:.16em;font-weight:400}
+  .side .h3 .cnt{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .roll{margin-top:2px}
+  .roll .it{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;
+            padding:7px 0;border-bottom:1px dotted var(--rule)}
+  .roll .it .nm{font-size:12px}
+  .roll .it .nm i{display:block;font-family:var(--mono);font-style:normal;font-size:9.5px;color:var(--ink3);margin-top:1px}
+  .roll .it .val{text-align:right;font-family:var(--mono);font-size:12px}
+  .roll .it .val i{display:block;font-style:normal;font-size:9.5px;color:var(--ink3);margin-top:1px}
+
+  .brief{margin-top:18px}
+  .brief .rule{border-top:1px solid var(--rule);margin:8px 0}
+  .brief p{font-size:11.5px;line-height:1.7;color:var(--ink2);margin-bottom:8px}
+  .brief p b{color:var(--ink);font-weight:500}
+  .brief .sig{font-family:var(--serif);font-size:11.5px;color:var(--ink3);text-align:right;margin-top:4px}
+
+  /* 页脚: 期号 + 说明, 像报纸的骑缝 */
+  .foot{display:flex;align-items:center;gap:16px;margin-top:26px;padding-top:9px;
+        border-top:3px double var(--rule-strong);font-family:var(--mono);font-size:9.5px;color:var(--ink3);letter-spacing:.1em}
+  .foot .pg{margin-left:auto}
+  .foot button{font-family:var(--sans);font-size:11.5px;padding:5px 15px;border:1px solid var(--ink);
+               background:var(--ink);color:var(--leaf);cursor:default;letter-spacing:.04em}
+  .foot button.g{background:transparent;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div class="mast-row">
+      <div class="mast-left">第 <b>1,284</b> 期<br>沪深京 · 5,580 只</div>
+      <div class="mast-c">
+        <h1>今日市场纪要</h1>
+        <div class="sub">QUANT WORKBENCH · DAILY RECORD</div>
+      </div>
+      <div class="mast-right">2026 年 11 月 6 日　星期五<br><span class="live"><i></i>盘中 · 15:00 收盘</span></div>
+    </div>
+  </div>
+
+  <div class="cols-bar">
+    <a class="on"><u>01</u>看板</a>
+    <a><u>02</u>自选</a>
+    <a><u>03</u>策略选股</a>
+    <a><u>04</u>因子</a>
+    <a><u>05</u>回测</a>
+    <a><u>06</u>市场环境</a>
+    <a><u>07</u>指数</a>
+    <a><u>08</u>连板梯队</a>
+    <a><u>09</u>行业板块</a>
+    <a><u>10</u>概念板块</a>
+    <span class="rest">+ 15</span>
+  </div>
+
+  <div class="lede">
+    <span class="drop">今</span>日两市高开低走，涨跌比 <b>1 比 1.4</b>，赚钱效应集中在前一日连板标的。资金自电子设备板块流出，转入公用事业与电力设备；北向全天净流入 <b>42.6 亿</b>，主要集中于权重蓝筹。连板梯队高度维持 <b>5 板</b>，但封板率较昨日下滑，<b>炸板 96 家</b>为近一周最高。
+  </div>
+
+  <div class="strip">
+    <div class="cell">
+      <k>涨停家数</k><div class="v">3,287</div>
+      <div class="d">连板 41 · 首板 3,246</div>
+    </div>
+    <div class="cell">
+      <k>跌停家数</k><div class="v">214</div><div class="d dn">较昨日 +61</div>
+    </div>
+    <div class="cell">
+      <k>情绪读数</k><div class="v">58<small>/100</small></div><div class="d dn">−7 · 偏冷</div>
+    </div>
+    <div class="cell">
+      <k>北向净流入</k><div class="v">42.6<small>亿</small></div><div class="d">沪 28.1 · 深 14.5</div>
+    </div>
+    <div class="cell">
+      <k>两市成交</k><div class="v">1.66<small>万亿</small></div><div class="d">较昨 −8.2%</div>
+    </div>
+    <div class="cell">
+      <k>最高连板</k><div class="v">5<small>板</small></div><div class="d n">华胜天成</div>
+    </div>
+  </div>
+
+  <div class="body-grid">
+    <!-- 左: 公报正文 -->
+    <div class="main">
+      <div class="h2">涨停名录 <span>LIMIT-UP ROLL</span></div>
+      <table>
+        <thead>
+          <tr><th>名称</th><th>现价</th><th>涨跌幅</th><th>封单</th><th>连板</th><th>换手</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>华胜天成<span class="code">600410.SH</span></td><td>18.42</td><td class="u bar-cell"><u style="width:38px"></u><span class="sign">▲</span>+10.01%</td><td>4.21 亿</td><td>5</td><td>12.4%</td></tr>
+          <tr><td>中际旭创<span class="code">300308.SZ</span></td><td>212.66</td><td class="u bar-cell"><u style="width:30px"></u><span class="sign">▲</span>+9.98%</td><td>3.08 亿</td><td>4</td><td>8.1%</td></tr>
+          <tr><td>新易盛<span class="code">300502.SZ</span></td><td>148.30</td><td class="u bar-cell"><u style="width:29px"></u><span class="sign">▲</span>+9.96%</td><td>2.77 亿</td><td>4</td><td>9.6%</td></tr>
+          <tr><td>沪电股份<span class="code">002463.SZ</span></td><td>62.15</td><td class="u bar-cell"><u style="width:24px"></u><span class="sign">▲</span>+10.00%</td><td>1.94 亿</td><td>3</td><td>6.2%</td></tr>
+          <tr><td>生益科技<span class="code">600183.SH</span></td><td>34.88</td><td class="u bar-cell"><u style="width:22px"></u><span class="sign">▲</span>+9.99%</td><td>1.51 亿</td><td>3</td><td>5.7%</td></tr>
+          <tr><td>深南电路<span class="code">002916.SZ</span></td><td>96.40</td><td class="u bar-cell"><u style="width:19px"></u><span class="sign">▲</span>+10.00%</td><td>1.18 亿</td><td>2</td><td>4.3%</td></tr>
+          <tr><td>浪潮信息<span class="code">000977.SZ</span></td><td>78.21</td><td class="u bar-cell"><u style="width:17px"></u><span class="sign">▲</span>+9.97%</td><td>0.94 亿</td><td>2</td><td>5.1%</td></tr>
+          <tr><td>宁德时代<span class="code">300750.SZ</span></td><td>182.40</td><td class="d bar-cell"><u style="width:28px"></u><span class="sign">▼</span>−2.31%</td><td>—</td><td>—</td><td>2.2%</td></tr>
+        </tbody>
+      </table>
+
+      <div class="h2" style="margin-top:20px">涨跌分布 <span>BREADTH</span></div>
+      <div class="ruler">
+        <div class="row">
+          <div class="b d" style="height:22%"></div>
+          <div class="b d" style="height:34%"></div>
+          <div class="b d" style="height:48%"></div>
+          <div class="b d" style="height:66%"></div>
+          <div class="b d" style="height:81%"></div>
+          <div class="b" style="height:97%"></div>
+          <div class="b u" style="height:100%"></div>
+          <div class="b u" style="height:74%"></div>
+          <div class="b u" style="height:48%"></div>
+          <div class="b u" style="height:26%"></div>
+          <div class="b u" style="height:11%"></div>
+        </div>
+        <div class="x"><span>−7</span><span>−5</span><span>−3</span><span>−1</span><span>0</span><span>1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>涨停</span></div>
+      </div>
+    </div>
+
+    <!-- 右: 名录 -->
+    <div class="side">
+      <div class="h3">行业榜 <em>SECTOR</em><span class="cnt">净流入</span></div>
+      <div class="roll">
+        <div class="it"><div class="nm">电子设备<i>主力净买入</i></div><div class="val u">+38.2 亿<i>+3.42%</i></div></div>
+        <div class="it"><div class="nm">公用事业<i>主力净买入</i></div><div class="val u">+21.7 亿<i>+2.15%</i></div></div>
+        <div class="it"><div class="nm">电力设备<i>主力净买入</i></div><div class="val u">+14.3 亿<i>+1.86%</i></div></div>
+        <div class="it"><div class="nm">房地产<i>主力净卖出</i></div><div class="val d">−18.9 亿<i>−1.24%</i></div></div>
+      </div>
+
+      <div class="h3" style="margin-top:18px">概念榜 <em>CONCEPT</em><span class="cnt">涨幅</span></div>
+      <div class="roll">
+        <div class="it"><div class="nm">固态电池<i>7 家涨停</i></div><div class="val u">+5.61%<i>龙头 赣锋锂业</i></div></div>
+        <div class="it"><div class="nm">算力租赁<i>6 家涨停</i></div><div class="val u">+4.03%<i>龙头 润泽科技</i></div></div>
+        <div class="it"><div class="nm">可控核聚变<i>4 家涨停</i></div><div class="val u">+2.77%<i>龙头 联创光电</i></div></div>
+      </div>
+
+      <div class="brief">
+        <div class="h3">编者按 <em>DISPATCH</em></div>
+        <div class="rule"></div>
+        <p>连板高度已连续三日停在 <b>5 板</b>，市场缺乏新题材承接。若次日最高板未能晋级 6 板，情绪读数将进一步回落至 <b>50 以下</b>区间。</p>
+        <p>本地策略 <b>#A-14</b> 在当前读数下给出「减仓等待」信号，历史同位胜率 <b>61.3%</b>。</p>
+        <div class="sig">—— 策略台 · 盘后复核</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== 全量落位: 栏目分区 + 模块 ===== -->
+  <div style="margin-top:26px;padding-top:14px;border-top:3px double var(--rule-strong)">
+    <div class="h2" style="border-bottom:none;padding-bottom:2px">版面分区 <span>SECTION MAP</span></div>
+    <p style="font-size:11.5px;color:var(--ink2);max-width:70ch;line-height:1.6;margin-bottom:12px">
+      日报固定 6 个栏目，25 个功能页按性质归位；每个栏目单独成版，可单独打印。</p>
+    <table style="font-size:11.5px">
+      <thead><tr><th style="text-align:left">栏目</th><th style="text-align:left">功能页</th><th style="text-align:left">版位</th></tr></thead>
+      <tbody>
+        <tr><td>一 · 每日</td><td style="text-align:left;font-family:var(--sans)">看板 / 自选</td><td style="text-align:left;font-family:var(--sans)">头版 · 首屏</td></tr>
+        <tr><td>二 · 研究</td><td style="text-align:left;font-family:var(--sans)">策略选股 / 因子 / 回测 / 个股分析 / 信号库</td><td style="text-align:left;font-family:var(--sans)">第二版</td></tr>
+        <tr><td>三 · 市场</td><td style="text-align:left;font-family:var(--sans)">市场环境 / 指数 / 连板梯队 / 行业板块 / 概念板块 / 异动监控</td><td style="text-align:left;font-family:var(--sans)">第三版</td></tr>
+        <tr><td>四 · 交易</td><td style="text-align:left;font-family:var(--sans)">模拟盘 / 持仓提醒 / 监控中心 / 复盘 / 财务概况</td><td style="text-align:left;font-family:var(--sans)">第四版</td></tr>
+        <tr><td>五 · 系统</td><td style="text-align:left;font-family:var(--sans)">数据 / 设置 / 品牌 / 引导 / 授权 / 开发 / 源包</td><td style="text-align:left;font-family:var(--sans)">末版</td></tr>
+      </tbody>
+    </table>
+
+    <div class="h2" style="margin-top:20px">头版模块 <span>HEAD-PAGE BLOCKS</span></div>
+    <p style="font-size:11.5px;color:var(--ink2);max-width:70ch;line-height:1.6;margin-bottom:12px">
+      首屏 6 块，其余 8 块进「看板」次级版，按 6 格指标条 · 全框线表格两种构件收编。</p>
+    <table style="font-size:11.5px">
+      <thead><tr><th style="text-align:left">模块</th><th style="text-align:left">构件</th><th style="text-align:left">位置</th></tr></thead>
+      <tbody>
+        <tr><td>指数行情 / 大盘指标</td><td style="text-align:left;font-family:var(--sans)">6 格指标条</td><td style="text-align:left;font-family:var(--sans)">首屏</td></tr>
+        <tr><td>涨停名录 / 涨跌分布</td><td style="text-align:left;font-family:var(--sans)">全框线表格 + 直方</td><td style="text-align:left;font-family:var(--sans)">首屏</td></tr>
+        <tr><td>行业榜 / 概念榜 / 编者按</td><td style="text-align:left;font-family:var(--sans)">右栏名录</td><td style="text-align:left;font-family:var(--sans)">首屏右栏</td></tr>
+        <tr><td>涨幅榜 / 跌幅榜 / 成交额榜 / 活跃换手</td><td style="text-align:left;font-family:var(--sans)">全框线表格（四榜并列）</td><td style="text-align:left;font-family:var(--sans)">次级版</td></tr>
+        <tr><td>情绪雷达 / 趋势强度</td><td style="text-align:left;font-family:var(--sans)">横向刻度尺</td><td style="text-align:left;font-family:var(--sans)">次级版</td></tr>
+        <tr><td>概念热度 / 行业热度 / 涨停梯队 / 监控中心 / 外部链接</td><td style="text-align:left;font-family:var(--sans)">名录 + 长条</td><td style="text-align:left;font-family:var(--sans)">次级版</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="foot">
+    <button>开始复盘</button>
+    <button class="g">查看回测</button>
+    <span>本地数据 · 最后写入 15:00:12</span>
+    <span class="pg">第 1 版</span>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>方案 A · 账簿跨页</title>
+<style>
+  :root{
+    --paper:#F4EFE6; --leaf:#FAF6EC; --ink:#1A1816; --ink2:#5C544C; --ink3:#8A8078;
+    --ochre:#B7410E; --rule:#C9BFAE; --rule-strong:#1A1816;
+    --warn:#8A6A12;
+    --up:#9B2C2C; --down:#2C5F4A;
+    --serif:"Noto Serif CJK SC", serif;
+    --sans:"Noto Sans CJK SC", sans-serif;
+    --mono:"JetBrains Mono", monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:12px; line-height:1.45; -webkit-font-smoothing:antialiased;
+    /* 纸张纤维: 极低对比的两层斜纹 */
+    background-image:
+      repeating-linear-gradient(90deg, rgba(26,24,22,.022) 0 1px, transparent 1px 3px),
+      radial-gradient(1200px 600px at 20% -10%, rgba(183,65,14,.05), transparent 60%);
+  }
+  .page{max-width:none;padding:22px 30px 40px}
+
+  /* ---------- 壳层: 左书脊索引 180px ---------- */
+  .shell{display:grid;grid-template-columns:180px minmax(0,1fr);max-width:1600px;margin:0 auto}
+  .index{border-right:1px solid var(--rule);padding:20px 0 34px;position:sticky;top:0;
+    align-self:start;max-height:100vh;overflow-y:auto}
+  .index .id-brand{display:flex;align-items:center;gap:7px;padding:0 14px 14px}
+  .index .id-brand i{width:18px;height:18px;background:var(--ochre);color:var(--leaf);display:grid;
+    place-items:center;font-family:var(--serif);font-size:11px;font-style:normal;font-weight:600}
+  .index .id-brand b{font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:.06em}
+  .index .grp{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--ink3);
+    padding:10px 14px 4px;border-top:1px solid var(--rule)}
+  .index a{display:flex;align-items:baseline;gap:8px;padding:4.5px 14px;text-decoration:none;
+    color:var(--ink2);font-size:11.5px;line-height:1.4}
+  .index a u{font-family:var(--mono);font-size:9px;color:var(--ink3);font-style:normal;
+    text-decoration:none;letter-spacing:.06em;flex:0 0 15px}
+  .index a.on{color:var(--ink);background:rgba(183,65,14,.055);box-shadow:inset 2px 0 0 var(--ochre)}
+  .index a.on u{color:var(--ochre)}
+  .index .tail{margin-top:10px;border-top:1px solid var(--rule);padding:8px 14px 0}
+  .index .tail span{display:flex;justify-content:space-between;font-family:var(--mono);
+    font-size:9px;color:var(--ink3);padding:2px 0}
+  .index .tail b{color:var(--ink2);font-weight:400}
+
+  /* ---------- 页头: 一行, 记录簿式的栏头 ---------- */
+  header{
+    display:flex;align-items:flex-end;gap:26px;
+    border-bottom:2px solid var(--rule-strong);padding-bottom:8px;
+  }
+  .brand{display:flex;align-items:baseline;gap:9px}
+  .seal{
+    width:22px;height:22px;background:var(--ochre);color:var(--leaf);
+    display:grid;place-items:center;font-family:var(--serif);font-size:13px;font-weight:600;
+  }
+  .brand h1{font-family:var(--serif);font-size:19px;font-weight:600;letter-spacing:.02em}
+  .brand span{font-size:11px;color:var(--ink3);letter-spacing:.14em}
+  .stamp{margin-left:auto;display:flex;align-items:center;gap:18px;font-family:var(--mono);font-size:11px;color:var(--ink2)}
+  .stamp b{color:var(--ink);font-weight:500}
+  .live{display:inline-flex;align-items:center;gap:5px;color:var(--ochre)}
+  .live i{width:5px;height:5px;background:var(--ochre);border-radius:50%;display:block}
+
+  /* ---------- 首屏骨架: 左账簿页 / 右窄批注栏 ---------- */
+  .spread{display:grid;grid-template-columns:1fr 300px;gap:0;margin-top:14px}
+  .folio{border-right:1px solid var(--rule);padding-right:24px}
+  .margin-col{padding-left:20px}
+
+  /* 大局读数: 三个量, 用宋体大字 + 等宽注 */
+  .aggregate{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:0;border-bottom:1px solid var(--rule)}
+  .agg{padding:6px 0 12px 0}
+  .agg + .agg{border-left:1px solid var(--rule);padding-left:16px}
+  .agg k{display:block;font-size:10.5px;letter-spacing:.16em;color:var(--ink3);margin-bottom:2px}
+  .agg .v{font-family:var(--serif);font-size:44px;font-weight:600;line-height:1;letter-spacing:-.01em}
+  .agg .v small{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--ink2);margin-left:5px;letter-spacing:0}
+  .agg .sub{font-family:var(--mono);font-size:10.5px;color:var(--ink2);margin-top:6px}
+  .agg .sub em{font-style:normal;color:var(--up)}
+  .agg .sub em.dn{color:var(--down)}
+
+  /* 情绪刻度: 用横向刻度尺代替进度条 */
+  .gauge{display:flex;align-items:center;gap:0;margin-top:9px}
+  .gauge .tick{width:1px;height:9px;background:var(--rule);flex:0 0 1px}
+  .gauge .track{height:1px;background:var(--rule);flex:1}
+  .gauge .needle{width:2px;height:15px;background:var(--ochre);flex:0 0 2px;margin:0 -1px}
+  .gauge .cap{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+
+  /* 指数条: 账簿的一行行, 不是卡片 */
+  .ledger-rows{margin-top:12px}
+  .lrow{display:grid;grid-template-columns:1fr 104px 74px 86px;align-items:baseline;
+        padding:5px 0;border-bottom:1px dotted var(--rule);font-family:var(--mono);font-size:11.5px}
+  .lrow:first-child{border-bottom:1px solid var(--rule-strong)}
+  .lrow .nm{font-family:var(--sans);color:var(--ink2)}
+  .lrow .px{text-align:right;color:var(--ink)}
+  .lrow .ch{text-align:right;color:var(--up)}
+  .lrow .ch.dn{color:var(--down)}
+  .lrow .vol{text-align:right;color:var(--ink3);font-size:10.5px}
+
+  /* ---------- 中段: 双栏账簿, 用中缝分隔 ---------- */
+  .columns{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:16px}
+  .col{padding:0 22px}
+  .col:first-child{padding-left:0;border-right:1px solid var(--rule)}
+  .col:last-child{padding-right:0}
+  .sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .sec-h h2{font-family:var(--serif);font-size:14px;font-weight:600;letter-spacing:.04em}
+  .sec-h .en{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--ink3);text-transform:uppercase}
+  .sec-h .more{margin-left:auto;font-size:10.5px;color:var(--ochre);cursor:default}
+
+  /* 涨跌分布: 手工绘制的竖线直方 */
+  .histo{display:grid;grid-template-columns:repeat(11,1fr);align-items:end;height:88px;gap:0;
+         border-bottom:1px solid var(--rule);padding-bottom:0}
+  .bar{position:relative;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+  .bar i{display:block;background:var(--ink);opacity:.82}
+  .bar.up i{background:var(--up)}
+  .bar.dn i{background:var(--down)}
+  .bar b{position:absolute;top:-1px;left:0;right:0;border-top:1px solid var(--ochre);opacity:.9}
+  .histo-x{display:grid;grid-template-columns:repeat(11,1fr);font-family:var(--mono);font-size:9px;
+           color:var(--ink3);margin-top:4px;text-align:center}
+
+  /* 涨停梯队: 竖条, 高度=家数 (仅连板股口径) */
+  .ladder{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;height:92px;
+          border-bottom:1px solid var(--rule);margin-top:8px}
+  .rung{position:relative;display:flex;align-items:flex-end;justify-content:center;height:100%}
+  .rung i{display:block;width:62%;background:var(--ochre);border-top:2px solid var(--ink)}
+  .rung em{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-family:var(--mono);
+           font-size:10px;font-style:normal;color:var(--ink)}
+  .rung-x{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;font-family:var(--mono);
+          font-size:9.5px;color:var(--ink2);margin-top:5px;text-align:center}
+
+  .mini-tbl{margin-top:14px}
+  .mini-tbl .r{display:grid;grid-template-columns:1.4fr .7fr .7fr;padding:4px 0;
+              border-bottom:1px dotted var(--rule);font-family:var(--mono);font-size:11px}
+  .mini-tbl .r span:nth-child(n+2){text-align:right}
+  .mini-tbl .r .u{color:var(--up)} .mini-tbl .r .d{color:var(--down)}
+
+  /* ---------- 右批注栏: 手写批注式的窄栏 ---------- */
+  .margin-col h3{font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:.05em;
+                 padding-bottom:5px;border-bottom:1px solid var(--rule-strong)}
+  .note{padding:9px 0;border-bottom:1px dotted var(--rule);font-size:11.5px;line-height:1.5;color:var(--ink2)}
+  .note b{color:var(--ink);font-weight:500}
+  .note .t{font-family:var(--mono);font-size:10px;color:var(--ink3);display:block;margin-bottom:2px}
+  .note mark{background:transparent;color:var(--ochre);font-weight:600}
+  .quote{font-family:var(--serif);font-size:12.5px;line-height:1.75;color:var(--ink);
+         border-left:2px solid var(--ochre);padding:2px 0 2px 11px;margin:12px 0}
+  .watch{margin-top:4px}
+  .watch .w{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px dotted var(--rule)}
+  .watch .w .c{font-family:var(--mono);font-size:10.5px;color:var(--ink3)}
+  .watch .w .n{font-size:11.5px}
+  .watch .w .p{margin-left:auto;font-family:var(--mono);font-size:11.5px}
+  .watch .w .p.u{color:var(--up)} .watch .w .p.d{color:var(--down)}
+
+  /* 底部动作: 账簿页脚的骑缝 */
+  .foot{display:flex;align-items:center;gap:14px;margin-top:20px;padding-top:10px;
+        border-top:2px solid var(--rule-strong)}
+  .btn{font-family:var(--sans);font-size:12px;padding:6px 18px;border:1px solid var(--ink);
+       background:var(--ink);color:var(--leaf);cursor:default}
+  .btn.ghost{background:transparent;color:var(--ink)}
+  .foot .meta{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.1em}
+
+  /* ---------- 全量落位图 ---------- */
+  .placer-wrap{max-width:1600px;margin:0 auto;padding-left:210px;padding-right:30px}
+  .placer{margin-top:26px;padding-top:14px;border-top:2px solid var(--rule-strong)}
+  .placer h2{font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.06em}
+  .placer p{font-size:11.5px;color:var(--ink2);margin:4px 0 12px;max-width:66ch;line-height:1.6}
+  .pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;background:var(--rule);
+         border:1px solid var(--rule-strong)}
+  .pc{background:var(--paper);padding:8px 10px 9px;min-height:44px;display:flex;
+      flex-direction:column;justify-content:space-between}
+  .pc b{font-size:11.5px;font-weight:500}
+  .pc span{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ===== 左: 书脊索引 ===== -->
+  <nav class="index">
+    <div class="id-brand"><i>簿</i><b>量化工作台</b></div>
+    <div class="grp">每日</div>
+    <a class="on"><u>01</u>看板</a>
+    <a><u>02</u>自选</a>
+    <div class="grp">研究</div>
+    <a><u>03</u>策略选股</a>
+    <a><u>04</u>因子</a>
+    <a><u>05</u>回测</a>
+    <a><u>06</u>个股分析</a>
+    <a><u>07</u>信号库</a>
+    <div class="grp">市场</div>
+    <a><u>08</u>市场环境</a>
+    <a><u>09</u>指数</a>
+    <a><u>10</u>连板梯队</a>
+    <a><u>11</u>行业板块</a>
+    <a><u>12</u>概念板块</a>
+    <a><u>13</u>异动监控</a>
+    <div class="grp">交易</div>
+    <a><u>14</u>模拟盘</a>
+    <a><u>15</u>持仓提醒</a>
+    <a><u>16</u>监控中心</a>
+    <a><u>17</u>复盘</a>
+    <a><u>18</u>财务概况</a>
+    <div class="grp">系统</div>
+    <a><u>19</u>数据</a>
+    <a><u>20</u>设置</a>
+    <a><u>21</u>品牌</a>
+    <a><u>22</u>引导</a>
+    <a><u>23</u>授权</a>
+    <a><u>24</u>开发</a>
+    <a><u>25</u>源包</a>
+    <div class="tail">
+      <span>数据源<b>通达信</b></span>
+      <span>沪深京<b>5,580</b></span>
+      <span>写入<b>15:00</b></span>
+    </div>
+  </nav>
+
+  <div class="page">
+
+  <header>
+    <div class="brand">
+      <span style="letter-spacing:.24em;color:var(--ink2)">每日看板 · 2026 年 11 月 6 日</span>
+    </div>
+    <div class="stamp">
+      <span>收盘 <b>15:00</b></span>
+      <span class="live"><i></i>盘中</span>
+    </div>
+  </header>
+
+  <div class="spread">
+    <!-- ===== 左: 主账簿页 ===== -->
+    <div class="folio">
+
+      <div class="aggregate">
+        <div class="agg">
+          <k>涨停家数</k>
+          <div class="v">3,287<small>家</small></div>
+          <div class="sub">连板 <em>41</em> · 首板 3,246 · 炸板 96</div>
+        </div>
+        <div class="agg">
+          <k>情绪读数</k>
+          <div class="v">58</div>
+          <div class="gauge">
+            <span class="cap">冰</span>
+            <span class="tick"></span><span class="track"></span>
+            <span class="needle"></span>
+            <span class="track"></span><span class="tick"></span>
+            <span class="cap">沸</span>
+          </div>
+          <div class="sub">较昨日 <em class="dn">−7</em> · 偏冷</div>
+        </div>
+        <div class="agg">
+          <k>北向净流入</k>
+          <div class="v">42.6<small>亿</small></div>
+          <div class="sub">沪 <em>28.1</em> · 深 <em>14.5</em></div>
+        </div>
+      </div>
+
+      <div class="ledger-rows">
+        <div class="lrow"><span class="nm">上证指数</span><span class="px">3,649.18</span><span class="ch">+0.62%</span><span class="vol">7,726 亿</span></div>
+        <div class="lrow"><span class="nm">深证成指</span><span class="px">11,175.78</span><span class="ch dn">−0.34%</span><span class="vol">8,852 亿</span></div>
+        <div class="lrow"><span class="nm">创业板指</span><span class="px">2,465.23</span><span class="ch dn">−1.08%</span><span class="vol">4,440 亿</span></div>
+        <div class="lrow"><span class="nm">科创 50</span><span class="px">1,024.66</span><span class="ch">+0.11%</span><span class="vol">912 亿</span></div>
+      </div>
+
+      <div class="columns">
+        <div class="col">
+          <div class="sec-h"><h2>涨跌分布</h2><span class="en">breadth</span><span class="more">全市场 →</span></div>
+          <div class="histo">
+            <div class="bar dn"><i style="height:18%"></i></div>
+            <div class="bar dn"><i style="height:30%"></i></div>
+            <div class="bar dn"><i style="height:44%"></i></div>
+            <div class="bar dn"><i style="height:62%"></i></div>
+            <div class="bar dn"><i style="height:78%"></i></div>
+            <div class="bar"><i style="height:96%"></i></div>
+            <div class="bar up"><i style="height:100%"></i><b></b></div>
+            <div class="bar up"><i style="height:71%"></i></div>
+            <div class="bar up"><i style="height:46%"></i></div>
+            <div class="bar up"><i style="height:24%"></i></div>
+            <div class="bar up"><i style="height:9%"></i></div>
+          </div>
+          <div class="histo-x"><span>−7</span><span>−5</span><span>−3</span><span>−1</span><span>0</span><span>1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>板</span></div>
+        </div>
+
+        <div class="col">
+          <div class="sec-h"><h2>涨停梯队</h2><span class="en">ladder</span><span class="more">明细 →</span></div>
+          <div class="ladder">
+            <div class="rung"><i style="height:5%"></i><em>1</em></div>
+            <div class="rung"><i style="height:9%"></i><em>2</em></div>
+            <div class="rung"><i style="height:18%"></i><em>4</em></div>
+            <div class="rung"><i style="height:52%"></i><em>12</em></div>
+            <div class="rung"><i style="height:96%"></i><em>22</em></div>
+          </div>
+          <div class="rung-x"><span>5板</span><span>4板</span><span>3板</span><span>2板</span><span>1板</span></div>
+          <div class="mini-tbl" style="margin-top:11px">
+            <div class="r"><span>炸板未封</span><span class="d">96</span><span>炸板率 2.8%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="columns" style="margin-top:14px">
+        <div class="col">
+          <div class="sec-h"><h2>行业热度</h2><span class="en">sector</span></div>
+          <div class="mini-tbl">
+            <div class="r"><span>电子设备</span><span class="u">+3.42%</span><span>18</span></div>
+            <div class="r"><span>公用事业</span><span class="u">+2.15%</span><span>12</span></div>
+            <div class="r"><span>医药生物</span><span class="u">+1.08%</span><span>9</span></div>
+            <div class="r"><span>房地产</span><span class="d">−1.24%</span><span>2</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="sec-h"><h2>概念热度</h2><span class="en">concept</span></div>
+          <div class="mini-tbl">
+            <div class="r"><span>固态电池</span><span class="u">+5.61%</span><span>7</span></div>
+            <div class="r"><span>算力租赁</span><span class="u">+4.03%</span><span>6</span></div>
+            <div class="r"><span>可控核聚变</span><span class="u">+2.77%</span><span>4</span></div>
+            <div class="r"><span>白酒</span><span class="d">−0.88%</span><span>0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button class="btn">开始复盘</button>
+        <button class="btn ghost">查看回测</button>
+        <span class="meta">本地数据 · 沪深京 5,580 只 · 最后写入 15:00:12</span>
+      </div>
+    </div>
+
+    <!-- ===== 右: 批注窄栏 ===== -->
+    <aside class="margin-col">
+      <h3>盘中批注</h3>
+      <div class="note">
+        <span class="t">9:25 集合竞价</span>
+        昨日 5 板以上标的今日炸板率 <b>38%</b>，资金从电子设备切向<mark>公用事业</mark>。
+      </div>
+      <div class="quote">连板高度决定情绪温度，情绪温度决定次日策略。<br>—— 本地策略 #A-14</div>
+      <div class="note">
+        <span class="t">13:45 异动</span>
+        茅台 <b>600519.SH</b> 放量突破前高，成交额较 5 日均值放大 <mark>2.4×</mark>。
+      </div>
+
+      <div class="sec-h" style="margin-top:16px"><h2>自选</h2><span class="en">watchlist</span></div>
+      <div class="watch">
+        <div class="w"><span class="c">600519</span><span class="n">贵州茅台</span><span class="p u">+0.07%</span></div>
+        <div class="w"><span class="c">000001</span><span class="n">平安银行</span><span class="p u">+1.46%</span></div>
+        <div class="w"><span class="c">300750</span><span class="n">宁德时代</span><span class="p d">−2.31%</span></div>
+        <div class="w"><span class="c">601899</span><span class="n">紫金矿业</span><span class="p"></span></div>
+      </div>
+    </aside>
+  </div>
+  </div>
+</div>
+
+<!-- ===== 全量落位图: 14 个看板模块 ===== -->
+<div class="page placer-wrap">
+    <div class="placer">
+      <h2>看板模块落位</h2>
+      <p>首屏只取 6 块，其余进「看板」的次级布局 —— 网格 12 列 × 5 行，全部 14 块可拖放。</p>
+      <div class="pgrid">
+        <div class="pc" style="grid-column:1/13"><b>指数行情</b><span>4×2 · 指数行</span></div>
+        <div class="pc" style="grid-column:1/13"><b>大盘指标</b><span>6×2 · 读数条</span></div>
+        <div class="pc" style="grid-column:1/5"><b>涨跌分布</b><span>3×6</span></div>
+        <div class="pc" style="grid-column:5/9"><b>情绪雷达</b><span>3×7</span></div>
+        <div class="pc" style="grid-column:9/13"><b>趋势强度</b><span>3×6</span></div>
+        <div class="pc" style="grid-column:1/7"><b>概念热度</b><span>3×6</span></div>
+        <div class="pc" style="grid-column:7/13"><b>行业热度</b><span>3×6</span></div>
+        <div class="pc" style="grid-column:1/4"><b>涨幅榜</b><span>2×7</span></div>
+        <div class="pc" style="grid-column:4/7"><b>跌幅榜</b><span>2×7</span></div>
+        <div class="pc" style="grid-column:7/10"><b>成交额榜</b><span>2×7</span></div>
+        <div class="pc" style="grid-column:10/13"><b>活跃换手</b><span>2×7</span></div>
+        <div class="pc" style="grid-column:1/5"><b>涨停梯队</b><span>3×6</span></div>
+        <div class="pc" style="grid-column:5/9"><b>监控中心</b><span>2×6</span></div>
+        <div class="pc" style="grid-column:9/13"><b>外部链接</b><span>2×5</span></div>
+      </div>
+    </div>
+</div>
+</body>
+</html>

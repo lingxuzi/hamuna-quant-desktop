@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "lang": "zh",
+  "project": "Quant Workbench",
+  "brief": "A 股量化研究工作台：同一份内容，比较配色、字体、控件与版式气质。候选全部保持在「密、冷静、庄重」调性内，只在配色身份、字体性格和控件语法上拉开。",
+  "round": "风格卡片",
+  "candidates": [
+    {
+      "id": "hamuna",
+      "name": "夜橙工作台",
+      "concept": "深夜盯盘的操作台：近黑的冷底压住整屏，橙色只出现在当前的价和当前的动作上，其余全部退成细线和灰字。",
+      "typography": "标题 Inter · 正文 Noto Sans CJK SC · 数字 JetBrains Mono",
+      "palette": [
+        "#06090E",
+        "#E8EBF0",
+        "#F97316",
+        "#E5B454"
+      ],
+      "traits": [
+        "近黑冷底",
+        "单一橙强调",
+        "零圆角细线分格"
+      ],
+      "kind": "html",
+      "source": "card-hamuna.html"
+    },
+    {
+      "id": "abyss",
+      "name": "深海薄荷",
+      "concept": "把屏幕做成一块深水：偏青的深灰层层叠起，薄荷色只标一处状态，其余靠明度和留白分层，比夜橙软一档。",
+      "typography": "标题 Inter · 正文 Noto Sans CJK SC · 数字 JetBrains Mono",
+      "palette": [
+        "#0B1416",
+        "#DCE7E5",
+        "#66E3C4",
+        "#E8C170"
+      ],
+      "traits": [
+        "青灰层叠",
+        "薄荷状态色",
+        "2px 微圆角"
+      ],
+      "kind": "html",
+      "source": "card-abyss.html"
+    },
+    {
+      "id": "graphite",
+      "name": "石墨仪表",
+      "concept": "实验室仪器的读数面板：中灰石墨底，酸性黄绿只点最关键的读数，间距比前两个都松，显得更冷静、更可核对。",
+      "typography": "标题 Inter · 正文 Noto Sans CJK SC · 数字 JetBrains Mono",
+      "palette": [
+        "#14161A",
+        "#EDEFF2",
+        "#C6F24E",
+        "#F0A94C"
+      ],
+      "traits": [
+        "中灰石墨底",
+        "酸绿读数",
+        "4px 圆角与宽松行距"
+      ],
+      "kind": "html",
+      "source": "card-graphite.html"
+    },
+    {
+      "id": "ledger",
+      "name": "宣纸账簿",
+      "concept": "把行情做成一本手写的账：米白纸底、墨色正文、赭石只用在结论数字上，标题用宋体立骨，圆角近乎没有。",
+      "typography": "标题 Noto Serif CJK SC · 正文 Noto Sans CJK SC · 数字 JetBrains Mono",
+      "palette": [
+        "#F4EFE6",
+        "#1A1816",
+        "#B7410E",
+        "#8A6A12"
+      ],
+      "traits": [
+        "米白纸底",
+        "宋体标题",
+        "赭石结论数字"
+      ],
+      "kind": "html",
+      "source": "card-ledger.html"
+    },
+    {
+      "id": "press",
+      "name": "冷白印刷",
+      "concept": "交易所公报的排法：冷白纸、全框线的表格、粗细分明的分隔，正文一律无衬线，只有涨跌与结论用朱红。",
+      "typography": "标题 Inter · 正文 Noto Sans CJK SC · 数字 Inter",
+      "palette": [
+        "#FBFAF7",
+        "#111111",
+        "#C0392B",
+        "#8C6A1E"
+      ],
+      "traits": [
+        "冷白纸底",
+        "全框线表格",
+        "朱红单点"
+      ],
+      "kind": "html",
+      "source": "card-press.html"
+    }
+  ]
+}

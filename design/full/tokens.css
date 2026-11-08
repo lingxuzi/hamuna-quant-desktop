@@ -1,0 +1,112 @@
+/* 宣纸账簿 · 逐日记事 —— 设计系统
+   配色与字体取自 04 宣纸账簿卡片；骨架取自版式方案 C。
+   这个文件只放 token 与全局层，页面自己的样式留在页面里。 */
+
+:root{
+  /* 纸 */
+  --paper:#F4EFE6;
+  --leaf:#FAF6EC;
+  --leaf-2:#EFE8DB;
+  /* 墨 */
+  --ink:#1A1816;
+  --ink-2:#5C544C;
+  --ink-3:#8A8078;
+  /* 赭石: 唯一的强调色, 只给结论数字与当前动作 */
+  --ochre:#B7410E;
+  --ochre-wash:rgba(183,65,14,.055);
+  /* 线: hairline 与加重线两级 */
+  --rule:#C9BFAE;
+  --rule-strong:#1A1816;
+  /* 涨跌: 墨红 / 墨绿, 都压过饱和, 让纸色底上仍有足够色距 */
+  --up:#9B2C2C;
+  --down:#2C5F4A;
+  --warn:#8A6A12;
+
+  --serif:"Noto Serif CJK SC","Source Han Serif SC",serif;
+  --sans:"Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+  --mono:"JetBrains Mono","SF Mono",monospace;
+
+  /* 节奏 */
+  --pad-x:44px;
+  --pad-y:32px;
+  --gap:1px;
+
+  /* 纸纹: 纤维、赭石晕、骨架灰、斜纹填充 */
+  --fiber:rgba(26,24,22,.018);
+  --glow:rgba(183,65,14,.045);
+  --skel:rgba(26,24,22,.055);
+  --fiber-strong:rgba(26,24,22,.18);
+}
+
+/* 另两套皮肤: 只换 token, 结构不动。
+   宣纸是默认; 亮色更接近白纸, 暗色保留赭石但压低饱和。 */
+:root[data-theme="light"]{
+  --paper:#FBF9F4; --leaf:#FFFFFF; --leaf-2:#F1EEE7;
+  --ink:#1A1816; --ink-2:#57514A; --ink-3:#8B847C;
+  --ochre:#C2410C; --ochre-wash:rgba(194,65,12,.05);
+  --rule:#DCD5C7; --rule-strong:#1A1816;
+  --up:#9B2C2C; --down:#2C5F4A; --warn:#8A6A12;
+  --fiber:rgba(26,24,22,.015); --glow:rgba(194,65,12,.04);
+  --skel:rgba(26,24,22,.05); --fiber-strong:rgba(26,24,22,.16);
+}
+:root[data-theme="dark"]{
+  --paper:#151310; --leaf:#1D1A16; --leaf-2:#24201B;
+  --ink:#EDE7DA; --ink-2:#A79D8D; --ink-3:#7B7263;
+  --ochre:#E2803F; --ochre-wash:rgba(226,128,63,.09);
+  --rule:#38322A; --rule-strong:#EDE7DA;
+  --up:#E0605E; --down:#5FBF8C; --warn:#D6A83E;
+  --fiber:rgba(237,231,218,.022); --glow:rgba(226,128,63,.055);
+  --skel:rgba(237,231,218,.07); --fiber-strong:rgba(237,231,218,.22);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:12px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  /* 纸张纤维: 横向极低对比纹理 + 一处极淡的赭石晕, 只在右上 */
+  background-image:
+    repeating-linear-gradient(0deg, var(--fiber) 0 1px, transparent 1px 4px),
+    radial-gradient(900px 700px at 88% 0%, var(--glow), transparent 65%);
+  background-attachment:fixed;
+}
+
+/* 数字一律等宽并在列上对齐 */
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* 涨跌语义: 只改颜色, 不改字重 —— 字重留给层级 */
+.u{color:var(--up)}
+.d{color:var(--down)}
+.flat{color:var(--ink-3)}
+
+/* 键盘可达性: 统一焦点环, 三种底色上都可见 */
+:focus-visible{outline:2px solid var(--ochre);outline-offset:2px;border-radius:1px}
+/* 鼠标点击不留焦点环, 键盘才留 */
+:focus:not(:focus-visible){outline:none}
+
+/* 降低动效: 用户系统层开 reduced motion 时全部瞬时完成 */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+    scroll-behavior:auto !important;
+  }
+}
+
+/* 滚动条: 细, 与纸同调 */
+*{scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--rule);border-radius:0}
+::-webkit-scrollbar-track{background:transparent}
+
+/* 选区: 用赭石薄雾而不是系统蓝 */
+::selection{background:rgba(183,65,14,.18)}
+
+/* 表格数字右对齐时不要吃掉行高 */
+table{border-collapse:collapse}

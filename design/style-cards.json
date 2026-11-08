@@ -1,0 +1,64 @@
+{
+  "project": "Quant Workbench",
+  "lang": "zh",
+  "round": "风格卡片",
+  "brief": "A 股量化研究工作台：同一份内容，比较配色、字体、控件与版式气质。候选全部保持在「密、冷静、庄重」调性内，只在配色身份、字体性格和控件语法上拉开。",
+  "content": {
+    "title": "连板梯队与自选异动",
+    "body": "9:25 集合竞价撮合完毕，昨日 5 板以上标的今日炸板率 38%，资金从电子设备切向公用事业。",
+    "number": "3,287",
+    "number_label": "今日涨停家数 · 连板 41",
+    "primary": "开始复盘",
+    "secondary": "查看回测",
+    "tags": ["北向净流入 42.6 亿", "情绪 58 · 偏冷"],
+    "input_label": "标的",
+    "input_value": "600519.SH"
+  },
+  "cards": [
+    {
+      "id": "hamuna",
+      "name": "夜橙工作台",
+      "concept": "深夜盯盘的操作台：近黑的冷底压住整屏，橙色只出现在当前的价和当前的动作上，其余全部退成细线和灰字。",
+      "traits": ["近黑冷底", "单一橙强调", "零圆角细线分格"],
+      "colors": {"bg": "#06090E", "surface": "#0C1017", "text": "#E8EBF0", "muted": "#7A8290", "accent": "#F97316", "accent_text": "#0A0A0A", "line": "#1B1D21", "warn": "#E5B454"},
+      "fonts": {"display": "Inter, \"Noto Sans CJK SC\", sans-serif", "body": "\"Noto Sans CJK SC\", Inter, sans-serif", "number": "JetBrains Mono, monospace"},
+      "display_weight": 700, "radius": 0, "border": "hairline", "shadow": "none", "density": "compact", "layout": "sidebar-table"
+    },
+    {
+      "id": "abyss",
+      "name": "深海薄荷",
+      "concept": "把屏幕做成一块深水：偏青的深灰层层叠起，薄荷色只标一处状态，其余靠明度和留白分层，比夜橙软一档。",
+      "traits": ["青灰层叠", "薄荷状态色", "2px 微圆角"],
+      "colors": {"bg": "#0B1416", "surface": "#111D20", "text": "#DCE7E5", "muted": "#6E8582", "accent": "#66E3C4", "accent_text": "#04100E", "line": "#1E2C2F", "warn": "#E8C170"},
+      "fonts": {"display": "Inter, \"Noto Sans CJK SC\", sans-serif", "body": "\"Noto Sans CJK SC\", Inter, sans-serif", "number": "JetBrains Mono, monospace"},
+      "display_weight": 600, "radius": 2, "border": "hairline", "shadow": "none", "density": "compact", "layout": "topbar-cards"
+    },
+    {
+      "id": "graphite",
+      "name": "石墨仪表",
+      "concept": "实验室仪器的读数面板：中灰石墨底，酸性黄绿只点最关键的读数，间距比前两个都松，显得更冷静、更可核对。",
+      "traits": ["中灰石墨底", "酸绿读数", "4px 圆角与宽松行距"],
+      "colors": {"bg": "#14161A", "surface": "#1C1F25", "text": "#EDEFF2", "muted": "#8A8F98", "accent": "#C6F24E", "accent_text": "#12140F", "line": "#2A2E36", "warn": "#F0A94C"},
+      "fonts": {"display": "Inter, \"Noto Sans CJK SC\", sans-serif", "body": "\"Noto Sans CJK SC\", Inter, sans-serif", "number": "JetBrains Mono, monospace"},
+      "display_weight": 700, "radius": 4, "border": "solid", "shadow": "soft", "density": "regular", "layout": "topbar-cards"
+    },
+    {
+      "id": "ledger",
+      "name": "宣纸账簿",
+      "concept": "把行情做成一本手写的账：米白纸底、墨色正文、赭石只用在结论数字上，标题用宋体立骨，圆角近乎没有。",
+      "traits": ["米白纸底", "宋体标题", "赭石结论数字"],
+      "colors": {"bg": "#F4EFE6", "surface": "#FAF6EC", "text": "#1A1816", "muted": "#6B6259", "accent": "#B7410E", "accent_text": "#FAF6EC", "line": "#1A1816", "warn": "#8A6A12"},
+      "fonts": {"display": "\"Noto Serif CJK SC\", serif", "body": "\"Noto Sans CJK SC\", sans-serif", "number": "JetBrains Mono, monospace"},
+      "display_weight": 600, "radius": 2, "border": "hairline", "shadow": "none", "density": "regular", "layout": "queue-detail"
+    },
+    {
+      "id": "press",
+      "name": "冷白印刷",
+      "concept": "交易所公报的排法：冷白纸、全框线的表格、粗细分明的分隔，正文一律无衬线，只有涨跌与结论用朱红。",
+      "traits": ["冷白纸底", "全框线表格", "朱红单点"],
+      "colors": {"bg": "#FBFAF7", "surface": "#FFFFFF", "text": "#111111", "muted": "#6E6B66", "accent": "#C0392B", "accent_text": "#FFFFFF", "line": "#D9D6CF", "warn": "#8C6A1E"},
+      "fonts": {"display": "Inter, \"Noto Sans CJK SC\", sans-serif", "body": "\"Noto Sans CJK SC\", Inter, sans-serif", "number": "Inter, \"Noto Sans CJK SC\", sans-serif"},
+      "display_weight": 800, "radius": 0, "border": "solid", "shadow": "none", "density": "compact", "layout": "editorial"
+    }
+  ]
+}
