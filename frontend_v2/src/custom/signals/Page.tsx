@@ -25,7 +25,7 @@ export function Signals() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="信号库" subtitle="条件信号定义, 供策略 / 回测 / 监控统一使用" right={<ResourceTransferButton kind="signal" />} />
+      <PageHeader seal="信" title="信号库" subtitle="条件信号定义, 供策略 / 回测 / 监控统一使用" right={<ResourceTransferButton kind="signal" />} />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <div className="mx-auto max-w-6xl">
           <SignalsBody highlight={highlight} />

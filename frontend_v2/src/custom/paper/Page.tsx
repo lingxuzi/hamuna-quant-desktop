@@ -1552,7 +1552,7 @@ function CompareView({ onCreateSingle }: { onCreateSingle: () => void }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader
+      <PageHeader seal="模"
         title="模拟盘"
         subtitle="多账户并行对比 — 同本金 · 同费率 · 点表头排序, 点行展开完整账户操作"
         right={

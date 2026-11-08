@@ -183,7 +183,7 @@ export function SettingsSystemPanel() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader seal="设"
         title="系统设置"
         subtitle="全局行为开关"
       />

@@ -608,7 +608,7 @@ export function Data() {
   return (
     <>
       <div ref={topRef} />
-      <PageHeader
+      <PageHeader seal="存"
         title="数据"
         subtitle="本地数据画像 · 同步状态 · 历史记录"
         right={

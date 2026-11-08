@@ -397,7 +397,7 @@ export function IndustryAnalysis() {
     return (
       <>
         <div className="flex h-full flex-col">
-          <PageHeader
+          <PageHeader seal="行"
             title="行业板块"
             right={
               <button onClick={() => setShowConfig(true)} className="p-1.5 text-muted hover:bg-surface hover:text-accent" title="配置数据源">
@@ -424,7 +424,7 @@ export function IndustryAnalysis() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader seal="行"
         title="行业板块"
         subtitle={`${industryLevelLabel} · ${marketQuery.data?.as_of ?? rowsQuery.data?.date ?? '最新'} · ${stats.length} 个行业 · ${totalSymbols} 只标的`}
         right={

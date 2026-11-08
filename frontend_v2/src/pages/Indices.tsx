@@ -174,7 +174,7 @@ export function Indices() {
 
   return (
     <div className="h-full overflow-auto">
-      <PageHeader
+      <PageHeader seal="指"
         title="指数"
         subtitle="INDEX · 独立 parquet · 不进入股票策略链路"
         right={

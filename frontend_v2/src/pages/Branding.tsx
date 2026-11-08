@@ -83,7 +83,7 @@ const MOCK_NAV = [
 export function Branding() {
   return (
     <>
-      <PageHeader
+      <PageHeader seal="牌"
         title="视觉风格预览"
         subtitle="名字保持 Tick Stock Panel,4 种赛博朋克 + 高级感的视觉处理 — 字重、字距、配色、图标各不同。挑你最喜欢的告诉我。"
       />

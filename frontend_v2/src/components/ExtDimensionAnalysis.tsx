@@ -249,6 +249,7 @@ export function ExtDimensionAnalysis({
   return (
     <>
       <PageHeader
+        seal="析"
         title={activeTitle}
         subtitle={menu ? `${menu.template} · ${menu.data_source}` : subtitle}
         right={

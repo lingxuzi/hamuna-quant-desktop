@@ -129,7 +129,7 @@ export function Analysis() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader seal="析"
         title="扩展分析"
         subtitle="自定义分析菜单 · 动态字段 · 动态列"
         right={

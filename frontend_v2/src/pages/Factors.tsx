@@ -71,7 +71,7 @@ export function Factors() {
 
   return (
     <div className="flex min-h-full flex-col bg-base xl:h-full">
-      <PageHeader
+      <PageHeader seal="因"
         title="因子"
         subtitle={<span className="hidden md:inline">{TABS[activeTab].subtitle}</span>}
         className="shrink-0 flex-wrap gap-x-4 gap-y-2 bg-base/95 px-3 lg:flex-nowrap lg:px-5"

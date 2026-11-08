@@ -93,7 +93,7 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader seal="设"
         title="设置"
         subtitle="管理账户、数据刷新策略和高级功能配置。"
         className="pl-14 md:pl-5"

@@ -250,7 +250,7 @@ nav :focus-visible { outline-offset: -2px; }
   }
   .ins-title {
     font-family: var(--font-serif);
-    font-size: 26px;
+    font-size: 34px;
     font-weight: 600;
     letter-spacing: .14em;
     line-height: 1.12;
@@ -268,7 +268,7 @@ nav :focus-visible { outline-offset: -2px; }
   }
   .ins-right { display: flex; align-items: flex-end; gap: 20px; justify-content: flex-end; }
   .seal {
-    width: 26px; height: 26px;
+    width: 28px; height: 28px;
     border: 1.5px solid hsl(var(--accent));
     color: hsl(var(--accent));
     display: grid; place-items: center;

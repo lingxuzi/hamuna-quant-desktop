@@ -288,22 +288,7 @@ export function Dashboard() {
       </AnimatePresence>
       {/* 无除权因子能力时的同步前置确认 */}
       {adjGate.dialog}
-      <header className="inscription">
-        <h1 className="ins-title">
-          市场看板
-          <i>MARKET BOARD</i>
-        </h1>
-        <div className="ins-right">
-          <div className="ins-meta">
-            <div>{dateLabel(currentDate)}</div>
-            <div className={quoteRunning ? 'live' : 'live stale'}>
-              <i />
-              <b>{quoteRunning ? '实时' : '非实时'}</b>
-            </div>
-          </div>
-          <div className="seal">盘</div>
-        </div>
-      </header>
+      <Inscription title="市场看板" subtitle="MARKET BOARD" seal="盘" date={currentDate} running={quoteRunning} />
 
       <div className="toolbar">
         <div className="tb-left">

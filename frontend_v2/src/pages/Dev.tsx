@@ -450,7 +450,7 @@ export function Dev() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader
+      <PageHeader seal="诊"
         title="系统工具"
         subtitle="数据诊断与预警调试"
         right={
