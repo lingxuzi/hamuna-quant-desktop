@@ -49,11 +49,23 @@ def _default_financial_provider() -> str:
     return "fuyao" if "fuyao" in custom_sources.names() else "tickflow"
 
 
+def _default_full_minute_provider() -> str:
+    """全量分钟默认源 = easytdx 插件已加载则 easytdx, 否则 tickflow。
+
+    与 preferences._default_full_minute_provider() 同口径。TickFlow 需 Expert
+    档; easytdx 逐标的拉当日 1m(全市场一轮约 13 分钟), 仅在盘中刷新开关
+    打开时才跑, 不会因默认值变化自动产生负载。
+    """
+    return "easytdx" if "easytdx" in custom_sources.names() else "tickflow"
+
+
 def _default_for(cap_id: str) -> str:
     if cap_id in _EASYTDX_ROUTED:
         return _default_provider()
     if cap_id == "financial":
         return _default_financial_provider()
+    if cap_id == "full_minute":
+        return _default_full_minute_provider()
     return "tickflow"
 
 

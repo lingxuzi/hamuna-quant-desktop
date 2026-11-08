@@ -406,8 +406,25 @@ def get_minute_data_provider() -> str:
     return _validated_provider(provider, "minute_data_provider")
 
 
+def _default_full_minute_provider() -> str:
+    """全量分钟默认源: easytdx 插件已加载时优先, 否则 tickflow。
+
+    与 capabilities._default_full_minute_provider() 同口径。TickFlow 需 Expert
+    档; easytdx 逐标的拉当日 1m(全市场一轮约 13 分钟), 仅在盘中刷新开关
+    打开时才跑, 不会因默认值变化自动产生负载。
+    """
+    try:
+        from app.data_providers import custom as custom_sources
+        if "easytdx" in custom_sources.names():
+            return "easytdx"
+    except Exception:  # noqa: BLE001
+        pass
+    return "tickflow"
+
+
 def get_full_minute_data_provider() -> str:
-    provider = str(load().get("full_minute_data_provider", "tickflow") or "tickflow").lower()
+    provider = str(load().get("full_minute_data_provider", _default_full_minute_provider())
+                   or "tickflow").lower()
     return _validated_provider(provider, "full_minute_data_provider")
 
 

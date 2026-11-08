@@ -43,7 +43,7 @@ from app.plugins.easytdx.client import EasyTdxClient, EasyTdxError, parse_symbol
 
 logger = logging.getLogger(__name__)
 
-_DATASETS = ("daily", "adj_factor", "realtime", "minute", "depth5")
+_DATASETS = ("daily", "adj_factor", "realtime", "minute", "depth5", "full_minute")
 
 _QUOTE_BATCH = 80  # 上游逐只报价单次 ≤80 只
 _HIST_INTERVAL_S = 0.02  # 单标的 K 线/事件请求节流(本地 TCP, 比 REST 源轻)
@@ -157,6 +157,32 @@ def _bars_for_window(span_days: int) -> int:
 def _minute_count_for_window(start_dt: datetime | None, end_dt: datetime) -> int:
     span = (end_dt - start_dt).days if start_dt else _MINUTE_HISTORY_DAYS
     return max(_MINUTE_BARS_PER_DAY, min(_MINUTE_MAX_COUNT, (int(span) + 1) * _MINUTE_BARS_PER_DAY + 300))
+
+
+def _minute_frame(
+    symbol: str,
+    bars: list[dict],
+    start_dt: datetime | None,
+    end_dt: datetime | None,
+) -> pl.DataFrame:
+    """分钟K 原始行 → 契约帧。get_minute 与 get_intraday_batch 共用同一映射。
+
+    单位: vol 股→手(÷100), amount 元直通; datetime 已是北京墙钟 naive。
+    """
+    rows = []
+    for bar in bars:
+        dt = _as_naive_dt(bar.get("datetime"))
+        if dt is None or (end_dt is not None and dt > end_dt) or (start_dt is not None and dt < start_dt):
+            continue
+        vol = bar.get("vol")
+        rows.append({
+            "symbol": symbol, "datetime": dt,
+            "open": _to_float(bar.get("open")), "high": _to_float(bar.get("high")),
+            "low": _to_float(bar.get("low")), "close": _to_float(bar.get("close")),
+            "volume": _to_float(vol) / 100.0 if vol is not None else None,
+            "amount": _to_float(bar.get("amount")),
+        })
+    return pl.DataFrame(rows, schema=_MINUTE_SCHEMA)
 
 
 def _symbol_of(market, code) -> str | None:
@@ -460,25 +486,41 @@ class EasyTdxProvider:
             except EasyTdxError as e:
                 # 请求失败应中止历史同步并标记失败, 不得作为无数据继续遍历全市场
                 raise EasyTdxError(f"分钟K {symbol}: {e}") from e
-            rows = []
-            for bar in bars:
-                dt = _as_naive_dt(bar.get("datetime"))
-                if dt is None or dt > end_dt or (start_dt is not None and dt < start_dt):
-                    continue
-                rows.append({
-                    "symbol": symbol, "datetime": dt,
-                    "open": _to_float(bar.get("open")), "high": _to_float(bar.get("high")),
-                    "low": _to_float(bar.get("low")), "close": _to_float(bar.get("close")),
-                    "volume": _to_float(bar.get("vol")) / 100.0
-                    if bar.get("vol") is not None else None,
-                    "amount": _to_float(bar.get("amount")),
-                })
-            parts.append(pl.DataFrame(rows, schema=_MINUTE_SCHEMA))
+            parts.append(_minute_frame(symbol, bars, start_dt, end_dt))
             if on_chunk_done:
                 on_chunk_done(i + 1, len(symbols))
             time.sleep(_HIST_INTERVAL_S)
         non_empty = [df for df in parts if not df.is_empty()]
         return pl.concat(non_empty, how="diagonal_relaxed") if non_empty else pl.DataFrame(schema=_MINUTE_SCHEMA)
+
+    def get_intraday_batch(
+        self, symbols: list[str], count: int = 300, asset_type: str = "stock",
+    ) -> pl.DataFrame:
+        """全量分钟修复轮: 当日窗口逐标的拉取, 只保留今日 1m 行。
+
+        上游无批量分钟端点(MAC 协议 K 线命令单标的一次一请求), 与 tdxquant
+        同形: 5574 只单线程约 13 分钟(实测 144ms/只), 由 minute_refresh 以
+        修复轮节奏调度。count 模式尾部天然带前一日余量, 按今日过滤掉。
+        """
+        if not symbols or asset_type != "stock":
+            return pl.DataFrame(schema=_MINUTE_SCHEMA)
+        client = self._get_client()
+        today = datetime.now().replace(tzinfo=None).date()
+        start_dt = datetime.combine(today, datetime.min.time())
+        # 240 根/日 + count 余量, 上限按服务端保留深度截断
+        fetch = min(_MINUTE_MAX_COUNT, _MINUTE_BARS_PER_DAY + max(int(count), 0))
+        parts: list[pl.DataFrame] = []
+        for symbol in symbols:
+            try:
+                bars = client.kline(symbol, period_name="MIN_1", count=fetch)
+            except EasyTdxError:
+                # 单标的失败不拖垮整轮(修复轮会重来), 与 realtime 软失败同语义
+                continue
+            df = _minute_frame(symbol, bars, start_dt, None)
+            if not df.is_empty():
+                parts.append(df)
+            time.sleep(_HIST_INTERVAL_S)
+        return pl.concat(parts, how="diagonal_relaxed") if parts else pl.DataFrame(schema=_MINUTE_SCHEMA)
 
     # ---- depth5 ----
     def get_depth_batch(self, symbols: list[str]) -> dict[str, dict]:
@@ -598,6 +640,13 @@ class EasyTdxProvider:
             try:
                 end = datetime.now()
                 df = self.get_minute(syms, end - timedelta(days=3), end)
+            except EasyTdxError as e:
+                return {"provider": self.name, "dataset": dataset, "rows": 0, "error": str(e)}
+            return self._preview(dataset, df)
+        if dataset == "full_minute":
+            syms = [s for s in (symbols or [])][:3] or ["600519.SH"]
+            try:
+                df = self.get_intraday_batch(syms, count=3)
             except EasyTdxError as e:
                 return {"provider": self.name, "dataset": dataset, "rows": 0, "error": str(e)}
             return self._preview(dataset, df)

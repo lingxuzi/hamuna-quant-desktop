@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import polars as pl
 import pytest
@@ -336,6 +336,57 @@ def test_minute_history_days_declared(provider):
     assert p.minute_history_days == ep._MINUTE_HISTORY_DAYS == 20
 
 
+# ---------------------------------------------------------------- full_minute
+def test_intraday_batch_keeps_only_today(provider):
+    """修复轮只要当日窗口: count 模式尾部的前一日余量必须滤掉。"""
+    p, fake = provider
+    now = datetime.now()
+    fake.kline_by_symbol["600519.SH"] = [
+        {"datetime": datetime(now.year, now.month, now.day) - timedelta(days=1), "open": 1.0,
+         "high": 1.0, "low": 1.0, "close": 1.0, "vol": 100.0, "amount": 100.0},
+        {"datetime": now.replace(hour=9, minute=31, second=0, microsecond=0), "open": 2.0,
+         "high": 2.0, "low": 2.0, "close": 2.0, "vol": 200.0, "amount": 200.0},
+    ]
+    df = p.get_intraday_batch(["600519.SH"], count=3)
+    assert df.height == 1
+    assert df["close"].to_list() == [2.0]
+    assert df["volume"].to_list() == [2.0]  # 200 股 → 2 手
+
+
+def test_intraday_batch_isolates_symbol_failure(provider):
+    """单标的失败不拖垮整轮修复。"""
+    p, fake = provider
+    now = datetime.now()
+
+    def kline(symbol, *, period_name, count):
+        if symbol == "000001.SZ":
+            raise EasyTdxError("节点断连")
+        return [{"datetime": now.replace(hour=9, minute=31, second=0, microsecond=0),
+                 "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                 "vol": 100.0, "amount": 100.0}]
+
+    fake.kline = kline
+    df = p.get_intraday_batch(["600519.SH", "000001.SZ"], count=3)
+    assert df["symbol"].to_list() == ["600519.SH"]
+
+
+def test_intraday_batch_empty_symbols_returns_schema(provider):
+    p, _ = provider
+    df = p.get_intraday_batch([], count=3)
+    assert df.is_empty() and df.columns == list(ep._MINUTE_SCHEMA)
+
+
+def test_test_dataset_full_minute_returns_preview(provider):
+    p, fake = provider
+    now = datetime.now()
+    fake.kline_by_symbol["600519.SH"] = [
+        {"datetime": now.replace(hour=9, minute=31, second=0, microsecond=0), "open": 1.0,
+         "high": 1.0, "low": 1.0, "close": 1.0, "vol": 100.0, "amount": 100.0},
+    ]
+    out = p.test_dataset("full_minute", ["600519.SH"])
+    assert out["rows"] == 1 and isinstance(out["preview"][0]["datetime"], str)
+
+
 # ---------------------------------------------------------------- instruments
 def test_instruments_converts_wan_shares_to_shares(provider):
     p, fake = provider
@@ -377,10 +428,10 @@ def test_declared_datasets_match_plugin_yaml():
     assert custom is not None
 
 
-def test_provider_does_not_declare_financial_or_full_minute(provider):
+def test_provider_does_not_declare_financial(provider):
+    """财务需 658 个无名位置字段的映射字典, 未接入 → 回退 fuyao/TickFlow。"""
     p, _ = provider
     assert "financial" not in p.config.datasets
-    assert "full_minute" not in p.config.datasets
 
 
 def test_availability_false_when_module_missing(monkeypatch):

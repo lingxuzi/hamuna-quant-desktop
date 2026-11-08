@@ -46,13 +46,11 @@ def test_registry_covers_all_routing_fields():
     assert full_minute["field"] == "full_minute_data_provider"
     assert full_minute["tf_tier"] == "expert"
     # 默认源随插件加载状态走 (插件未装 → 回落 tickflow):
-    # 五项能力跟 easytdx, 财务跟 fuyao, 全量分钟只有 TickFlow 提供故恒为 tickflow。
+    # 五项能力 + 全量分钟跟 easytdx, 财务跟 fuyao。
     easytdx_ready = "easytdx" in custom_sources.names()
     fuyao_ready = "fuyao" in custom_sources.names()
     for cap in CAPABILITY_REGISTRY:
-        if cap["id"] == "full_minute":
-            assert cap["default"] == "tickflow"
-        elif cap["id"] == "financial":
+        if cap["id"] == "financial":
             assert cap["default"] == ("fuyao" if fuyao_ready else "tickflow")
         else:
             assert cap["default"] == ("easytdx" if easytdx_ready else "tickflow")
