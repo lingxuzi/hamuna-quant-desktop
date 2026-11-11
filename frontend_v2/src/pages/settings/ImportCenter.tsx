@@ -15,11 +15,11 @@ import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
 import { PackageActions } from '@/custom/source-packages/extension'
 import { PluginKeyConfig } from './DataSources'
 import { INVALIDATE_KEYS, SettingsBackupPanel } from './Backup'
+import { BTN_LG, BTN_PRIMARY, INPUT_LG } from '@/components/controls'
 
-const BUTTON = 'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn border border-border bg-surface px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-9'
-const PRIMARY = cn(BUTTON, 'border-accent bg-accent text-white hover:bg-accent/90 hover:text-white')
-// 16px 用 text-[16px]: 主题色有 base, text-base 会生成 color 规则让文字变成背景色 (见 tailwind.config.ts)
-const INPUT = 'min-h-11 w-full min-w-0 rounded-input border border-border bg-base px-3 py-2 text-[16px] leading-6 text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:min-h-9 sm:text-sm'
+const BUTTON = BTN_LG
+const PRIMARY = cn(BUTTON, BTN_PRIMARY)
+const INPUT = cn(INPUT_LG, 'w-full min-w-0')
 const KIND = { strategy: '策略', factor: '因子', signal: '信号', settings: '调参', code: '辅助模块' }
 const TYPE = { resources: '策略与定义资源', backup: '配置备份', source: '数据源插件', extension: '后端扩展', page: '页面插件', project: '项目源码页面' }
 type Review = ImportCenterPreview | { kind: 'project'; preview: { namespace: string } }
@@ -39,7 +39,7 @@ function Status({ children }: { children: string }) {
 function Stepper({ step }: { step: number }) {
   return <ol className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-secondary" aria-label="导入进度">
     {['选择文件', '预览确认', '处理结果'].map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} className={cn('flex items-center gap-2', index === step && 'text-accent')}>
-      <span className={cn('flex h-6 w-6 items-center justify-center rounded-full text-[11px]', index < step ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : index === step ? 'bg-accent/10' : 'bg-elevated')}>{index < step ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}</span>{label}
+      <span className={cn('flex h-[24px] w-[24px] items-center justify-center rounded-full text-[11px]', index < step ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : index === step ? 'bg-accent/10' : 'bg-elevated')}>{index < step ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}</span>{label}
     </li>)}
   </ol>
 }
@@ -203,7 +203,7 @@ export function SettingsImportCenterPanel() {
   return <div className="max-w-5xl space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 flex-1"><h2 className="text-xl font-semibold tracking-tight text-foreground">导入与备份</h2><p className="mt-2 text-sm leading-6 text-secondary">一个入口，导入资源、安装扩展、迁移配置。</p></div>
-      <button type="button" className={cn(BUTTON, 'shrink-0')} disabled={busy} onClick={() => changeView('backup')}><Download className="h-4 w-4" aria-hidden="true" />创建配置备份</button>
+      <button type="button" className={cn(BUTTON, 'shrink-0')} disabled={busy} onClick={() => changeView('backup')}><Download className="h-[16px] w-[16px]" aria-hidden="true" />创建配置备份</button>
     </header>
     <nav className="flex gap-6 border-b border-border" aria-label="导入与扩展">
       {[['import', '导入文件'], ['installed', '已安装扩展']].map(([key, label]) => <button key={key} type="button" aria-pressed={key === 'import' ? view !== 'installed' : view === key} disabled={busy} onClick={() => changeView(key)}
@@ -217,7 +217,7 @@ export function SettingsImportCenterPanel() {
         : <>
           <Stepper step={result ? 2 : review ? 1 : 0} />
           {result ? <section className="max-w-2xl py-2" role="status">
-            <CheckCircle2 className="mb-4 h-9 w-9 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            <CheckCircle2 className="mb-4 h-[36px] w-[36px] text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
             <h3 className="text-lg font-semibold text-foreground">{result.title}</h3><p className="mt-3 text-sm leading-7 text-secondary">{result.message}</p>
             <ul className="my-6 space-y-3 border-y border-border py-5 text-sm leading-6 text-secondary">{result.details.map((detail, i) => <li key={i} className="break-words">{detail}</li>)}</ul>
             <div className="flex flex-wrap gap-3">{result.target && <button type="button" className={PRIMARY} onClick={() => changeView('installed', result.target)}>查看已安装扩展<ArrowRight className="h-3.5 w-3.5" /></button>}
@@ -225,7 +225,7 @@ export function SettingsImportCenterPanel() {
               <button type="button" className={BUTTON} onClick={reset}>继续导入</button></div>
           </section> : review ? <>
             <header className="space-y-2">
-              <div className="flex flex-wrap items-center gap-3 text-xs text-secondary"><Package className="h-4 w-4" aria-hidden="true" /><span>{review.kind === 'extension' && review.preview.manifest.frontend ? '完整功能包' : TYPE[review.kind]}</span><span className="break-all">{review.kind === 'project' ? '项目源码 · ' + review.preview.namespace : files.map(f => f.name).join('、')}</span>{!!files.length && <span>{formatSize(files.reduce((sum, f) => sum + f.size, 0))}</span>}</div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-secondary"><Package className="h-[16px] w-[16px]" aria-hidden="true" /><span>{review.kind === 'extension' && review.preview.manifest.frontend ? '完整功能包' : TYPE[review.kind]}</span><span className="break-all">{review.kind === 'project' ? '项目源码 · ' + review.preview.namespace : files.map(f => f.name).join('、')}</span>{!!files.length && <span>{formatSize(files.reduce((sum, f) => sum + f.size, 0))}</span>}</div>
               <h3 className="text-lg font-semibold text-foreground">{name}</h3>
               {packageDoc && <p className="text-xs text-secondary">{installedVersion ? '本机 ' + installedVersion + ' → 目标 ' + packageDoc.version : '版本 ' + packageDoc.version}{packageDoc.author ? ' · 来源声明：' + packageDoc.author : ''}</p>}
               {packageDoc?.description && (review.kind === 'source'
@@ -263,8 +263,8 @@ export function SettingsImportCenterPanel() {
                 </section>}
                 {review.kind === 'extension' && <section className="space-y-4">
                   <h4 className="text-sm font-semibold text-foreground">本次变更</h4>
-                  <div className="flex items-start gap-3 border-b border-border pb-4"><Server className="mt-1 h-4 w-4 shrink-0 text-secondary" /><div><p className="text-sm font-medium text-foreground">后端服务与启动任务</p><p className="mt-1 text-xs leading-6 text-secondary">重启后注册扩展接口，执行包内声明的初始化任务。</p></div></div>
-                  {review.preview.manifest.frontend && <div className="flex items-start gap-3 border-b border-border pb-4"><FileCode2 className="mt-1 h-4 w-4 shrink-0 text-secondary" /><div><p className="text-sm font-medium text-foreground">配套前端页面</p><p className="mt-1 text-xs leading-6 text-secondary">与后端按同一版本更新、启停和卸载。</p></div></div>}
+                  <div className="flex items-start gap-3 border-b border-border pb-4"><Server className="mt-1 h-[16px] w-[16px] shrink-0 text-secondary" /><div><p className="text-sm font-medium text-foreground">后端服务与启动任务</p><p className="mt-1 text-xs leading-6 text-secondary">重启后注册扩展接口，执行包内声明的初始化任务。</p></div></div>
+                  {review.preview.manifest.frontend && <div className="flex items-start gap-3 border-b border-border pb-4"><FileCode2 className="mt-1 h-[16px] w-[16px] shrink-0 text-secondary" /><div><p className="text-sm font-medium text-foreground">配套前端页面</p><p className="mt-1 text-xs leading-6 text-secondary">与后端按同一版本更新、启停和卸载。</p></div></div>}
                   <Notice>{review.preview.manifest.frontend ? '后台启动成功后，新版本页面才会对外提供。确认安装时会先加载页面代码检查其前端契约。' : '新版本仅在主程序重启时加载；安装和预览阶段不会执行包内 Python 代码。'}</Notice>
                   <details className="text-xs leading-6 text-secondary"><summary className="cursor-pointer">查看包内文件与技术信息</summary><p className="mt-2">接口命名空间：/api/extensions/{review.preview.manifest.id}/</p><ul className="mt-2 break-all font-mono">{review.preview.files.map(file => <li key={file}>{file}</li>)}</ul></details>
                 </section>}
@@ -275,10 +275,10 @@ export function SettingsImportCenterPanel() {
                   {pages.error && <p role="alert" className="text-xs text-danger">本机页面清单读取失败。<button className="ml-2 underline" onClick={() => void pages.refetch()}>重新读取</button></p>}
                   <Notice>这里只导入前端页面，加载校验通过后刷新生效。需要新的后台接口时，请使用包含 extension.yaml 的完整功能包。</Notice>
                 </section>}
-                {(review.kind === 'source' || review.kind === 'extension') && <section className="space-y-3"><h4 className="text-sm font-semibold text-foreground">兼容检查</h4>{packageErrors.length ? <div role="alert" className="space-y-2 text-sm text-danger">{packageErrors.map((message, i) => <p key={i}>{message}</p>)}</div> : <p className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />静态兼容检查通过</p>}<p className="text-xs leading-6 text-secondary">缺少依赖时停止安装，不会自动修改主程序运行环境。</p></section>}
+                {(review.kind === 'source' || review.kind === 'extension') && <section className="space-y-3"><h4 className="text-sm font-semibold text-foreground">兼容检查</h4>{packageErrors.length ? <div role="alert" className="space-y-2 text-sm text-danger">{packageErrors.map((message, i) => <p key={i}>{message}</p>)}</div> : <p className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300"><CheckCircle2 className="h-[16px] w-[16px]" />静态兼容检查通过</p>}<p className="text-xs leading-6 text-secondary">缺少依赖时停止安装，不会自动修改主程序运行环境。</p></section>}
                 {!!issues.length && <div role="alert" className="space-y-2 text-xs leading-6 text-danger">{issues.map((issue, i) => <p key={i}>{issue}</p>)}</div>}
               </div>
-              <aside className="min-w-0 leaf-cell">
+              <aside className="min-w-0 border-t border-border-strong pt-4">
                 <h4 className="text-sm font-semibold text-foreground">{review.kind === 'backup' ? '本次恢复' : '本次操作'}</h4>
                 <dl className="my-4 space-y-3 text-xs leading-6"><div className="flex justify-between gap-3"><dt className="text-secondary">处理方式</dt><dd className="text-right text-foreground">{review.kind === 'backup' ? '按类别恢复' : review.kind === 'resources' ? '所选资源与依赖' : 'installed_version' in review.preview && review.preview.installed_version ? '更新已有扩展' : '新增导入'}</dd></div>
                   <div className="flex justify-between gap-3"><dt className="text-secondary">生效时间</dt><dd className="text-right text-foreground">{review.kind === 'extension' ? '重启主程序后' : isPage ? '刷新页面后' : review.kind === 'source' && review.preview.installed_version ? '重启主程序后' : '处理完成后'}</dd></div>
@@ -286,7 +286,7 @@ export function SettingsImportCenterPanel() {
                   {packageDoc && <div className="flex justify-between gap-3"><dt className="text-secondary">目标版本</dt><dd>{packageDoc.version}</dd></div>}
                 </dl>
                 {(codeTrust || review.kind === 'backup') && <label className="flex items-start gap-2 text-xs leading-6 text-secondary"><input type="checkbox" className="mt-1 accent-accent" disabled={busy} aria-label={review.kind === 'backup' ? '信任备份来源' : '信任代码来源'} checked={trusted} onChange={e => setTrusted(e.target.checked)} /><span>{review.kind === 'backup' ? '我确认这是可信的备份，允许恢复所选配置及其中的代码。' : '我信任此代码来源，允许它在本机运行。代码可访问主程序的数据和凭据。'}</span></label>}
-                <button type="button" className={cn(PRIMARY, 'mt-4 w-full whitespace-normal')} disabled={disabled} onClick={() => void apply()}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}{busy ? '正在处理…' : review.kind === 'backup' ? '恢复所选配置' : review.kind === 'resources' ? '确认导入' : 'installed_version' in review.preview && review.preview.installed_version ? '确认更新' : '确认安装'}</button>
+                <button type="button" className={cn(PRIMARY, 'mt-4 w-full whitespace-normal')} disabled={disabled} onClick={() => void apply()}>{busy && <Loader2 className="h-[16px] w-[16px] animate-spin" />}{busy ? '正在处理…' : review.kind === 'backup' ? '恢复所选配置' : review.kind === 'resources' ? '确认导入' : 'installed_version' in review.preview && review.preview.installed_version ? '确认更新' : '确认安装'}</button>
                 <p className="mt-3 text-xs leading-6 text-secondary">确认前不会应用任何变更。{unresolved ? '请先处理同名冲突。' : ''}</p>
               </aside>
             </div>
@@ -294,12 +294,12 @@ export function SettingsImportCenterPanel() {
           </> : <>
             <div className={cn('rounded-card border border-dashed bg-surface px-4 py-10 text-center transition-colors sm:py-12', dragging ? 'border-accent bg-accent/5' : 'border-border')}
               onDragOver={e => { e.preventDefault(); if (!busy) setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); void inspect(Array.from(e.dataTransfer.files)) }}>
-              <Upload className="mx-auto mb-4 h-7 w-7 text-secondary" aria-hidden="true" /><h3 className="text-lg font-semibold text-foreground">把文件放到这里</h3>
+              <Upload className="mx-auto mb-4 h-[28px] w-[28px] text-secondary" aria-hidden="true" /><h3 className="text-lg font-semibold text-foreground">把文件放到这里</h3>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-secondary">自动识别策略与定义、配置备份、数据源插件、页面插件，以及后端或前后端完整扩展包。</p>
-              <button type="button" className={cn(PRIMARY, 'mt-5')} disabled={busy} onClick={() => fileInput.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}{busy ? '正在识别文件…' : '选择文件'}</button>
+              <button type="button" className={cn(PRIMARY, 'mt-5')} disabled={busy} onClick={() => fileInput.current?.click()}>{busy ? <Loader2 className="h-[16px] w-[16px] animate-spin" /> : <FolderOpen className="h-[16px] w-[16px]" />}{busy ? '正在识别文件…' : '选择文件'}</button>
               <p className="mt-3 text-xs leading-6 text-secondary">支持 ZIP、PY、JSON、JS、MJS、TSX。资源文件可多选；扩展和备份逐包处理。</p>
             </div>
-            {!!namespaces.data?.length && <details className="border-b border-border pb-5 text-xs text-secondary"><summary className="cursor-pointer">从本项目的源码页面导入</summary><p className="mt-3 leading-6">把现有源码页面编译为独立页面插件；不会把它的后端代码一起打包。</p><div className="mt-3 flex flex-wrap items-center gap-2"><select aria-label="项目源码页面" className={cn(INPUT, 'sm:w-64')} value={namespace} onChange={e => setNamespace(e.target.value)} disabled={busy}><option value="">选择源码页面</option>{namespaces.data.map(ns => <option key={ns} value={ns}>{ns}</option>)}</select><button type="button" className={BUTTON} disabled={busy || !namespace} onClick={() => { setReview({ kind: 'project', preview: { namespace } }); setPageId(namespace.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64)); setTrusted(false); setAllowOverwrite(false) }}>预览项目页面</button></div></details>}
+            {!!namespaces.data?.length && <details className="border-b border-border pb-5 text-xs text-secondary"><summary className="cursor-pointer">从本项目的源码页面导入</summary><p className="mt-3 leading-6">把现有源码页面编译为独立页面插件；不会把它的后端代码一起打包。</p><div className="mt-3 flex flex-wrap items-center gap-2"><select aria-label="项目源码页面" className={cn(INPUT, 'w-auto sm:w-64')} value={namespace} onChange={e => setNamespace(e.target.value)} disabled={busy}><option value="">选择源码页面</option>{namespaces.data.map(ns => <option key={ns} value={ns}>{ns}</option>)}</select><button type="button" className={BUTTON} disabled={busy || !namespace} onClick={() => { setReview({ kind: 'project', preview: { namespace } }); setPageId(namespace.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64)); setTrusted(false); setAllowOverwrite(false) }}>预览项目页面</button></div></details>}
             <section className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
               <div><h3 className="text-sm font-medium text-foreground">分享策略、信号与因子</h3><p className="mt-2 text-xs leading-6 text-secondary">批量导出定义和关联依赖；换机迁移请使用“创建配置备份”。</p></div>
               <div className="flex flex-wrap gap-2"><select aria-label="导出资源类型" className={cn(INPUT, 'w-auto')} value={exportKind} onChange={e => setExportKind(e.target.value as ResourceKind)}>{(['strategy', 'signal', 'factor'] as const).map(kind => <option key={kind} value={kind}>{KIND[kind]}</option>)}</select><button type="button" className={BUTTON} onClick={() => setExporting(true)}><Download className="h-3.5 w-3.5" />批量导出资源</button></div>
@@ -308,7 +308,7 @@ export function SettingsImportCenterPanel() {
           </>}
           <input ref={fileInput} type="file" className="hidden" aria-label="选择导入文件" multiple accept=".zip,.py,.json,.js,.mjs,.tsx" disabled={busy} onChange={e => { const next = Array.from(e.target.files ?? []); e.target.value = ''; void inspect(next) }} />
         </>}
-    {error && <div role="alert" className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 p-3 text-sm leading-6 text-danger"><ShieldAlert className="mt-1 h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{error}</span>{!review && !!files.length && <button type="button" className="shrink-0 underline" disabled={busy} onClick={() => void inspect(files)}>重新预览</button>}</div>}
+    {error && <div role="alert" className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 p-3 text-sm leading-6 text-danger"><ShieldAlert className="mt-1 h-[16px] w-[16px] shrink-0" /><span className="min-w-0 break-words">{error}</span>{!review && !!files.length && <button type="button" className="shrink-0 underline" disabled={busy} onClick={() => void inspect(files)}>重新预览</button>}</div>}
     {exporting && <ResourceTransferDialog kind={exportKind} initialMode="export" exportOnly onClose={() => setExporting(false)} />}
   </div>
 }
@@ -359,7 +359,7 @@ function InstalledView({ packages, sources, pages, selected, select, install, re
       </div>
     </header>
     {!!error && <div role="alert" className="text-sm text-danger">扩展清单读取失败，已保留可用列表。请点击刷新重试。</div>}
-    {loading && <p role="status" className="flex gap-2 text-sm text-secondary"><Loader2 className="h-4 w-4 animate-spin" />正在读取扩展…</p>}
+    {loading && <p role="status" className="flex gap-2 text-sm text-secondary"><Loader2 className="h-[16px] w-[16px] animate-spin" />正在读取扩展…</p>}
     {!!runtimeErrors.length && <details className="rounded-btn border border-warning/25 bg-warning/5 px-4 py-3 text-xs leading-6 text-secondary">
       <summary className="cursor-pointer font-medium text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:text-amber-300">{runtimeErrors.length} 个页面加载失败</summary>
       <div className="mt-2 space-y-2">
@@ -368,20 +368,20 @@ function InstalledView({ packages, sources, pages, selected, select, install, re
       </div>
     </details>}
     {!loading && !items.length && <div className="rounded-card border border-dashed border-border px-5 py-12 text-center">
-      <Package className="mx-auto h-7 w-7 text-muted" aria-hidden="true" />
+      <Package className="mx-auto h-[28px] w-[28px] text-muted" aria-hidden="true" />
       <p className="mt-4 text-sm font-medium text-foreground">尚未安装外部扩展</p>
       <p className="mt-2 text-xs leading-6 text-secondary">从“导入文件”安装数据源或页面插件。源码内置页面可在“页面管理”中维护。</p>
       <button type="button" className={cn(BUTTON, 'mt-4')} onClick={install}>安装扩展</button>
     </div>}
     {/* 设置页已有两级侧栏，按面板的可用宽度决定何时折叠。 */}
-    {!!items.length && <div className="overflow-hidden leaf-cell [container-type:inline-size]">
+    {!!items.length && <div className="[container-type:inline-size] border-t border-border-strong pt-4">
       <div className="grid grid-cols-1 [@container(min-width:44rem)]:grid-cols-[15rem_minmax(0,1fr)]">
       <nav aria-label="已安装扩展列表" className="min-w-0 space-y-1 border-b border-border bg-elevated/20 p-2 [@container(min-width:44rem)]:border-b-0 [@container(min-width:44rem)]:border-r">
         {items.map(item => <button key={item.key} type="button" disabled={busy} aria-pressed={activeKey === item.key} aria-controls="installed-extension-detail"
           onClick={() => { setFailure(''); setMessage(''); setConfirm(''); select(item.key) }}
           className={cn('flex min-h-16 w-full items-start gap-3 rounded-btn border px-3 py-3 text-left transition-colors hover:bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50',
             activeKey === item.key ? 'border-accent/20 bg-accent/10' : 'border-transparent')}>
-          <item.icon className={cn('mt-1 h-4 w-4 shrink-0', activeKey === item.key ? 'text-accent' : 'text-secondary')} aria-hidden="true" />
+          <item.icon className={cn('mt-1 h-[16px] w-[16px] shrink-0', activeKey === item.key ? 'text-accent' : 'text-secondary')} aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className={cn('block break-words text-sm font-semibold', activeKey === item.key ? 'text-accent' : 'text-foreground')}>{item.title}</span>
             <span className="mt-1 block truncate text-xs leading-5 text-secondary" title={item.subtitle}>{item.subtitle}</span>

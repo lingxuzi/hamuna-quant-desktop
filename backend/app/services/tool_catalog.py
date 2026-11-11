@@ -182,16 +182,14 @@ def list_strategies(engine) -> dict[str, Any]:
 def list_data_capabilities() -> dict[str, Any]:
     """返回能力目录及当前生效数据源的可用状态。"""
     from app.data_providers.capabilities import CAPABILITY_REGISTRY, resolve_capability_sources
-    from app.tickflow import policy
 
-    routing = {row["id"]: row for row in resolve_capability_sources(policy.base_tier_name())}
+    routing = {row["id"]: row for row in resolve_capability_sources()}
 
     capabilities = [
         {
             "id": cap["id"],
             "label": cap["label"],
             "desc": cap["desc"],
-            "tf_tier": cap["tf_tier"],
             **routing.get(cap["id"], {}),
         }
         for cap in CAPABILITY_REGISTRY

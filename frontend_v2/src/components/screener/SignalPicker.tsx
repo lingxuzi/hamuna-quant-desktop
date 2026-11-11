@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { PenLine } from 'lucide-react'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
+import { CHIP } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 /** 展示与过滤可选项 (全部可选, 有默认值) */
 interface SignalPickerOptions {
@@ -67,8 +69,8 @@ export function SignalPicker({ signals, onChange, kind, options }: Props) {
     : 'border-border bg-base text-muted hover:border-accent/40'
 
   const btnCls = variant === 'dialog'
-    ? 'rounded px-1.5 py-0.5 text-[10px] font-medium border transition-colors cursor-pointer'
-    : 'rounded-btn border px-2.5 py-1.5 text-[11px] transition-colors cursor-pointer'
+    ? cn(CHIP, 'px-1.5')
+    : CHIP
 
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -99,7 +101,7 @@ export function SignalPicker({ signals, onChange, kind, options }: Props) {
           >
             {customOptions.names[id]}
             <span className="pointer-events-none absolute -top-1 -right-1 rounded-full border border-border bg-base p-px">
-              <PenLine className="h-2 w-2 text-muted" />
+              <PenLine className="h-[8px] w-[8px] text-muted" />
             </span>
           </button>
         )

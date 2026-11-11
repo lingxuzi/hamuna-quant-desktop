@@ -11,7 +11,7 @@ const chart = vi.hoisted(() => ({
   getZr: () => ({ on: vi.fn(), off: vi.fn() }),
 }))
 vi.mock('echarts', () => ({ init: () => chart }))
-vi.mock('@/lib/theme', () => ({ useChartTheme: () => ({}) }))
+vi.mock('@/lib/theme', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/theme')>()), useChartTheme: () => ({}) }))
 const rows = [
   { datetime: '2026-09-09 09:30:00', open: 119.77, high: 119.77, low: 119, close: 119.1, volume: 100, amount: 1191000 },
   { datetime: '2026-09-09 11:20:00', open: 118.25, high: 118.28, low: 118.24, close: 118.25, volume: 55, amount: 650375 },

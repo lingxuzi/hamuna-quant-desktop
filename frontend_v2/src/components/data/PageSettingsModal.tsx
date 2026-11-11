@@ -180,7 +180,7 @@ export function PageSettingsModal({
       <div className="flex items-center justify-end pt-1">
         <button
           onClick={reset}
-          className="px-2 py-0.5 rounded-btn text-[10px] text-secondary hover:text-foreground transition-colors"
+          className="ctl ctl-sm ctl-ghost px-1.5 hover:text-foreground"
         >
           恢复默认
         </button>
@@ -231,19 +231,19 @@ function SortableCardRow({
         className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground transition-colors shrink-0"
         title="拖动排序"
       >
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="h-[16px] w-[16px]" />
       </button>
       {/* 显隐勾选 */}
       <button
         type="button"
         onClick={onToggle}
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+        className={`flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded border transition-colors ${
           on ? 'bg-accent border-accent' : 'bg-base border-border'
         }`}
         role="checkbox"
         aria-checked={on}
       >
-        {on && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+        {on && <Check className="h-[12px] w-[12px] text-on-solid" strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-foreground">{label}</div>

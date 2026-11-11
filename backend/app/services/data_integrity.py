@@ -640,7 +640,7 @@ def launch_integrity_repair(
     if repo is None or capset is None:
         return None, False
     try:
-        from app.tickflow.capabilities import Cap
+        from app.data_providers.capabilities import Cap
 
         if not capset.has(Cap.KLINE_DAILY_BATCH):
             logger.info("integrity repair skipped: no KLINE_DAILY_BATCH capability")

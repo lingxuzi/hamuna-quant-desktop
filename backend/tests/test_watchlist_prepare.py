@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.api import kline, watchlist
 from app.services import kline_sync
-from app.tickflow.capabilities import CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 
 ETF = "159558.SZ"
 DAY = date(2026, 11, 4)
@@ -35,7 +35,7 @@ def market(tmp_path, monkeypatch):
     })
     calls = []
 
-    def fetch(symbols, capset, **kwargs):
+    def fetch(symbols, **kwargs):
         calls.append((symbols, kwargs))
         yield frame
 

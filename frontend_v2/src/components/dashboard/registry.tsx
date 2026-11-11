@@ -143,7 +143,7 @@ function MonitorSection({ ctx }: { ctx: WidgetCtx }) {
           <h2 className="font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">监控中心</h2>
           <span className="font-mono text-[10px] text-muted">实时信号</span>
         </div>
-        <Link to="/monitor" className="inline-flex items-center justify-center h-5 w-5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors" title="进入监控中心">
+        <Link to="/monitor" className="inline-flex items-center justify-center h-[20px] w-[20px] rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors" title="进入监控中心">
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </div>

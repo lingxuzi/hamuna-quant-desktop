@@ -9,6 +9,7 @@ import { cloneElement, isValidElement, useEffect, useRef, type ReactElement, typ
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import type { ColumnConfig } from '@/lib/list-columns'
 import { UNSORTABLE_KEYS } from '@/lib/stock-table'
+import { cn } from "@/lib/cn"
 import { VIRTUAL_LIST_THRESHOLD, useParentScroll } from '@/components/virtual-list/useParentScroll'
 import type { SortState } from './useTableSort'
 
@@ -38,6 +39,8 @@ export interface StockDataTableProps {
   extraHeader?: ReactNode
   /** 自定义表头单元格内容覆盖（如日k眼睛按钮）。返回 undefined 则用 col.label */
   renderHeaderContent?: (col: ColumnConfig) => ReactNode | undefined
+  /** 表尾单元格（如自选页的读取用时/数据日），忽略排序与虚拟化，始终显示在末行 */
+  footer?: ReactNode
   /**
    * 虚拟化视口行变化上报 (可见 + overscan 缓冲), 供父级收敛按需数据请求
    * (如分时列分钟批量只拉视口集合)。非虚拟化视图 (行数 ≤ 阈值) 上报 null。
@@ -48,14 +51,11 @@ export interface StockDataTableProps {
   className?: string
 }
 
-// 表头用账簿体例: 小字、字距放宽、弱化色 (设计稿 .dtable thead)
-const TH_TYPO = 'text-[11px] font-normal tracking-[0.08em] text-muted'
-
 function alignThClass(align: ColumnConfig['align']): string {
   // 表头一律不换行: 窄列(如收起的图表列)中标签/排序箭头折行会把整行表头顶高
-  if (align === 'right') return `px-3 py-2.5 ${TH_TYPO} text-right whitespace-nowrap`
-  if (align === 'center') return `px-3 py-2.5 ${TH_TYPO} text-center whitespace-nowrap`
-  return `px-3 py-2.5 ${TH_TYPO} whitespace-nowrap`
+  if (align === 'right') return 'text-right whitespace-nowrap'
+  if (align === 'center') return 'text-center whitespace-nowrap'
+  return 'whitespace-nowrap'
 }
 
 export function StockDataTable({
@@ -71,6 +71,7 @@ export function StockDataTable({
   renderExtraCol,
   extraHeader,
   renderHeaderContent,
+  footer,
   onVisibleRowsChange,
   // 账簿体例: 无卡片外框; 点线行分隔由 .dtable 负责, 调用方 rowClassName 只叠加状态底色
   className = 'overflow-x-auto',
@@ -83,7 +84,9 @@ export function StockDataTable({
   const rowVirtualizer = useVirtualizer({
     count: virtualized ? rows.length : 0,
     getScrollElement,
-    estimateSize: () => 56,
+    // 自选名录行 30px (design/v2/02-watchlist.html 的 .wl-table td 高度); 初始估值偏大会让
+    // overflow-anchor 误判, 首行被滚动锚定裁掉, 因此按实际行高起估, 由 measureElement 校准。
+    estimateSize: () => 32,
     getItemKey: index => rowKey(rows[index]),
     overscan: 10,
     scrollMargin,
@@ -140,7 +143,7 @@ export function StockDataTable({
 
   return (
     <div ref={containerRef} className={className}>
-      <table className="dtable" style={{ minWidth: computedMinWidth }}>
+      <table className={cn("dtable", className.includes("wl-table") && "wl-table")} style={{ minWidth: computedMinWidth }}>
         <thead className={theadClass}>
           <tr>
             {visibleColumns.map(col => {
@@ -153,6 +156,7 @@ export function StockDataTable({
                   key={col.id}
                   className={`${alignThClass(col.align)} ${sortable ? 'cursor-pointer select-none group' : ''}`}
                   onClick={sortable ? () => onSortToggle!(col.id) : undefined}
+                  aria-sort={isSorted ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}
                 >
                   {contentOverride !== undefined ? contentOverride : col.label}
                   {sortable && (
@@ -164,7 +168,7 @@ export function StockDataTable({
               )
             })}
             {extraHeader && (
-              <th className="px-3 py-2.5 text-[11px] font-normal tracking-[0.08em] text-muted text-right">{extraHeader}</th>
+              <th className="text-right text-[10px] font-normal tracking-[0.12em] text-muted">{extraHeader}</th>
             )}
           </tr>
         </thead>
@@ -183,6 +187,11 @@ export function StockDataTable({
             </tr>
           )}
         </tbody>
+        {footer && (
+          <tfoot>
+            <tr className="border-t border-border-strong">{footer}</tr>
+          </tfoot>
+        )}
       </table>
     </div>
   )

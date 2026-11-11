@@ -174,7 +174,7 @@ def test_preview_revision_prevents_stale_binding(env):
 
 
 def fill_buys(env, monkeypatch, day=27):
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     repo = KlineRepository(DataStore(env.root))
     symbols = env.screener.frame["symbol"].to_list()

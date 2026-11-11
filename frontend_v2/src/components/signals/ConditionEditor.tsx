@@ -74,7 +74,7 @@ export function ConditionEditor({ conditions, onChange, options, max = 8, title,
               disabled={conditions.length >= max}
               className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent/80 cursor-pointer disabled:opacity-40"
             >
-              <Plus className="h-3 w-3" />添加条件
+              <Plus className="h-[12px] w-[12px]" />添加条件
             </button>
           </div>
         </div>
@@ -95,7 +95,7 @@ export function ConditionEditor({ conditions, onChange, options, max = 8, title,
               <FieldPicker value={c.left} fields={fields} groups={groups} onChange={v => changeLeft(i, v)} />
 
               {/* 运算符: 字符串字段为 包含/等于/不等于 */}
-              <select value={c.op} onChange={e => updateCond(i, { op: e.target.value })} className="w-11 h-7 px-0.5 rounded bg-base border border-border text-[11px] font-mono text-foreground text-center focus:outline-none focus:border-accent/50">
+              <select value={c.op} onChange={e => updateCond(i, { op: e.target.value })} className="ctl ctl-md ctl-select w-11 font-mono text-center">
                 {condOps.map(op => <option key={op} value={op}>{OP_LABELS[op] ?? op}</option>)}
               </select>
 
@@ -103,7 +103,7 @@ export function ConditionEditor({ conditions, onChange, options, max = 8, title,
               {isStr ? (
                 <input type="text" value={c.right} onChange={e => updateCond(i, { right: e.target.value })}
                   placeholder="概念/行业名, 如 AI" maxLength={64}
-                  className="flex-1 min-w-0 h-7 px-1.5 rounded bg-base border border-border text-[11px] text-foreground focus:outline-none focus:border-accent/50" />
+                  className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 focus:border-accent/50 bg-base" />
               ) : (
                 <RightValueInput cond={c} fields={fields} groups={groups} maxDays={maxDays} hideDays={hideDays}
                   onChangeRight={v => updateCond(i, { right: v })}
@@ -111,8 +111,8 @@ export function ConditionEditor({ conditions, onChange, options, max = 8, title,
               )}
 
               {(conditions.length > 1 || allowEmpty) && (
-                <button onClick={() => removeCond(i)} aria-label="删除条件" className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 cursor-pointer">
-                  <X className="h-3 w-3" />
+                <button onClick={() => removeCond(i)} aria-label="删除条件" className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
+                  <X className="h-[12px] w-[12px]" />
                 </button>
               )}
             </div>
@@ -155,7 +155,7 @@ function FieldPicker({ value, fields, groups, onChange }: {
       <button
         type="button"
         onClick={() => { setQuery(''); setOpen(true) }}
-        className="min-w-[80px] max-w-[180px] h-7 px-1.5 rounded bg-base border border-border text-[11px] text-foreground text-left hover:border-accent/40 transition-colors cursor-pointer truncate"
+        className="ctl ctl-md ctl-btn min-w-[80px] max-w-[180px] px-2.5 text-left hover:border-accent/40 truncate bg-base"
       >
         {selectedLabel}
       </button>
@@ -181,7 +181,7 @@ function FieldPicker({ value, fields, groups, onChange }: {
                 <div className="p-3 border-b border-border/50 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-foreground">选择字段</span>
-                    <button onClick={() => setOpen(false)} className="rounded p-1 text-muted hover:bg-elevated hover:text-foreground transition-colors">
+                    <button onClick={() => setOpen(false)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-elevated hover:text-foreground">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -192,9 +192,9 @@ function FieldPicker({ value, fields, groups, onChange }: {
                       value={query}
                       onChange={e => setQuery(e.target.value)}
                       placeholder="搜索字段…"
-                      className="flex-1 bg-transparent text-xs text-foreground focus:outline-none"
+                      className="ctl ctl-md ctl-input flex-1 bg-transparent"
                     />
-                    {query && <button onClick={() => setQuery('')} className="text-muted hover:text-foreground"><X className="h-3 w-3" /></button>}
+                    {query && <button onClick={() => setQuery('')} className="text-muted hover:text-foreground"><X className="h-[12px] w-[12px]" /></button>}
                   </div>
                 </div>
                 {/* 分组列表 */}
@@ -251,7 +251,7 @@ function DaysInput({ value, max, onChange }: { value: number; max: number; onCha
         type="button"
         onClick={() => onChange(1)}
         title="点击切换为「前N日」(取 N 个交易日前的值)"
-        className="h-7 px-2 rounded bg-base border border-border text-[11px] text-muted hover:text-accent hover:border-accent/50 transition-colors shrink-0 cursor-pointer"
+        className="ctl ctl-md ctl-btn px-2.5 hover:text-accent hover:border-accent/50 shrink-0 bg-base"
       >
         最新
       </button>
@@ -272,7 +272,7 @@ function DaysInput({ value, max, onChange }: { value: number; max: number; onCha
           onChange(n)
         }}
         title={`前 ${value} 个交易日的值`}
-        className="w-7 h-full px-0 text-[11px] font-mono text-foreground text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+        className="ctl ctl-md ctl-input w-7 h-full px-2.5 font-mono text-center bg-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
       <button
         type="button"
@@ -310,8 +310,8 @@ function RightValueInput({ cond, fields, groups, maxDays, hideDays, onChangeRigh
         <>
           {!hideDays && <DaysInput value={cond.rightDays ?? 0} max={maxDays} onChange={onChangeDays} />}
           <FieldPicker value={fieldValue} fields={fields} groups={groups} onChange={v => onChangeRight(`field:${v}`)} />
-          <button onClick={() => onChangeRight('0')} title="切换为数字" className="p-0.5 rounded text-muted hover:text-accent cursor-pointer shrink-0">
-            <ArrowRight className="h-3 w-3 rotate-90" />
+          <button onClick={() => onChangeRight('0')} title="切换为数字" className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
+            <ArrowRight className="h-[12px] w-[12px] rotate-90" />
           </button>
         </>
       ) : (
@@ -319,9 +319,9 @@ function RightValueInput({ cond, fields, groups, maxDays, hideDays, onChangeRigh
           {/* 常量无前N日概念, 占位保持与字段模式对齐 */}
           {!hideDays && <div className="shrink-0" style={{ width: 44 }} />}
           <input type="number" value={numValue} onChange={e => onChangeRight(e.target.value)} step="any"
-            className="flex-1 min-w-0 h-7 px-1.5 rounded bg-base border border-border text-[11px] font-mono text-foreground text-center focus:outline-none focus:border-accent/50" />
-          <button onClick={() => onChangeRight('field:close')} title="切换为字段" className="p-0.5 rounded text-muted hover:text-accent cursor-pointer shrink-0">
-            <ArrowRight className="h-3 w-3 -rotate-90" />
+            className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 font-mono text-center focus:border-accent/50 bg-base" />
+          <button onClick={() => onChangeRight('field:close')} title="切换为字段" className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
+            <ArrowRight className="h-[12px] w-[12px] -rotate-90" />
           </button>
         </>
       )}

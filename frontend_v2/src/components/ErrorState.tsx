@@ -14,12 +14,12 @@ export function ErrorState({ icon: Icon, title = '数据加载失败', hint, ret
   return (
     <div className="flex h-full items-start px-6">
       <div className="fail">
-        <div className="fail-mark">{Icon ? <Icon className="h-4 w-4" strokeWidth={1.5} /> : '!'}</div>
+        <div className="fail-mark">{Icon ? <Icon className="h-[16px] w-[16px]" strokeWidth={1.5} /> : '!'}</div>
         <h2>{title}</h2>
         {hint && <p>{hint}</p>}
         {onRetry && (
           <div className="fail-act">
-            <button type="button" onClick={onRetry} disabled={retrying} className="tb-btn inline-flex items-center gap-1.5 disabled:opacity-50">
+            <button type="button" onClick={onRetry} disabled={retrying} className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 disabled:opacity-50">
               <RefreshCw className={retrying ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
               重试
             </button>

@@ -18,7 +18,7 @@ from app.indicators.pipeline import (
     compute_indicators,
     compute_signals,
 )
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 TODAY = date(2026, 8, 3)
 

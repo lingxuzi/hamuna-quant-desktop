@@ -165,20 +165,20 @@ export function TradeKlineModal({ trade, navItems, currentKey, onNavigate, onClo
                 </div>
                 <button
                   onClick={() => setShowIntraday((v) => !v)}
-                  className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors ${
+                  className={`ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 ${
                     showIntraday
                       ? 'border border-accent/30 bg-accent/15 text-accent'
                       : 'border border-border bg-elevated text-secondary hover:border-accent/30'
                   }`}
                 >
-                  <Clock className="h-3 w-3" />
+                  <Clock className="h-[12px] w-[12px]" />
                   分时
                 </button>
                 <button
                   onClick={onClose}
-                  className="rounded-btn p-1 text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+                  className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:bg-elevated hover:text-foreground"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-[16px] w-[16px]" />
                 </button>
               </div>
             </div>

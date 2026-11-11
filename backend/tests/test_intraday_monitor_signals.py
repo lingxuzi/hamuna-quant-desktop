@@ -6,11 +6,49 @@ import polars as pl
 import pytest
 
 from app.market_time import CN_TZ
+from app.services import kline_sync
 from app.services.kline_sync import fetch_intraday_monitor_batch, intraday_monitor_support
 from app.strategy import monitor_rules
 from app.strategy.intraday_signals import IntradaySignalEvaluator
 from app.strategy.monitor import MonitorRuleEngine
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
+
+
+class _FakeProvider:
+    """假分钟源: resolver 只读 config.datasets, 取数走 get_minute。"""
+
+    def __init__(self, datasets: set[str] | None = None) -> None:
+        declared = {"minute"} if datasets is None else datasets
+        self.config = type("C", (), {"datasets": {ds: {} for ds in declared}})()
+        self.minute_calls: list[dict] = []
+
+    def get_minute(self, symbols, *, start_time=None, end_time=None, asset_type="stock",
+                   freq="1m", on_chunk_done=None):
+        self.minute_calls.append({
+            "symbols": list(symbols), "start_time": start_time, "end_time": end_time,
+            "asset_type": asset_type, "freq": freq,
+        })
+        return pl.DataFrame({
+            "symbol": list(symbols),
+            "datetime": [datetime(2026, 7, 17, 9, 30)] * len(symbols),
+            "open": [10.0] * len(symbols), "high": [10.1] * len(symbols),
+            "low": [9.9] * len(symbols), "close": [10.0] * len(symbols),
+            "volume": [1.0] * len(symbols), "amount": [1000.0] * len(symbols),
+        })
+
+
+def _route_minute_source(monkeypatch, provider: _FakeProvider | None = None,
+                          name: str = "mock_src") -> _FakeProvider:
+    """把生效分钟源指向假 provider。
+
+    存量偏好与生效 getter 必须一致 —— _selected_minute_provider_name 会在两者
+    不一致时判为「源已失效」并 fail-closed。
+    """
+    provider = provider or _FakeProvider()
+    monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: name)
+    monkeypatch.setattr(kline_sync.preferences, "load", lambda: {"minute_data_provider": name})
+    monkeypatch.setattr("app.data_providers.custom.get_provider", lambda n: provider)
+    return provider
 
 
 def _minute_rows(prices: list[float]) -> pl.DataFrame:
@@ -149,44 +187,38 @@ def test_intraday_rule_rejects_non_symbol_scope():
 
 
 def test_intraday_support_uses_capability_limits(monkeypatch):
-    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "tickflow")
+    """分时监控可用性取决于生效分钟源能否解析; 单轮标的上限取 capability 限额。"""
+    _route_minute_source(monkeypatch)
     capset = CapabilitySet({Cap.KLINE_MINUTE_BATCH: CapabilityLimits(batch=25, rpm=30)})
     support = intraday_monitor_support(capset)
     assert support["available"] is True
-    assert support["source"] == "minute_batch"
+    assert support["source"] == "minute"
     assert support["max_symbols"] == 25
 
-    denied = intraday_monitor_support(CapabilitySet())
+    # 无 capability 限额 → 默认上限 (源可用即可分时监控)
+    default_support = intraday_monitor_support(CapabilitySet())
+    assert default_support["available"] is True
+    assert default_support["max_symbols"] == 100
+
+    # 生效源没有 minute 数据集 → fail-closed
+    _route_minute_source(monkeypatch, _FakeProvider(datasets=set()))
+    denied = intraday_monitor_support(capset)
     assert denied["available"] is False
+    assert denied["source"] is None
 
 
 def test_intraday_batch_provider_is_normalized_without_network(monkeypatch):
-    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "tickflow")
-
-    class FakeKlines:
-        def intraday_batch(self, symbols, count, as_dataframe, show_progress, batch_size):
-            assert symbols == ["600000.SH"]
-            assert count == 300
-            assert as_dataframe is False
-            assert show_progress is False
-            assert batch_size == 20
-            # as_dataframe=False: dict[symbol → CompactKlineData (字段→列数组)]
-            ts = int(datetime(2026, 7, 17, 9, 30, tzinfo=CN_TZ).timestamp() * 1000)
-            return {
-                "600000.SH": {
-                    "timestamp": [ts],
-                    "open": [10.0], "high": [10.1], "low": [9.9], "close": [10.0],
-                    "volume": [1.0], "amount": [1000.0],
-                },
-            }
-
-    class FakeClient:
-        klines = FakeKlines()
-
-    monkeypatch.setattr("app.services.kline_sync.get_client", lambda: FakeClient())
-    capset = CapabilitySet({Cap.INTRADAY_BATCH: CapabilityLimits(batch=20, rpm=30)})
+    provider = _route_minute_source(monkeypatch)
+    capset = CapabilitySet({Cap.KLINE_MINUTE_BATCH: CapabilityLimits(batch=20, rpm=30)})
     result = fetch_intraday_monitor_batch(
         ["600000.SH"], capset, now=datetime(2026, 7, 17, 10, 0, tzinfo=CN_TZ),
     )
     assert result.columns == ["symbol", "datetime", "open", "high", "low", "close", "volume", "amount"]
     assert result["symbol"].to_list() == ["600000.SH"]
+    # 源收到当日 09:25 → now 的窗口与 stock 资产类型
+    call = provider.minute_calls[0]
+    assert call["symbols"] == ["600000.SH"]
+    assert call["asset_type"] == "stock"
+    assert call["freq"] == "1m"
+    assert call["start_time"] == datetime(2026, 7, 17, 9, 25, tzinfo=CN_TZ)
+    assert call["end_time"] == datetime(2026, 7, 17, 10, 0, tzinfo=CN_TZ)

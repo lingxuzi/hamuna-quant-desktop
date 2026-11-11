@@ -60,7 +60,7 @@ it('hint yields to the real count once available', () => {
 it('mini size also renders the hint', () => {
   render({ awaitRun: true, cardSize: 'mini' })
 
-  expect(container.textContent).toContain('待算')
+  expect(container.textContent).toContain('待计算')
 })
 
 it('onRun fires when the card is clicked', () => {

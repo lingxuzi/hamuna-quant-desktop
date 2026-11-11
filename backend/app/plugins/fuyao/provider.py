@@ -9,10 +9,10 @@
                  深窗口走单标的 historical 接口(≤10 年/次自动分片)
   - adj_factor   A 股除权因子; adjustment-factors 事件 dump + 自家原始日K前收盘,
                  按交易所公式推导单事件比值, 涨跌停自检
-  - financial    财务五表(股本除外): 三表多期序列 + 指标单期, 字段映射为 TickFlow
+  - financial    财务五表(股本除外): 三表多期序列 + 指标单期, 字段映射为项目 canonical
                  canonical 列名, 扶摇独有字段原名透传为扩展列; bps 由估值 pb_mrq
                  反推; shares 无上游接口恒空
-未声明 minute → provider_has_dataset 为 False, 自动回退 tickflow。
+未声明 minute → provider_has_dataset 为 False, 自动回退该能力默认源。
 
 单位与口径 (CONTRIBUTING §3.1, 不可凭字段名推断):
   - 扶摇 price_change_ratio_pct 为百分数数值 (1.74 = +1.74%), 本项目 realtime
@@ -48,7 +48,7 @@ from app.plugins.fuyao.client import FuyaoClient, FuyaoError
 
 logger = logging.getLogger(__name__)
 
-# 只声明真实提供的数据集; 其余数据集 provider_has_dataset 返回 False → 回退 tickflow
+# 只声明真实提供的数据集; 其余数据集 provider_has_dataset 返回 False → 回退该能力默认源
 _DATASETS = ("realtime", "daily", "adj_factor", "financial")
 
 API_KEY_ENV = "FUYAO_API_KEY"
@@ -94,7 +94,7 @@ def availability() -> tuple[bool, str]:
 
 
 def probe_api_key(api_key: str) -> tuple[bool, str]:
-    """用候选 Key 实探一次快照接口(先探后存, 对齐 /tickflow-key 语义)。不落盘。"""
+    """用候选 Key 实探一次快照接口(先探后存)。不落盘。"""
     client = None
     try:
         client = fuyao_client.FuyaoClient(api_key=api_key, timeout=10.0)
@@ -758,7 +758,7 @@ class FuyaoProvider:
             if not closes:
                 logger.warning("扶摇除权因子: %s 原始日K为空, 跳过其 %d 个事件", sym, evs.height)
                 continue
-            # 公式与涨跌停自检走共享模块(与 tdxquant/easytdx 同一份涉钱计算)
+            # 公式与涨跌停自检走共享模块(与 easytdx 同一份涉钱计算)
             out_rows.extend(
                 factor_rows(
                     sym,
@@ -845,7 +845,7 @@ class FuyaoProvider:
         return df.select("symbol", "ex_date", "dividend", "bonus", "allot", "allot_price")
 
     # ---- financial ----
-    # 字段映射: 扶摇原始字段 → 项目 canonical 列名(TickFlow 口径, 前端财务页与回测
+    # 字段映射: 扶摇原始字段 → 项目 canonical 列名(前端财务页与回测
     # FUNDAMENTAL_FACTORS 按此消费)。映射表之外的扶摇独有字段以原名透传为扩展列。
     _INCOME_FIELD_MAP = {
         "operating_income": "revenue",
@@ -877,7 +877,7 @@ class FuyaoProvider:
         "pay_fixed_assets_etc_cash": "capex",
         "cash_equivalents_net_addition": "net_cash_change",
     }
-    # 官方指标 index_id → canonical。归母净利同比近似 tickflow net_income_yoy;
+    # 官方指标 index_id → canonical。归母净利同比近似 net_income_yoy;
     # 实测 index_id 与文档有出入(calculate_ 前缀等), 以实测为准。
     _METRICS_FIELD_MAP = {
         "index_weighted_avg_roe": "roe",
@@ -901,7 +901,7 @@ class FuyaoProvider:
 
         - 三大报表: 单股单请求, latest_only 决定最近 1 期还是 8 期季报;
         - metrics: 指标接口为单股单期, 恒只拉最新一期(bps 由估值快照 pb_mrq 反推,
-          eps_basic 顺带取自利润表); 历史各期建议切回 TickFlow 同步补齐 —
+          eps_basic 顺带取自利润表); 历史各期建议切回默认源同步补齐 —
           报告期合并写入会让两源数据共存, 互不覆盖;
         - shares: 扶摇无股本接口, 恒返回空(已有存量靠合并写入保留)。
         """
@@ -1014,7 +1014,7 @@ class FuyaoProvider:
     def dragon_tiger(self, board_type: str = "all", date: str | None = None) -> dict:
         """龙虎榜单榜 (复盘页卡片 + AI 复盘上下文)。返回原始 data 容器。
 
-        非路由数据集 (tickflow 无对应能力), 不进 plugin.yaml datasets,
+        非路由数据集 (无对应能力), 不进 plugin.yaml datasets,
         由 services.dragon_tiger 统一做三榜聚合/缓存/交易日回退。
         """
         return self._get_client().dragon_tiger_list(board_type, date)
@@ -1022,7 +1022,7 @@ class FuyaoProvider:
     def short_term_benchmark(self, date: str | None = None) -> dict:
         """短线风向标竞价基准 (复盘页卡片 + AI 复盘上下文)。返回原始 data 容器。
 
-        非路由数据集 (tickflow 无对应能力), 不进 plugin.yaml datasets,
+        非路由数据集 (无对应能力), 不进 plugin.yaml datasets,
         由 services.auction_benchmark 统一做按日缓存/收益enrich/交易日回退。
         """
         return self._get_client().short_term_benchmark(date)
@@ -1177,7 +1177,7 @@ class FuyaoProvider:
                 "provider": self.name,
                 "dataset": dataset,
                 "rows": 0,
-                "error": f"扶摇插件未接入 {dataset} 数据集(自动回退 TickFlow)",
+                "error": f"扶摇插件未接入 {dataset} 数据集(自动回退该能力默认源)",
             }
         try:
             rows, count = self._get_client().snapshot_page(limit=5)

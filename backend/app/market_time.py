@@ -74,7 +74,7 @@ def trading_minutes_elapsed_from_ts(ts_ms: int | float | None) -> float:
     (服务端时间含网络/限流延迟)。
 
     Args:
-        ts_ms: 毫秒级 Unix 时间戳 (TickFlow SDK quote.timestamp / kline.timestamp)
+        ts_ms: 毫秒级 Unix 时间戳 (数据源 quote.timestamp / kline.timestamp)
 
     Returns:
         已交易分钟数 (0~240)。timestamp 为 None/无效时返回 240 (视作全天,

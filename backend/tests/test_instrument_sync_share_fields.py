@@ -136,22 +136,15 @@ def test_daily_price_limits_are_not_inherited_from_old_metadata(tmp_path, monkey
     assert row["limit_down"] is None
 
 
-@pytest.mark.parametrize(("mode", "current_limits"), [("none", False), ("free", False), ("api_key", True)])
-def test_only_paid_metadata_can_supply_todays_price_limits(tmp_path, monkeypatch, mode, current_limits):
-    from types import SimpleNamespace
-
-    from app.tickflow import client
-
+def test_provider_metadata_supplies_price_limits(tmp_path, monkeypatch):
+    """provider 维表 ext 的涨跌停/股本字段直接落库 (无档位区分)。"""
     item = {"symbol": "002172.SZ", "name": "澳洋健康", "ext": {
         "limit_up": 6.50, "limit_down": 5.32, "float_shares": 765140730.0,
     }}
-    monkeypatch.setattr(isync, "fetch_instruments_via_provider", lambda *_: None)
-    monkeypatch.setattr(isync, "get_client", lambda: SimpleNamespace(
-        exchanges=SimpleNamespace(get_instruments=lambda *args, **kwargs: [item]),
-    ))
-    monkeypatch.setattr(client, "current_mode", lambda: mode)
+    monkeypatch.setattr(isync, "fetch_instruments_via_provider",
+                        lambda *_: isync._flatten_instruments([item]))
     isync.sync_instruments(tmp_path)
     row = pl.read_parquet(tmp_path / "instruments/instruments.parquet").row(0, named=True)
-    assert row["limit_up"] == (6.50 if current_limits else None)
-    assert row["limit_down"] == (5.32 if current_limits else None)
+    assert row["limit_up"] == 6.50
+    assert row["limit_down"] == 5.32
     assert row["float_shares"] == 765140730.0

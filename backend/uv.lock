@@ -2511,15 +2511,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tdxaidata"
-version = "1.2.2"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/0f/a8/3b1a4341769c081b3bdbc4e6c9991ac05c49585e256965cd9402f066daa6/tdxaidata-1.2.2.tar.gz", hash = "sha256:794011131704a7827746b89da490e43345ddd442644d6100890d39063485171e" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/dc/c1/29b840db422aa32c87baedf2d402ccb8cbba8964d33caff3b20e5b3ddad4/tdxaidata-1.2.2-py3-none-any.whl", hash = "sha256:ceaf0be18cb54cd197e79cca5590d4ba7d7c3620b899e818d472d032f2c33849" },
-]
-
-[[package]]
 name = "threadpoolctl"
 version = "3.6.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2529,32 +2520,13 @@ wheels = [
 ]
 
 [[package]]
-name = "tickflow"
-version = "0.1.25"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "httpx" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/d1/c9/facd0cd7568ea3c7dcfb0d52ded7d0b52ad871ca45fa97d7df0925b26091/tickflow-0.1.25.tar.gz", hash = "sha256:a86929bc99167014567c3d8b99af1c2f498922ad476bb4507edb57164c576d04" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/ea/37/f80b8f6e435f1825ea8384b1605a01c323998f00b1c112c59e72a9d7dd9a/tickflow-0.1.25-py3-none-any.whl", hash = "sha256:69687235e85b44eae077262325ddef15e82d5adafda075945612f8cf0815a44c" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "pandas" },
-    { name = "tqdm" },
-    { name = "websockets" },
-]
-
-[[package]]
 name = "tickflow-stock-panel-backend"
 version = "0.3.31"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
     { name = "duckdb" },
+    { name = "easy-tdx-plus" },
     { name = "fastapi" },
     { name = "fastexcel" },
     { name = "httpx" },
@@ -2576,8 +2548,6 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "sse-starlette" },
-    { name = "tdxaidata" },
-    { name = "tickflow", extra = ["all"] },
     { name = "uvicorn", extra = ["standard"] },
     { name = "winotify", marker = "sys_platform == 'win32'" },
 ]
@@ -2606,6 +2576,7 @@ legacy-cpu = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10" },
     { name = "duckdb", specifier = ">=1.0" },
+    { name = "easy-tdx-plus" },
     { name = "easy-tdx-plus", marker = "extra == 'easytdx'", url = "https://github.com/N2XK/easy-tdx-plus/archive/a6eb63e6c96474146b97667806cbe402c8c82987.tar.gz" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fastexcel", specifier = ">=0.10" },
@@ -2634,8 +2605,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "sse-starlette", specifier = ">=2.0" },
-    { name = "tdxaidata", specifier = ">=1.2.2" },
-    { name = "tickflow", extras = ["all"], specifier = ">=0.1.23" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
     { name = "vectorbt", marker = "extra == 'backtest'", specifier = ">=0.26" },
     { name = "winotify", marker = "sys_platform == 'win32'", specifier = ">=1.1" },

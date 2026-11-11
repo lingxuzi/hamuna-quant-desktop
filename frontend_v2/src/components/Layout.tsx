@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { BootGate } from '@/components/BootGate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useQuoteStream, useQuoteStreamStatus } from '@/lib/useQuoteStream'
@@ -28,7 +29,6 @@ import { getPageScale } from '@/lib/pageZoom'
 import { setKlineBatchLimits } from '@/lib/klineBatchLimits'
 import { compareByDefaultNav, defaultNavIndex, seedHiddenForNewUser } from '@/lib/navOrder'
 import {
-  Settings,
   DatabaseZap,
   Loader2,
   Tags,
@@ -44,7 +44,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Download,
-  HardDriveDownload,
 } from 'lucide-react'
 import {
   IconDashboard,
@@ -55,12 +54,15 @@ import {
   IconRegime,
   IconIndices,
   IconData,
+  IconSettings,
+  IconBrand,
+  IconDev,
   type BrandIconProps,
 } from './BrandIcons'
 import { Logo } from './Logo'
 import { api, type CapabilityMatrix, type IndexQuote } from '@/lib/api'
 import { cn } from '@/lib/cn'
-import { useIsDesktop } from '@/lib/useMediaQuery'
+import { useIsDesktop, useMediaQuery } from '@/lib/useMediaQuery'
 import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
 import { resolveWatchlistGroupColor } from '@/lib/watchlist-group-colors'
 import { computeGroupPcts, groupPctColor, groupPctTitle } from '@/lib/watchlistGroupStats'
@@ -69,6 +71,7 @@ import { findDataSource } from '@/lib/dataSources'
 import { setTheme, useTheme } from '@/lib/theme'
 import { setCurrentTotal as setAlertTotal, useUnreadAlerts } from '@/lib/monitorBadge'
 import { ExtensionSlot } from '@/extensions/ExtensionSlot'
+import { RailSlotContext, type RailSlotValue } from './RailSlot'
 import { getFrontendExtensionNavigation } from '@/extensions/registry'
 
 // 品牌色 — 只用于 logo / brand 区域,不影响功能语义色
@@ -93,17 +96,20 @@ const NAV_GROUPS: ReadonlyArray<{ name: string; paths: ReadonlyArray<string> }> 
   { name: '研究', paths: ['/screener', '/factors', '/backtest', '/stock-analysis', '/signals'] },
   { name: '市场', paths: ['/regime', '/indices', '/limit-ladder', '/industry-analysis', '/concept-analysis', '/abnormal'] },
   { name: '交易', paths: ['/paper', '/lots', '/monitor', '/review', '/financials'] },
-  { name: '系统', paths: ['/data'] },
+  { name: '系统', paths: ['/data', '/settings', '/branding', '/dev'] },
 ]
 const nav = [
   { to: '/',                 label: '看板',     icon: IconDashboard },
   { to: '/watchlist',        label: '自选',     icon: IconWatchlist },
-  { to: '/screener',         label: '策略',     icon: IconStrategy },
+  { to: '/screener',         label: '策略选股', icon: IconStrategy },
   { to: '/factors',          label: '因子',     icon: IconFactors },
   { to: '/backtest',         label: '回测',     icon: IconBacktest },
   { to: '/regime',           label: '市场环境', icon: IconRegime },
   { to: '/indices',          label: '指数',     icon: IconIndices },
   { to: '/data',             label: '数据',     icon: IconData },
+  { to: '/settings',         label: '设置',     icon: IconSettings },
+  { to: '/branding',         label: '品牌',     icon: IconBrand },
+  { to: '/dev',              label: '开发',     icon: IconDev },
 ] as const
 
 /** 皮肤切换 — 纸 / 暗 / 亮 三段, 状态存 localStorage, 生效见 lib/theme.ts */
@@ -125,7 +131,7 @@ function ThemeToggle({ compact = false }: { compact?: boolean }) {
         onClick={() => setTheme(next.id)}
         title={`界面皮肤: ${current.label}`}
         aria-label={`界面皮肤: ${current.label}, 点击切换`}
-        className="flex h-7 w-7 items-center justify-center font-mono text-[11px] text-muted transition-colors hover:text-foreground"
+        className="toc-rail-link font-mono text-[10px] text-muted"
       >
         {current.label}
       </button>
@@ -141,7 +147,7 @@ function ThemeToggle({ compact = false }: { compact?: boolean }) {
             role="radio"
             aria-checked={on}
             onClick={() => setTheme(o.id)}
-            className={cn('px-3', on && 'on')}
+            className={cn(on && 'on')}
           >
             {o.label}
           </button>
@@ -177,7 +183,7 @@ function MonitorBadge({ active }: { active: boolean }) {
   })()
   if (active || unread <= 0 || !badgeEnabled) return null
   return (
-    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white animate-pulse">
+    <span className="inline-flex h-[16px] min-w-[16px] shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white animate-pulse">
       {unread > 99 ? '99+' : unread}
     </span>
   )
@@ -187,7 +193,7 @@ function SidebarIndexQuotes({ rows, items }: { rows: IndexQuote[] | undefined; i
   if (items.length === 0) return null
   const quoteBySymbol = new Map((rows ?? []).map(q => [q.symbol, q]))
   return (
-    <div className="mt-2 border-t border-border/60 pt-1.5">
+    <div className="toc-ix">
       {items.map(item => {
         const q = quoteBySymbol.get(item.symbol)
         const value = q?.last_price ?? q?.close
@@ -196,14 +202,12 @@ function SidebarIndexQuotes({ rows, items }: { rows: IndexQuote[] | undefined; i
           <NavLink
             key={item.symbol}
             to={`/indices?symbol=${encodeURIComponent(item.symbol)}`}
-            className="flex items-baseline gap-2 py-[3px] transition-colors hover:text-foreground"
+            className="toc-ix-row"
             title={`${item.name} ${item.symbol}`}
           >
-            <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{item.name}</span>
-            <span className={`shrink-0 font-mono text-[10px] tabular-nums ${indexPctClass(pct)}`}>{fmtIndexPct(pct)}</span>
-            <span className={`w-[52px] shrink-0 text-right font-mono text-[10px] tabular-nums ${indexPctClass(pct)}`}>
-              {fmtIndexValue(value)}
-            </span>
+            <span className="toc-ix-n">{item.name}</span>
+            <span className={`toc-ix-v ${indexPctClass(pct)}`}>{fmtIndexPct(pct)}</span>
+            <span className={`toc-ix-p ${indexPctClass(pct)}`}>{fmtIndexValue(value)}</span>
           </NavLink>
         )
       })}
@@ -211,40 +215,16 @@ function SidebarIndexQuotes({ rows, items }: { rows: IndexQuote[] | undefined; i
   )
 }
 
-// ===== 头部快捷行: 数据同步入口 (描边分段按钮, 与扩展快捷方式并排成组) =====
-// 点击直达 /data; 同步中转圈 / 刚完成绿勾, 空闲无角标保持安静。
-function QuickDataEntry({ syncing, justDone }: { syncing: boolean; justDone: boolean }) {
-  return (
-    <NavLink
-      to="/data"
-      title={syncing ? '数据同步中…' : '数据同步与画像'}
-      className={cn(
-        'group flex h-7 flex-1 items-center justify-center gap-1.5 border transition-colors duration-150',
-        syncing
-          // 同步中: 主色呼吸光晕 — 与数据页「立即同步」按钮同一视觉语义
-          ? 'animate-breath-sync border-accent/50 bg-accent/10 text-accent'
-          : 'border-border text-secondary hover:border-foreground hover:text-foreground',
-      )}
-    >
-      {syncing
-        ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-        : <HardDriveDownload className="h-3 w-3 shrink-0 text-muted transition-colors group-hover:text-foreground" />}
-      <span className="text-[11px] leading-none">数据</span>
-      {!syncing && justDone && <CheckCircle2 className="h-3 w-3 shrink-0 text-bull" />}
-    </NavLink>
-  )
-}
-
 // ===== 数据源能力健康卡 =====
-// 能力路由架构下的侧栏状态: 不再展示「主数据源 + TickFlow 档位」(单源时代遗留 —
+// 能力路由架构下的侧栏状态: 不再展示「主数据源」(单源时代遗留 —
 // 五个能力各自路由, 拿日K的源代表全局是随意的), 改为回答「各能力当前是否都有源在供」。
-// 档位/订阅信息归设置页 TickFlow 介绍卡 (档位词仅出现在 TickFlow 专属界面的设计规则)。
+// 数据源详情归设置页数据源页 (源详情里自带说明)。
 // 单能力方格: 可用=绿 / 日K缺失=红 / 其他缺失=琥珀 (与悬浮卡中同色, 一眼对应)
 function capSquareCls(c: { id: string; usable: boolean }) {
   return c.usable ? 'bg-accent' : c.id === 'daily' ? 'bg-danger' : 'bg-warning/80'
 }
 
-function DataSourceHealthBadge({ matrix }: { matrix: CapabilityMatrix | undefined }) {
+function DataSourceHealthBadge({ matrix, className }: { matrix: CapabilityMatrix | undefined; className?: string }) {
   const caps = matrix?.capabilities ?? []
   const loading = caps.length === 0
   const usableCount = caps.filter(c => c.usable).length
@@ -298,10 +278,10 @@ function DataSourceHealthBadge({ matrix }: { matrix: CapabilityMatrix | undefine
         onFocus={openPop}
         onBlur={closePop}
         onKeyDown={e => { if (e.key === 'Escape') setPopPos(null) }}
-        className="group relative flex items-center gap-2 overflow-hidden py-1.5 transition-colors duration-150 hover:text-foreground"
+        className={cn('group relative flex items-center gap-2 overflow-hidden transition-colors duration-150 hover:text-foreground', className)}
       >
-        <DatabaseZap className="h-3 w-3 shrink-0 text-muted group-hover:text-foreground transition-colors" />
-        <span className="text-[11px] text-secondary group-hover:text-foreground transition-colors">数据源</span>
+        <DatabaseZap className="h-[12px] w-[12px] shrink-0 text-muted group-hover:text-foreground transition-colors" />
+        <span className="text-[10px] text-secondary group-hover:text-foreground transition-colors">数据源</span>
         {/* 能力方格 (按注册顺序: 实时/日K/分钟/除权/财务), 与悬浮卡逐格同色对应 */}
         <span className="ml-auto flex items-center gap-1 shrink-0">
           {loading
@@ -346,13 +326,13 @@ function DataSourceHealthBadge({ matrix }: { matrix: CapabilityMatrix | undefine
                 <div className="py-0.5 text-[11px] text-muted">正在获取能力路由状态…</div>
               ) : caps.map(c => (
                 <div key={c.id} className="flex min-w-0 items-center gap-2">
-                  <span className={`h-2 w-2 shrink-0 rounded-[2px] ${capSquareCls(c)}`} />
+                  <span className={`h-[8px] w-[8px] shrink-0 rounded-[2px] ${capSquareCls(c)}`} />
                   <span className="shrink-0 text-xs font-medium text-secondary">{c.label}</span>
                   <span className="ml-auto flex min-w-0 shrink items-center gap-1.5">
                     {c.usable ? (
                       <>
                         <span className="truncate text-[11px] text-muted">{c.effective_display}</span>
-                        <CheckCircle2 className="h-3 w-3 shrink-0 text-accent" />
+                        <CheckCircle2 className="h-[12px] w-[12px] shrink-0 text-accent" />
                       </>
                     ) : (
                       <span className="text-[11px] text-muted/70">未接入</span>
@@ -367,7 +347,7 @@ function DataSourceHealthBadge({ matrix }: { matrix: CapabilityMatrix | undefine
             </div>
             <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-1.5 text-[10px] text-muted">
               点击前往数据源配置
-              <ChevronRight className="h-3 w-3" />
+              <ChevronRight className="h-[12px] w-[12px]" />
             </div>
           </motion.div>
         </div>
@@ -376,22 +356,22 @@ function DataSourceHealthBadge({ matrix }: { matrix: CapabilityMatrix | undefine
   )
 }
 
-function AIConfigBadge({ configured, model }: { configured?: boolean; model?: string }) {
+function AIConfigBadge({ configured, model, className }: { configured?: boolean; model?: string; className?: string }) {
   const descText = configured ? (model || '已接入模型') : '接入策略生成模型'
   return (
     <NavLink
       to="/settings?tab=ai"
-      className="group relative flex items-center gap-2 overflow-hidden py-1.5 transition-colors duration-150 hover:text-foreground"
+      className={cn('group relative flex items-center gap-2 overflow-hidden transition-colors duration-150 hover:text-foreground', className)}
       title={`AI 配置 — ${descText}`}
     >
-      <Sparkles className="h-3 w-3 shrink-0 text-muted group-hover:text-foreground transition-colors" />
+      <Sparkles className="h-[12px] w-[12px] shrink-0 text-muted group-hover:text-foreground transition-colors" />
       {configured ? (
-        <span className="min-w-0 flex-1 truncate text-[11px] text-secondary group-hover:text-foreground transition-colors">
+        <span className="min-w-0 flex-1 truncate text-[10px] text-secondary group-hover:text-foreground transition-colors">
           {model || '已接入模型'}
         </span>
       ) : (
         <>
-          <span className="text-[11px] text-secondary group-hover:text-foreground transition-colors">AI 配置</span>
+          <span className="text-[10px] text-secondary group-hover:text-foreground transition-colors">AI 配置</span>
           <span className="ml-auto text-[10px] font-mono leading-none text-muted">未配置</span>
         </>
       )}
@@ -470,6 +450,14 @@ export function Layout() {
   const railMode = isDesktop && navState === 'rail'
   // 路由跳转/切回桌面时关抽屉; ESC 同样关闭
   useEffect(() => { setDrawerOpen(false) }, [location.pathname, isDesktop])
+
+  // 右侧指标栏插槽 — 看板页把指标栏 portal 进来, 作为壳层第三栏(设计稿 .app.with-rail 同构)。
+  // 指标栏占位宽 272px; 断点与设计稿一致(窄屏 ≤1080px 收单列), 主栏优先。
+  const [railHost, setRailHost] = useState<HTMLElement | null>(null)
+  const [railActive, setRailActive] = useState(false)
+  const railWide = useMediaQuery('(min-width: 1081px)')
+  const railCol = railActive && railWide ? '272px' : '0px'
+  const railSlot = useMemo<RailSlotValue>(() => ({ host: railHost, setActive: setRailActive }), [railHost])
   useEffect(() => {
     if (!drawerOpen) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawerOpen(false) }
@@ -561,6 +549,14 @@ export function Layout() {
     placeholderData: (prev) => prev,
   })
 
+  // 全市场只数 — 目录尾部「沪深京」读数 (与页眉 Inscription 共用同一缓存条目)
+  const { data: sidebarOverview } = useQuery({
+    queryKey: QK.overviewMarket(undefined),
+    queryFn: () => api.overviewMarket(),
+    staleTime: 60_000,
+  })
+  const universeCount = sidebarOverview?.breadth?.total
+
   // SSE: 行情更新时自动刷新相关 queries + 告警通知
   useQuoteStream(realtimeEnabled, prefs?.sse_refresh_pages)
   // 实时 SSE 连接状态 — 断开时底部显示提示, 提示可能漏策略告警
@@ -576,9 +572,9 @@ export function Layout() {
   const realtimeUnavailable = quoteMode === 'none'
   const isWatchlistMode = quoteMode === 'watchlist'
   const realtimeModeLabel = isWatchlistMode ? '自选' : '全市场'
-  // 当前实时行情数据源名称 (插件/自定义源显示源名, tickflow 不显示)
+  // 当前实时行情数据源名称 (插件/自定义源显示源名, 内置源不显示)
   const realtimeProvider = prefs?.realtime_data_provider
-  const realtimeProviderName = realtimeProvider && realtimeProvider !== 'tickflow'
+  const realtimeProviderName = realtimeProvider && realtimeProvider !== 'easytdx'
     ? (findDataSource(dataSources, realtimeProvider)?.display_name || realtimeProvider)
     : null
   const realtimeToggleDisabled = toggleQuote.isPending || isPaused
@@ -626,18 +622,15 @@ export function Layout() {
 
   // 合并内置页面 + 可见的扩展分析菜单
   type NavIcon = (props: BrandIconProps) => ReactNode
-  // arch: 'ext' = 扩展域页面 (官方扩展/自定义分析), 核心域 nav 常量不带标。
-  // 与菜单设置 ARCH_CLASS 同口径: nav 常量 8 项全部核心, 其余两个来源全部扩展。
-  type NavItem = { to: string; label: string; icon: NavIcon; badge?: string; arch?: 'core' | 'ext' }
+  type NavItem = { to: string; label: string; icon: NavIcon; badge?: string }
   const analysisNav: NavItem[] = (analysisMenus?.items ?? [])
     .filter(m => m.visible)
-    .map(m => ({ to: `/analysis/${m.id}`, label: m.label, icon: m.icon === 'tags' ? Tags : BarChart3, arch: 'ext' as const }))
+    .map(m => ({ to: `/analysis/${m.id}`, label: m.label, icon: m.icon === 'tags' ? Tags : BarChart3 }))
   const extensionNav: NavItem[] = getFrontendExtensionNavigation().map(item => ({
     to: item.route.path,
     label: item.label,
     icon: item.icon,
     badge: item.badge,
-    arch: 'ext' as const,
   }))
 
   const allNav: NavItem[] = [...nav, ...analysisNav, ...extensionNav]
@@ -742,82 +735,61 @@ export function Layout() {
   }
 
   /** 目录中的一条 — 自选项在开启分组侧栏时渲染为可展开父项 + 二级分组 */
-  const renderNavItem = ({ to, label, icon: Icon, badge, arch }: NavItem) => {
+  const renderNavItem = ({ to, label, icon: Icon, badge }: NavItem) => {
     const isWatchlistExpandable = to === '/watchlist' && groupsInNav && !railMode && watchlistGroups.length > 0
+    // 图标条形态: 设计稿没有这一态, 保留 v1 的图标条 (功能不丢)
+    if (railMode) {
+      return (
+        <NavLink
+          key={to}
+          to={to}
+          title={label}
+          className={({ isActive }) => cn('toc-rail-link', isActive && 'on')}
+        >
+          {({ isActive }) => (
+            <>
+              <span className="toc-rail-icon">
+                <Icon className={cn('h-[13px] w-[13px]', isActive ? 'text-accent' : 'text-muted')} />
+              </span>
+              {badge && <span className="toc-rail-dot" />}
+            </>
+          )}
+        </NavLink>
+      )
+    }
     return (
       <div key={to}>
         {isWatchlistExpandable ? (
           <button
             onClick={() => setWatchlistNavExpanded(v => !v)}
-            className={cn(
-              'group relative flex w-full items-center gap-2.5 py-[6px] text-[12.5px] transition-[color,background-color,padding-left] duration-200 ease-smooth',
-              railMode ? 'justify-center px-0 py-2' : 'px-5',
-              location.pathname === '/watchlist'
-                ? 'bg-accent/[0.06] text-accent'
-                : 'text-secondary hover:bg-foreground/[0.04] hover:text-foreground hover:pl-[22px]',
-            )}
+            className={cn('toc-row', location.pathname === '/watchlist' && 'on')}
           >
-            <span
-              className={cn(
-                'pointer-events-none absolute inset-y-0 left-0 w-[2px] origin-top bg-accent transition-transform duration-[220ms] ease-smooth group-hover:scale-y-100',
-                location.pathname === '/watchlist' ? 'scale-y-100' : 'scale-y-0',
-              )}
-            />
-            {railMode && <Icon className={cn('h-[13px] w-[13px] shrink-0 transition-colors', location.pathname === '/watchlist' ? 'text-accent' : 'text-muted group-hover:text-foreground')} />}
-            <span className="flex-1 text-left">{label}</span>
+            <span>{label}</span>
             {watchlistNavExpanded
-              ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
-              : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" />
+              ? <ChevronDown className="toc-chev" />
+              : <ChevronRight className="toc-chev" />
             }
           </button>
         ) : (
           <NavLink
             to={to}
-            title={railMode ? label : undefined}
-            className={({ isActive }) =>
-              cn(
-                'group relative flex items-center text-[12.5px] transition-[color,background-color,padding-left] duration-200 ease-smooth',
-                railMode ? 'justify-center px-0 py-2' : 'px-5 py-[6px]',
-                isActive
-                  ? 'bg-accent/[0.06] text-accent'
-                  : 'text-secondary hover:bg-foreground/[0.04] hover:text-foreground hover:pl-[22px]',
-              )
-            }
+            className={({ isActive }) => cn(isActive && 'on')}
           >
             {({ isActive }) => (
               <>
-                <span
-                  className={cn(
-                    'pointer-events-none absolute inset-y-0 left-0 w-[2px] origin-top bg-accent transition-transform duration-[220ms] ease-smooth group-hover:scale-y-100',
-                    isActive ? 'scale-y-100' : 'scale-y-0',
-                  )}
-                />
-                {railMode && <Icon className={cn('h-[13px] w-[13px] shrink-0 transition-colors', isActive ? 'text-accent' : 'text-muted group-hover:text-foreground')} />}
-                {!railMode && (
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate">{label}</span>
-                    {arch === 'ext' && (
-                      <span
-                        title="扩展域页面 — 可整体替换/移除而不伤核心"
-                        className="shrink-0 font-mono text-[8px] font-medium uppercase leading-none tracking-[0.08em] text-muted/70"
-                      >
-                        ext
-                      </span>
-                    )}
-                  </span>
-                )}
-                {!railMode && badge && (
-                  <span className="ml-auto inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400 shrink-0">
+                <span>{label}</span>
+                {badge && (
+                  <em className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400 shrink-0">
                     {badge}
-                  </span>
+                  </em>
                 )}
-                {to === '/data' && isDataSyncing && !railMode && (
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent" />
+                {to === '/data' && isDataSyncing && (
+                  <Loader2 className="ml-auto h-[12px] w-[12px] shrink-0 animate-spin text-accent" />
                 )}
-                {to === '/data' && !isDataSyncing && dataSyncJustDone && !railMode && (
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-bull animate-pulse" />
+                {to === '/data' && !isDataSyncing && dataSyncJustDone && (
+                  <CheckCircle2 className="ml-auto h-[12px] w-[12px] shrink-0 text-bull animate-pulse" />
                 )}
-                {to === '/monitor' && !railMode && <MonitorBadge active={isActive} />}
+                {to === '/monitor' && <MonitorBadge active={isActive} />}
               </>
             )}
           </NavLink>
@@ -825,24 +797,19 @@ export function Layout() {
 
         {/* 自选分组二级子菜单 — 展开时显示 */}
         {isWatchlistExpandable && watchlistNavExpanded && (
-          <div className="mt-0.5 space-y-0.5">
+          <div className="toc-sub">
             <NavLink
               to="/watchlist"
-              className={({ isActive }) => cn(
-                'flex items-center gap-2 py-[5px] pl-9 pr-4 text-[11.5px] transition-colors duration-150 ease-smooth',
-                isActive && !location.search
-                  ? 'text-accent'
-                  : 'text-muted hover:text-foreground',
-              )}
+              className={({ isActive }) => cn('toc-row', isActive && !location.search && 'on')}
             >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted" />
+              <span className="toc-dot bg-muted" />
               <span>全部</span>
               {(() => {
                 const info = navGroupPcts['all']
                 return info && info.pct != null ? (
-                  <span className={`ml-auto font-mono text-[10px] tabular-nums ${groupPctColor(info.pct)}`} title={groupPctTitle(info)}>
+                  <em className={`font-mono text-[10px] tabular-nums ${groupPctColor(info.pct)}`} title={groupPctTitle(info)}>
                     {fmtPct(info.pct)}
-                  </span>
+                  </em>
                 ) : null
               })()}
             </NavLink>
@@ -855,19 +822,14 @@ export function Layout() {
                 <NavLink
                   key={group.id}
                   to={groupPath}
-                  className={cn(
-                    'flex items-center gap-2 py-[5px] pl-9 pr-4 text-[11.5px] transition-colors duration-150 ease-smooth',
-                    isGroupActive
-                      ? 'text-accent'
-                      : 'text-muted hover:text-foreground',
-                  )}
+                  className={cn('toc-row', isGroupActive && 'on')}
                 >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color.dot}`} />
-                  <span className="truncate">{group.name}</span>
+                  <span className="toc-dot" style={{ background: color.dot }} />
+                  <span>{group.name}</span>
                   {pctInfo && pctInfo.pct != null && (
-                    <span className={`ml-auto font-mono text-[10px] tabular-nums ${groupPctColor(pctInfo.pct)}`} title={groupPctTitle(pctInfo)}>
+                    <em className={`font-mono text-[10px] tabular-nums ${groupPctColor(pctInfo.pct)}`} title={groupPctTitle(pctInfo)}>
                       {fmtPct(pctInfo.pct)}
-                    </span>
+                    </em>
                   )}
                 </NavLink>
               )
@@ -881,7 +843,9 @@ export function Layout() {
   return (
     <div
       className="h-full grid bg-base text-foreground overflow-hidden transition-[grid-template-columns] duration-200 ease-smooth"
-      style={{ gridTemplateColumns: isDesktop && !overlayPreview ? (navState === 'expanded' ? '12.5rem 1fr' : navState === 'rail' ? '3.25rem 1fr' : '0 1fr') : '1fr' }}
+      style={{ gridTemplateColumns: isDesktop && !overlayPreview
+        ? `${navState === 'expanded' ? '14rem' : navState === 'rail' ? '3.25rem' : '0'} minmax(0, 1fr) ${railCol}`
+        : `minmax(0, 1fr) ${railCol}` }}
     >
       {/* 移动端抽屉遮罩 */}
       {!isDesktop && drawerOpen && (
@@ -914,86 +878,82 @@ export function Layout() {
           title={isDesktop ? '展开菜单' : '打开菜单'}
         >
           {isDesktop
-            ? <PanelLeftOpen className="h-4 w-4 shrink-0" />
-            : <Menu className="h-4 w-4 shrink-0" />}
+            ? <PanelLeftOpen className="h-[16px] w-[16px] shrink-0" />
+            : <Menu className="h-[16px] w-[16px] shrink-0" />}
         </button>
       )}
       <aside
         onMouseLeave={() => { if (overlayPreview) setOverlayPreview(false) }}
         className={cn(
-          'bg-base flex flex-col min-h-0 overflow-hidden',
+          'toc min-h-0 bg-base text-foreground',
           isDesktop
-            ? cn('h-full', navState === 'hidden' && !overlayPreview ? 'border-r-0' : 'border-r border-border')
+            ? cn('h-full', railMode && 'toc-rail', navState === 'hidden' && !overlayPreview && 'border-r-0')
             : cn(
-                'fixed inset-y-0 left-0 z-50 w-[80vw] max-w-[320px] border-r border-border shadow-2xl',
+                'fixed inset-y-0 left-0 z-50 w-[80vw] max-w-[320px] overflow-y-auto shadow-2xl',
                 'transition-transform duration-200 ease-smooth',
                 drawerOpen ? 'translate-x-0' : '-translate-x-full',
               ),
-          overlayPreview && 'fixed inset-y-0 left-0 z-50 w-56 shadow-2xl border-r border-border',
+          overlayPreview && 'fixed inset-y-0 left-0 z-50 w-56 shadow-2xl',
         )}
       >
-        <div className={cn('border-b border-border shrink-0', railMode ? 'px-2 pt-3 pb-2' : 'px-5 pt-5 pb-3')}>
-          {/* Brand block — 收起时只显 logo 居中 */}
-          <div className={cn('flex', railMode ? 'flex-col items-center gap-2' : 'items-center gap-2.5')}>
+        {/* 题头: 展开形态不留品牌区 (设计稿目录从「每日」直接起头);
+            仅图标条 (收起态) 与移动端抽屉保留品牌位与展开/关闭控件。 */}
+        {(railMode || !isDesktop) && (
+        <div className={cn('toc-brand shrink-0', railMode && 'toc-brand-rail')}>
+          <div className={cn('flex items-center', railMode ? 'flex-col gap-1' : 'gap-2.5')}>
             <Logo size={railMode ? 22 : 24} className="shrink-0" style={{ color: BRAND }} />
             {!railMode && (
               <div className="flex min-w-0 flex-col leading-tight">
-                <span className="font-serif text-[14px] font-semibold tracking-[0.14em] text-foreground whitespace-nowrap">
+                <span className="whitespace-nowrap font-serif text-[13px] font-semibold tracking-[0.14em] text-foreground">
                   量化工作台
                 </span>
-                <span className="font-mono text-[8.5px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
+                <span className="whitespace-nowrap font-mono text-[8px] uppercase tracking-[0.2em] text-muted">
                   Quant Workbench
                 </span>
               </div>
             )}
-            {/* 收起/展开 按钮 (桌面三态循环) / 移动端抽屉关闭按钮 */}
-            {isDesktop ? (
+            {/* 展开 (图标条) / 关闭菜单 (移动端抽屉) */}
+            {railMode ? (
               <button
                 onClick={toggleNavCollapsed}
-                className={cn(
-                  'flex items-center rounded-btn text-muted hover:text-foreground hover:bg-elevated/60 transition-colors duration-150 ease-smooth',
-                  railMode ? 'justify-center p-1.5' : 'ml-auto p-1.5',
-                )}
-                title={railMode ? '展开菜单' : '收起菜单'}
+                className="ctl ctl-sm ctl-ghost ctl-icon flex items-center justify-center text-muted duration-150 hover:text-foreground"
+                title="展开菜单"
               >
-                {railMode
-                  ? <PanelLeft className="h-3.5 w-3.5 shrink-0" />
-                  : <PanelLeftClose className="h-3.5 w-3.5 shrink-0" />
-                }
+                <PanelLeft className="h-3.5 w-3.5 shrink-0" />
               </button>
             ) : (
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="ml-auto flex items-center rounded-btn p-1.5 text-muted hover:text-foreground hover:bg-elevated/60 transition-colors duration-150 ease-smooth"
+                className="ctl ctl-sm ctl-ghost ctl-icon ml-auto flex items-center text-muted duration-150 hover:text-foreground"
                 title="关闭菜单"
               >
-                <X className="h-4 w-4 shrink-0" />
+                <X className="h-[16px] w-[16px] shrink-0" />
               </button>
             )}
           </div>
-
-            {/* 状态卡 — 收起时隐藏 */}
-            {!railMode && (
-              <div className="mt-3 border-t border-border/60 pt-2">
-                <DataSourceHealthBadge matrix={matrix} />
-              <div className="border-t border-border/60" aria-hidden="true" />
-              <AIConfigBadge
-                configured={settingsState?.ai_configured ?? settingsState?.has_ai_key}
-                model={settingsState?.ai_model}
-              />
-              {/* 快捷行: 数据 + 扩展快捷方式 (AI 助手) 一行两个半宽 chip */}
-              <div className="mt-2 flex items-stretch gap-1.5">
-                <QuickDataEntry syncing={isDataSyncing} justDone={dataSyncJustDone} />
-                <ExtensionSlot name="layout.header.quick" context={{}} compact />
-              </div>
+          {/* 收起态控件: 皮肤 + 实时行情指示点 */}
+          {railMode && (
+            <div className="mt-1 flex flex-col items-center">
+              <ThemeToggle compact />
+              <button
+                onClick={() => handleToggle(!realtimeEnabled)}
+                disabled={realtimeToggleDisabled}
+                aria-label={realtimeToggleTitle}
+                aria-busy={toggleQuote.isPending}
+                title={realtimeToggleTitle}
+                className="toc-rail-link mt-1"
+              >
+                <span className={cn('h-[8px] w-[8px] rounded-full', realtimeIndicatorClass)} />
+              </button>
             </div>
           )}
         </div>
+        )}
 
-        <nav className="tf-nav-scroll flex-1 min-h-0 overflow-y-auto px-0 py-2 space-y-0">
+        {/* 目录: 五组纯文字 (设计稿体例 — 分组标题 + 12px 条目) */}
+        <nav aria-label="功能目录" className="toc-nav">
           {(() => {
             const itemByTo = new Map(visibleNavItems.map(n => [n.to, n] as const))
-            const rendered = new Set<string>()
             const groups = NAV_GROUPS.map(g => ({
               name: g.name,
               items: g.paths.map(p => itemByTo.get(p)).filter((x): x is NavItem => !!x),
@@ -1004,14 +964,9 @@ export function Layout() {
             for (const item of visibleNavItems) {
               if (!listed.has(item.to)) sys.items.push(item)
             }
-            for (const g of groups) for (const it of g.items) rendered.add(it.to)
             return groups.filter(g => g.items.length > 0 || (!railMode && g.name === '系统')).map(g => (
-              <div key={g.name} className="mt-1.5 first:mt-0">
-                {!railMode && (
-                  <div className="mx-5 border-t border-border/60 px-0 pb-[5px] pt-3 font-mono text-[9px] tracking-[0.18em] text-muted/80 first:border-t-0">
-                    {g.name}
-                  </div>
-                )}
+              <div key={g.name} className="toc-g">
+                {!railMode && <div className="toc-g-name">{g.name}</div>}
                 {g.items.map(item => renderNavItem(item))}
               </div>
             ))
@@ -1023,58 +978,67 @@ export function Layout() {
           />
         </nav>
 
-        {/* 全局行情开关 — 收起时只显示状态指示点 */}
-        {railMode ? (
-          <div className="border-t border-border px-2 py-2.5 shrink-0 flex justify-center">
-            <button
-              onClick={() => handleToggle(!realtimeEnabled)}
-              disabled={realtimeToggleDisabled}
-              aria-label={realtimeToggleTitle}
-              aria-busy={toggleQuote.isPending}
-              title={realtimeToggleTitle}
-              className="flex items-center justify-center rounded-btn p-1.5 transition-colors hover:bg-elevated/70 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span className={`inline-block h-2 w-2 rounded-full ${realtimeIndicatorClass}`} />
-            </button>
+        {/* 尾部状态 (设计稿 .toc-tail 的 KV 体例) */}
+        {!railMode && (
+          <div className="toc-tail shrink-0">
+            <DataSourceHealthBadge matrix={matrix} className="toc-rowline" />
+            <AIConfigBadge
+              configured={settingsState?.ai_configured ?? settingsState?.has_ai_key}
+              model={settingsState?.ai_model}
+              className="toc-rowline"
+            />
+            <span>沪深京<b>{universeCount != null ? universeCount.toLocaleString('zh-CN') : '—'}</b></span>
+            {/* 版本行: 有新版本时版本号旁挂更新标记 (底部控制区宽度已满, 更新入口归位到版本旁) */}
+            <span>
+              版本
+              <b className="inline-flex items-center gap-1.5">
+                {version || '—'}
+                {hasUpdate && (
+                  <button
+                    onClick={() => navigate('/settings?tab=about&autoupdate=1')}
+                    className="inline-flex items-center text-amber-400 transition-transform hover:scale-110 animate-breath"
+                    title={`发现新版本 ${update.info?.latest ?? ''}，点击检查更新`}
+                    aria-label="检查更新"
+                  >
+                    <Download className="h-[11px] w-[11px]" />
+                  </button>
+                )}
+              </b>
+            </span>
           </div>
-        ) : (
-        <div className="border-t border-border px-5 py-3 shrink-0">
+        )}
+
+        {/* 控件区: 实时开关 / 快捷入口 / 指数条 / 皮肤与设置 */}
+        {!railMode && (
+        <div className="toc-ctl shrink-0">
           {realtimeUnavailable && !realtimeProviderName ? (
             <div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] tracking-[0.08em] text-muted">实时行情</span>
-                <span className="font-mono text-[10px] text-muted/80">不可用</span>
+              <div className="toc-ctl-hd">
+                <span>实时行情</span>
+                <span>不可用</span>
               </div>
-              <div className="mt-1.5 text-[10px] leading-snug text-muted">
+              <div className="toc-ctl-hint">
                 当前数据源无实时行情权限,
                 <button
                   type="button"
                   onClick={() => navigate('/settings?tab=data-sources&highlight=data-sources')}
-                  className="mx-0.5 text-accent/80 hover:text-accent hover:underline"
+                  className="toc-link"
                 >
                   去配置数据源
                 </button>
               </div>
             </div>
           ) : (
-            /* 实时可用 — 开关 + 跳转设置 */
-            <div className="flex items-center gap-2">
-              <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${realtimeIndicatorClass}`} />
-              <span className="shrink-0 whitespace-nowrap font-mono text-[10px] tracking-[0.08em] text-muted">实时行情</span>
+            /* 实时可用 — 状态 + 开关 (设置入口在「系统」组, 不再重复) */
+            <div className="toc-ctl-row">
+              <span className={cn('toc-dot shrink-0', realtimeIndicatorClass)} />
+              <span className="toc-ctl-label">实时行情</span>
               <span
-                className={`ml-auto min-w-0 truncate font-mono text-[10px] ${realtimeStatusClass}`}
+                className={`toc-ctl-val ${realtimeStatusClass}`}
                 title={`${realtimeProviderName || realtimeModeLabel} · ${realtimeStatusLabel}`}
               >
                 {realtimeStatusLabel}
               </span>
-              <button
-                onClick={() => navigate('/settings?tab=monitoring&highlight=quotes')}
-                aria-label="打开实时监控设置"
-                className="flex h-6 w-6 shrink-0 items-center justify-center text-muted transition-colors hover:text-foreground"
-                title="实时监控设置"
-              >
-                <Settings className="h-3.5 w-3.5" />
-              </button>
               <button
                 type="button"
                 role="switch"
@@ -1084,18 +1048,9 @@ export function Layout() {
                 onClick={() => handleToggle(!realtimeEnabled)}
                 disabled={realtimeToggleDisabled}
                 title={realtimeToggleTitle}
-                className={cn(
-                  'relative inline-flex h-5 w-[34px] shrink-0 items-center border transition-colors duration-200',
-                  realtimeEnabled
-                    ? 'border-accent bg-accent/10'
-                    : 'border-border bg-transparent hover:border-muted',
-                  realtimeToggleDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
-                )}
+                className={cn('sw ml-auto', realtimeEnabled && 'on', realtimeToggleDisabled && 'dis')}
               >
-                <span className={cn(
-                  'inline-block h-3 w-3 rounded-[1px] transition-transform duration-200',
-                  realtimeEnabled ? 'translate-x-[17px] bg-accent' : 'translate-x-[3px] bg-muted',
-                )} />
+                <i />
               </button>
             </div>
           )}
@@ -1105,7 +1060,7 @@ export function Layout() {
             && (!realtimeUnavailable || realtimeProviderName)
             && (isPaused || (isWatchlistMode && !dismissFreeHint && !realtimeProviderName))
             && (
-              <div className="mt-1.5 text-[10px] leading-snug space-y-0.5">
+              <div className="toc-ctl-hint">
                 {isWatchlistMode && !dismissFreeHint && !realtimeProviderName && (
                   <div className="flex items-start gap-1 text-amber-400/80">
                     <span className="flex-1">自选实时模式监控前 5 只，全市场实时依赖数据源支持</span>
@@ -1123,84 +1078,37 @@ export function Layout() {
                 )}
               </div>
             )}
+
+          {/* 快捷入口: 扩展快捷方式 (数据同步状态在导航项「数据」上) */}
+          <div className="toc-quick">
+            <ExtensionSlot name="layout.header.quick" context={{}} compact />
+          </div>
+
           {!isWatchlistMode && (!realtimeUnavailable || !!realtimeProviderName) && (
             <SidebarIndexQuotes rows={sidebarIndexQuotes?.rows} items={sidebarIndexes} />
           )}
-        </div>
-        )}
 
-        <div className={cn('border-t border-border py-2.5 shrink-0', railMode ? 'px-2 flex flex-col items-center gap-1' : 'px-0')}>
-          <div className={railMode ? 'flex flex-col items-center gap-1' : 'flex flex-col gap-2 px-5'}>
-            {!railMode && <ThemeToggle />}
-            {railMode && <ThemeToggle compact />}
-            <NavLink
-              to="/settings"
-              title={railMode ? '设置' : undefined}
-              className={({ isActive }) =>
-                cn(
-                  'group relative flex items-center text-[12.5px] transition-[color,background-color] duration-200 ease-smooth',
-                  railMode ? 'justify-center px-0 py-2' : 'gap-2.5 px-0 py-[7px]',
-                  isActive
-                    ? 'text-accent'
-                    : 'text-secondary hover:text-foreground',
-                )
-              }
+          {/* 皮肤 + 收起 (更新标记在「版本」行) */}
+          <div className="toc-foot">
+            <ThemeToggle />
+            <button
+              onClick={toggleNavCollapsed}
+              className="toc-ctl-icon ml-auto"
+              title="收起菜单"
+              aria-label="收起菜单"
             >
-              {({ isActive }) => (
-                <>
-                  <span
-                    className={cn(
-                      'pointer-events-none absolute inset-y-0 left-0 w-[2px] origin-top bg-accent transition-transform duration-[220ms] ease-smooth group-hover:scale-y-100',
-                      isActive ? 'scale-y-100' : 'scale-y-0',
-                    )}
-                  />
-                  <Settings className={cn('h-[13px] w-[13px] shrink-0 transition-colors', isActive ? 'text-accent' : 'text-muted group-hover:text-foreground')} />
-                  {!railMode && <span className="whitespace-nowrap">设置</span>}
-                  {!railMode && version && (
-                    <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] text-muted/50 select-none shrink-0">
-                      {version}
-                      {hasUpdate && update.info && (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          title={`发现新版本 ${update.info.latest}，点击检查更新`}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            navigate('/settings?tab=about&autoupdate=1')
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              navigate('/settings?tab=about&autoupdate=1')
-                            }
-                          }}
-                          className="inline-flex cursor-pointer text-amber-400 transition-transform hover:scale-110 animate-breath"
-                        >
-                          <Download className="h-3 w-3" />
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {railMode && hasUpdate && (
-                    <span
-                      className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_6px_rgba(59,130,246,0.8)]"
-                      title="发现新版本"
-                    />
-                  )}
-                </>
-              )}
-            </NavLink>
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
+        )}
       </aside>
 
       <motion.main
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="h-full overflow-auto scrollbar-gutter-stable"
+        className="page scroll-shell h-full overflow-auto scrollbar-gutter-stable"
       >
         {streamStatus === 'reconnecting' && (
           <div
@@ -1208,21 +1116,25 @@ export function Layout() {
             aria-live="polite"
             className="fixed bottom-4 left-1/2 z-[9998] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning shadow-lg backdrop-blur-md"
           >
-            <WifiOff className="h-3 w-3 shrink-0 animate-pulse" />
+            <WifiOff className="h-[12px] w-[12px] shrink-0 animate-pulse" />
             与服务连接已断开 · 正在重连
           </div>
         )}
         <DailyDataHealthNotice />
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center py-24">
-              <Loader2 className="h-5 w-5 animate-spin text-muted" />
-            </div>
-          }
-        >
-          <Outlet />
-        </Suspense>
+        <RailSlotContext.Provider value={railSlot}>
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-[20px] w-[20px] animate-spin text-muted" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        </RailSlotContext.Provider>
       </motion.main>
+      {/* 指标栏挂载点 — display:contents 让 portal 进来的指标栏直接成为壳层第三栏的网格项 */}
+      <div ref={setRailHost} className="contents" />
       <ToastContainer />
       <AlertToastContainer />
       <AiAnalysisHost />
@@ -1230,6 +1142,8 @@ export function Layout() {
       <StockAnalysisHost />
       <StockAnalysisBubble />
       <StockPreviewHost />
+      {/* 入口闸门: 本地日K有未完成的修补/重算时, 阻塞到修完为止 */}
+      <BootGate />
 
       {/* 开启实时行情 + 排队中的挖掘任务 → 冲突确认 */}
       {miningQueuedWarning != null && (
@@ -1243,8 +1157,8 @@ export function Layout() {
               排队中的任务启动时可能因数据更新校验而失败（需重新开始挖掘）；已开始运行的任务不受影响。
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setMiningQueuedWarning(null)} className="h-8 rounded-btn border border-border px-3 text-xs text-secondary hover:bg-elevated">取消</button>
-              <button type="button" onClick={() => { setMiningQueuedWarning(null); void doEnableRealtime() }} className="h-8 rounded-btn bg-accent px-3 text-xs font-semibold text-white hover:opacity-90">仍要开启</button>
+              <button type="button" onClick={() => setMiningQueuedWarning(null)} className="ctl ctl-md ctl-btn px-2.5 hover:bg-elevated">取消</button>
+              <button type="button" onClick={() => { setMiningQueuedWarning(null); void doEnableRealtime() }} className="ctl ctl-md ctl-btn pri px-2.5 font-semibold hover:opacity-90">仍要开启</button>
             </div>
           </div>
         </div>

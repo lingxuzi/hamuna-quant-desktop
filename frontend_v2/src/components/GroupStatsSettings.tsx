@@ -48,13 +48,13 @@ export function GroupStatsSettings({
         onClick={() => setOpen(v => !v)}
         aria-label={ariaLabel}
         title={ariaLabel}
-        className={`inline-flex h-5 w-5 items-center justify-center rounded transition-colors ${
+        className={`ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center ${
           open
             ? 'text-accent bg-accent/10'
             : 'text-muted hover:text-foreground hover:bg-elevated'
         }`}
       >
-        <SlidersHorizontal className="h-3 w-3" />
+        <SlidersHorizontal className="h-[12px] w-[12px]" />
       </button>
       {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-card border border-border bg-base p-3 shadow-xl">
@@ -66,7 +66,7 @@ export function GroupStatsSettings({
                 type="button"
                 title={m.hint}
                 onClick={() => onChange({ metric: m.id })}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                className={`ctl ctl-sm ctl-ghost px-1.5 ${
                   config.metric === m.id
                     ? 'bg-accent/15 text-accent'
                     : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -83,7 +83,7 @@ export function GroupStatsSettings({
                 key={s.id}
                 type="button"
                 onClick={() => onChange({ sort: s.id })}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                className={`ctl ctl-sm ctl-ghost px-1.5 ${
                   config.sort === s.id
                     ? 'bg-accent/15 text-accent'
                     : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -102,9 +102,9 @@ export function GroupStatsSettings({
                   aria-label="减少卡片显示条数"
                   disabled={config.cardTopN <= GROUP_CARD_TOP_N_MIN}
                   onClick={() => onChange({ cardTopN: config.cardTopN - 1 })}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded bg-elevated text-secondary transition-colors hover:text-foreground hover:bg-elevated/80 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="ctl ctl-sm ctl-ghost inline-flex w-5 px-0 items-center justify-center hover:text-foreground hover:bg-elevated/80 disabled:cursor-not-allowed disabled:opacity-40 bg-elevated"
                 >
-                  <Minus className="h-3 w-3" />
+                  <Minus className="h-[12px] w-[12px]" />
                 </button>
                 <span className="w-16 text-center font-mono text-[11px] tabular-nums text-secondary">
                   前 {config.cardTopN} 条
@@ -114,9 +114,9 @@ export function GroupStatsSettings({
                   aria-label="增加卡片显示条数"
                   disabled={config.cardTopN >= GROUP_CARD_TOP_N_MAX}
                   onClick={() => onChange({ cardTopN: config.cardTopN + 1 })}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded bg-elevated text-secondary transition-colors hover:text-foreground hover:bg-elevated/80 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="ctl ctl-sm ctl-ghost inline-flex w-5 items-center justify-center bg-elevated hover:text-foreground hover:bg-elevated/80 disabled:cursor-not-allowed disabled:opacity-40 px-0"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-[12px] w-[12px]" />
                 </button>
               </div>
               <div className="mt-2 space-y-1.5">

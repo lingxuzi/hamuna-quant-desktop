@@ -14,7 +14,7 @@ import {
 export function LicenseComplianceNotice({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/5 ${compact ? 'p-3 mt-4' : 'p-3'}`}>
-      <ShieldAlert className="h-4 w-4 text-warning shrink-0 mt-px" />
+      <ShieldAlert className="h-[16px] w-[16px] text-warning shrink-0 mt-px" />
       <div className="min-w-0">
         <div className="text-xs font-medium text-warning">许可合规声明</div>
         <p className="mt-1 text-[11px] leading-relaxed text-secondary">
@@ -43,15 +43,15 @@ export function OssLicenseDialog({ onClose }: { onClose: () => void }) {
       {/* 标题栏 */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <ScrollText className="h-4 w-4 text-accent" />
+          <ScrollText className="h-[16px] w-[16px] text-accent" />
           <h2 id="oss-license-title" className="text-sm font-medium text-foreground">开源许可</h2>
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-elevated transition-colors text-secondary"
+          className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated text-secondary"
           aria-label="关闭"
         >
-          <X className="h-4 w-4" />
+          <X className="h-[16px] w-[16px]" />
         </button>
       </div>
 

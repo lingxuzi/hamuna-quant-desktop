@@ -52,7 +52,7 @@ def test_persist_path_pulls_and_persists_per_chunk(monkeypatch):
     def fake_try(symbols, **kwargs):
         calls.append(list(symbols))
         assert kwargs.get("on_chunk_done") is None, "块内不应再转发进度回调"
-        return _minute_df(symbols), False
+        return _minute_df(symbols), True
 
     monkeypatch.setattr(kline_sync, "_try_custom_minute", fake_try)
     monkeypatch.setattr(kline_sync, "_CUSTOM_MINUTE_CHUNK", 50)
@@ -77,41 +77,32 @@ def test_persist_path_empty_symbols_no_calls(monkeypatch):
     monkeypatch.setattr(
         kline_sync,
         "_try_custom_minute",
-        lambda symbols, **kw: calls.append(list(symbols)) or (_minute_df(symbols), False),
+        lambda symbols, **kw: calls.append(list(symbols)) or (_minute_df(symbols), True),
     )
     out = kline_sync.sync_minute_batch([], on_segment=lambda df: None)
     assert calls == []
     assert out.is_empty()
 
 
-def test_persist_path_falls_through_to_tickflow_on_provider_failure(monkeypatch):
-    """任一块 fallback → 整体落到 TickFlow 路径 (原语义), 不再调用剩余块。
-    get_client 打桩避免真实网络; TickFlow 路径以"已调用"为断言即可。"""
+def test_persist_path_fails_closed_on_unresolved_provider(monkeypatch):
+    """首块源未解析 → 整体 fail-closed 返回空 df, 不调用剩余块、不跨源。"""
     calls: list[list[str]] = []
     segs: list[pl.DataFrame] = []
 
     def fake_try(symbols, **kwargs):
         calls.append(list(symbols))
-        return pl.DataFrame(schema=_MINUTE_DF_SCHEMA), True  # fallback
+        return None, False  # 源未解析
 
     monkeypatch.setattr(kline_sync, "_try_custom_minute", fake_try)
     monkeypatch.setattr(kline_sync, "_CUSTOM_MINUTE_CHUNK", 50)
 
-    class _FakeTF:
-        class klines:  # noqa: N801 - 与 tickflow SDK 形状一致即可
-            @staticmethod
-            def batch(*args, **kwargs):
-                raise AssertionError("TickFlow 路径不应被本测试真实触达")
-
-    monkeypatch.setattr(kline_sync, "get_client", lambda: _FakeTF())
-    # TickFlow 分段路径会构造时间段并逐块调用; 这里只验证"落到了 TickFlow
-    # 路径"(自定义源不再被继续调用), SDK 层抛错被 sync_minute_batch 捕获计数。
-    kline_sync.sync_minute_batch(
+    out = kline_sync.sync_minute_batch(
         [f"{i:06d}.SZ" for i in range(60)],
         on_segment=segs.append,
     )
-    assert len(calls) == 1  # 首块即 fallback, 不空打剩余块
+    assert len(calls) == 1  # 首块未解析即中止, 不空打剩余块
     assert segs == []
+    assert out.is_empty()
 
 
 def test_no_segment_path_returns_df_directly(monkeypatch):
@@ -121,7 +112,7 @@ def test_no_segment_path_returns_df_directly(monkeypatch):
     def fake_try(symbols, **kwargs):
         calls.append(list(symbols))
         assert kwargs.get("on_chunk_done") is not None, "补拉路径保留进度回调"
-        return _minute_df(symbols), False
+        return _minute_df(symbols), True
 
     monkeypatch.setattr(kline_sync, "_try_custom_minute", fake_try)
 
@@ -145,8 +136,7 @@ def test_explicit_provider_failure_is_not_reported_as_successful_empty_sync(monk
         raise ProviderRequestError("数据源凭据或额度不可用")
 
     monkeypatch.setattr(kline_sync, "_selected_minute_provider_name", lambda: "example")
-    monkeypatch.setattr(kline_sync, "_resolve_minute_provider", lambda name: (SimpleNamespace(get_minute=fail), False, None))
-    monkeypatch.setattr(kline_sync, "get_client", lambda: pytest.fail("不得跨源请求 TickFlow"))
+    monkeypatch.setattr(kline_sync, "_resolve_minute_provider", lambda name: (SimpleNamespace(get_minute=fail), None))
     persisted = []
     with pytest.raises(ProviderRequestError, match="凭据或额度"):
         kline_sync.sync_minute_batch(["600519.SH", "000001.SZ"], on_segment=persisted.append if streaming else None)
@@ -169,7 +159,7 @@ def test_background_minute_sync_marks_provider_denial_as_failed(monkeypatch, tmp
     monkeypatch.setattr(pipeline_jobs, "release_run_slot", lambda job_id: None)
     monkeypatch.setattr(pipeline_jobs, "run_with_capacity", lambda job_id, fn: fn())
     monkeypatch.setattr(kline_api, "_minute_allowed", lambda capset: True)
-    monkeypatch.setattr("app.tickflow.pools.get_pool", lambda name: ["600519.SH"])
+    monkeypatch.setattr("app.services.watchlist.symbols", lambda: ["600519.SH"])
     monkeypatch.setattr("app.api.data.invalidate_storage_cache", lambda: None)
     def denied(*args, **kwargs):
         raise ProviderRequestError("TdxQuant 凭据、接口权限或额度不可用")

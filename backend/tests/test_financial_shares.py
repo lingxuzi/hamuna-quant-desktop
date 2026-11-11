@@ -9,7 +9,7 @@ import pytest
 from app.api import data as data_api
 from app.indicators import pipeline
 from app.services import financial_sync
-from app.tickflow.capabilities import CapabilitySet
+from app.data_providers.capabilities import CapabilitySet
 
 
 def _write_instruments(data_dir, symbols: list[str]) -> None:
@@ -93,8 +93,8 @@ def test_custom_financial_provider_receives_shares_contract(monkeypatch):
     from app.data_providers import custom as custom_sources
     from app.services import preferences
 
-    monkeypatch.setattr(financial_sync, "_financial_is_custom", lambda: True)
     monkeypatch.setattr(preferences, "get_financial_provider", lambda: "custom-test")
+    monkeypatch.setattr(custom_sources, "provider_has_dataset", lambda name, dataset: True)
     monkeypatch.setattr(custom_sources, "get_provider", lambda _name: Provider())
 
     result = financial_sync._fetch_table(

@@ -10,14 +10,18 @@ export const STAGE_LABELS: Record<string, string> = {
   integrity_check: '日K数据自检',
   resolve_universe: '解析标的池',
   sync_instruments: '同步个股维表',
+  sync_index: '同步指数日 K',
   sync_daily: '同步日 K',
   sync_adj: '同步除权因子',
   compute_enriched: '计算技术指标',
+  compute_regime: '计算市场环境',
+  compute_mainline: '计算市场主线',
   sync_minute: '同步分钟 K',
   extend_history: '扩展日K历史',
   extend_minute: '扩展分钟K历史',
   rebuild_enriched: '全量计算',
   refresh_views: '刷新视图',
+  paper_settle: '模拟盘结算',
   done: '完成',
 }
 
@@ -75,7 +79,7 @@ export function ActiveJobCard({ job }: { job: PipelineJob }) {
     <div className={`rounded-card border ${meta.border} ${meta.bg} p-5`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <Icon className={`h-5 w-5 ${meta.color} ${meta.spinning ? 'animate-spin' : ''}`} />
+          <Icon className={`h-[20px] w-[20px] ${meta.color} ${meta.spinning ? 'animate-spin' : ''}`} />
           <div>
             <div className="text-sm font-medium text-foreground">
               {meta.label}{!isDone && ` · ${stageLabel}`}

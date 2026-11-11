@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Skeleton } from '@/components/data/Skeleton'
 import { api, type AnalysisColumn, type ExtDataConfig, type ExtDataField } from '@/lib/api'
@@ -131,11 +131,11 @@ export function Analysis() {
     <>
       <PageHeader seal="析"
         title="扩展分析"
-        subtitle="自定义分析菜单 · 动态字段 · 动态列"
+        subtitle="ANALYSIS"
         right={
           <button
             onClick={() => { resetForm(); setShowCreate(v => !v) }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent transition-colors"
+            className="ctl ctl-md ctl-btn soft inline-flex items-center gap-1.5 px-2.5 hover:bg-accent bg-accent/90"
           >
             <Plus className="h-3.5 w-3.5" />
             新建菜单
@@ -144,29 +144,26 @@ export function Analysis() {
       />
 
       <div className="px-8 py-6 max-w-6xl space-y-6">
-        <section className="leaf-cell">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-secondary">
-            <BarChart3 className="h-3.5 w-3.5" />
-            扩展数据 → 分析菜单 → 动态页面
-          </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">把任意扩展字段配置成一个菜单</h2>
+        <section>
+          <div className="figcap">扩 展 数 据 → 分 析 菜 单 → 动 态 页 面</div>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">把任意扩展字段配置成一个菜单</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-secondary">
             菜单配置决定使用哪个扩展数据源、哪个字段分组、列表展示哪些列。侧边栏会自动显示可见菜单，列表列严格按配置渲染。
           </p>
         </section>
 
         {showCreate && (
-          <section className="leaf-cell space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="space-y-1.5">
+          <section className="border-t border-rule-strong pt-4 space-y-4">
+            <div className="tool-a md:grid-cols-3 grid-cols-1">
+              <label>
                 <span className="text-[11px] text-muted">菜单标识</span>
-                <input value={id} onChange={e => setId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} placeholder="如 concept_hot" className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+                <input value={id} onChange={e => setId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} placeholder="如 concept_hot" />
               </label>
-              <label className="space-y-1.5">
+              <label>
                 <span className="text-[11px] text-muted">菜单名称</span>
-                <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+                <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" />
               </label>
-              <label className="space-y-1.5">
+              <label>
                 <span className="text-[11px] text-muted">扩展数据源</span>
                 <select
                   value={dataSource || activeConfig?.id || ''}
@@ -176,32 +173,31 @@ export function Analysis() {
                     setDimensionField(firstMatchingField(cfg, ['概念', 'industry', '行业', 'sector']))
                     setSelectedColumns(cfg?.fields.filter(f => !['symbol', 'code'].includes(f.name)).slice(0, 6).map(f => f.name) ?? [])
                   }}
-                  className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground"
                 >
                   {configs.map(cfg => <option key={cfg.id} value={cfg.id}>{cfg.label}</option>)}
                 </select>
               </label>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="space-y-1.5">
+            <div className="tool-a md:grid-cols-3 grid-cols-1">
+              <label>
                 <span className="text-[11px] text-muted">模板</span>
-                <select value={template} onChange={e => setTemplate(e.target.value as any)} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground">
+                <select value={template} onChange={e => setTemplate(e.target.value as any)}>
                   <option value="dimension_rank">维度热度榜</option>
                   <option value="ranking">指标排名榜</option>
                   <option value="table">明细表</option>
                 </select>
               </label>
-              <label className="space-y-1.5">
+              <label>
                 <span className="text-[11px] text-muted">分组字段</span>
-                <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground disabled:opacity-50">
+                <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="ctl ctl-md ctl-select">
                   <option value="">请选择</option>
                   {fields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
                 </select>
               </label>
-              <label className="space-y-1.5">
+              <label>
                 <span className="text-[11px] text-muted">排名字段</span>
-                <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground disabled:opacity-50">
+                <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="ctl ctl-md ctl-select">
                   <option value="">请选择</option>
                   {numericFields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
                 </select>
@@ -217,7 +213,7 @@ export function Analysis() {
                     <button
                       key={f.name}
                       onClick={() => setSelectedColumns(cols => active ? cols.filter(c => c !== f.name) : [...cols, f.name])}
-                      className={`rounded-full border px-3 py-1 text-[11px] transition-colors ${active ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-elevated/40 text-secondary hover:bg-elevated'}`}
+                      className={`ctl ctl-sm ctl-btn rounded-full px-1.5 ${active ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-elevated/40 text-secondary hover:bg-elevated'}`}
                     >
                       {f.label || f.name}
                     </button>
@@ -226,20 +222,20 @@ export function Analysis() {
               </div>
             </div>
 
-            {error && <div className="rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</div>}
+            {error && <div className="border-l-2 border-danger pl-3 text-xs text-danger">{error}</div>}
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs">取消</button>
-              <button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium disabled:opacity-50">
+              <button onClick={() => setShowCreate(false)} className="ctl-btn ctl-sm">取消</button>
+              <button onClick={() => save.mutate()} disabled={save.isPending} className="ctl-btn ctl-sm pri inline-flex items-center gap-1.5">
                 <Save className="h-3.5 w-3.5" />保存
               </button>
             </div>
           </section>
         )}
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <section className="hgrid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {menuItems.map((menu, idx) => (
-            <div key={menu.id} className="leaf-cell">
+            <div key={menu.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-medium text-foreground">{menu.label}</h3>
@@ -249,7 +245,7 @@ export function Analysis() {
                   <button
                     onClick={() => moveMenu(idx, -1)}
                     disabled={idx === 0 || reorder.isPending}
-                    className="p-1 rounded text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30"
+                    className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30"
                     title="上移"
                   >
                     <ChevronUp className="h-3.5 w-3.5" />
@@ -257,7 +253,7 @@ export function Analysis() {
                   <button
                     onClick={() => moveMenu(idx, 1)}
                     disabled={idx === menuItems.length - 1 || reorder.isPending}
-                    className="p-1 rounded text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30"
+                    className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30"
                     title="下移"
                   >
                     <ChevronDown className="h-3.5 w-3.5" />
@@ -265,7 +261,7 @@ export function Analysis() {
                   {menu.builtin ? (
                     <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">默认</span>
                   ) : (
-                    <button onClick={() => del.mutate(menu.id)} disabled={del.isPending} className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10">
+                    <button onClick={() => del.mutate(menu.id)} disabled={del.isPending} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
@@ -277,21 +273,25 @@ export function Analysis() {
                 {menu.dimension_field && <div>分组字段：{menu.dimension_field}</div>}
                 <div>列表列：{menu.detail_columns.length} 个</div>
               </div>
-              <Link to={`/analysis/${menu.id}`} className="mt-4 inline-flex w-full items-center justify-center rounded-btn border border-border bg-elevated px-3 py-1.5 text-xs text-foreground hover:bg-border/30 transition-colors">
+              <Link to={`/analysis/${menu.id}`} className="mt-4 ctl-btn ctl-sm inline-flex w-full items-center justify-center">
                 打开分析页
               </Link>
             </div>
           ))}
           {menus.isLoading &&
             Array.from({ length: 3 }).map((_, i) => (
-              <div key={`sk-${i}`} className="leaf-cell space-y-3">
+              <div key={`sk-${i}`} className="p-4 space-y-3">
                 <Skeleton w="w-1/2" h="h-4" />
                 <Skeleton w="w-1/3" h="h-3" />
                 <Skeleton h="h-8" rounded="rounded-btn" />
               </div>
             ))}
           {!menus.isLoading && menuItems.length === 0 && (
-            <div className="leaf-cell text-center text-sm text-muted md:col-span-2 xl:col-span-3">暂无分析菜单，点击右上角新建。</div>
+            <div className="bt-empty md:col-span-2 xl:col-span-3">
+              <span className="em">分析菜单 · 空</span>
+              <h2>暂无分析菜单</h2>
+              <p>点击右上角「新建菜单」，把任意扩展字段配置成一个动态页面。</p>
+            </div>
           )}
         </section>
       </div>

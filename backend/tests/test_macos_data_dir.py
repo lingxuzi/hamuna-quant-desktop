@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app import config as config_mod
 from app.config import _user_data_root
-from app.tickflow.repository import DataStore
+from app.data_providers.repository import DataStore
 
 # ── 路径解析 ─────────────────────────────────────────────────────────
 

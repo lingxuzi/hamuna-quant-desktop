@@ -102,9 +102,9 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
               type="button"
               onClick={() => batchRepair.mutate(repairSymbols)}
               disabled={!hasCap || repairSymbols.length === 0 || busySymbol !== null || batchRepair.isPending || gaps.isFetching}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-accent/90 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-accent disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="ctl ctl-md ctl-btn soft inline-flex shrink-0 items-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-accent/60 bg-accent/90"
             >
-              {batchRepair.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              {batchRepair.isPending ? <Loader2 className="h-[12px] w-[12px] animate-spin" /> : <Download className="h-[12px] w-[12px]" />}
               {batchRepair.isPending ? '正在启动…' : `一键补齐（${repairSymbols.length} 只）`}
             </button>
           )}
@@ -112,9 +112,9 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
             type="button"
             onClick={() => gaps.refetch()}
             disabled={gaps.isFetching || batchRepair.isPending || busySymbol !== null}
-            className="inline-flex shrink-0 items-center gap-1 rounded-btn border border-border px-2.5 py-1.5 text-[11px] text-secondary hover:text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="ctl ctl-md ctl-btn inline-flex shrink-0 items-center gap-1 px-2.5 hover:text-accent disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <RefreshCw className={`h-3 w-3 ${gaps.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-[12px] w-[12px] ${gaps.isFetching ? 'animate-spin' : ''}`} />
             重新体检
           </button>
         </div>
@@ -157,7 +157,7 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
               onChange={e => { setFilter(e.target.value); setPage(0) }}
               placeholder="按代码 / 日期过滤"
               aria-label="按代码或日期过滤缺口"
-              className="h-9 min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none"
+              className="ctl ctl-lg ctl-input min-w-0 flex-1 bg-transparent"
             />
           </div>
 
@@ -201,7 +201,7 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
                       type="button"
                       disabled={!hasCap || busySymbol !== null || batchRepair.isPending}
                       onClick={() => { setBusySymbol(g.symbol); repair.mutate(g.symbol) }}
-                      className="whitespace-nowrap rounded-btn border border-border px-2 py-1.5 text-[10px] text-secondary hover:border-accent hover:text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                      className="ctl ctl-sm ctl-btn whitespace-nowrap px-1.5 hover:border-accent hover:text-accent disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent/60"
                     >
                       {busySymbol === g.symbol ? '补齐中…' : '尝试补齐'}
                     </button>
@@ -221,7 +221,7 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
                     type="button"
                     onClick={() => setPage(Math.max(0, currentPage - 1))}
                     disabled={currentPage === 0}
-                    className="rounded-btn border border-border px-2 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    className="ctl ctl-sm ctl-btn px-1.5 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
                     上一页
                   </button>
@@ -230,7 +230,7 @@ export function MinuteGapPanel({ hasCap = true, onJobStart }: { hasCap?: boolean
                     type="button"
                     onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))}
                     disabled={currentPage >= pageCount - 1}
-                    className="rounded-btn border border-border px-2 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    className="ctl ctl-sm ctl-btn px-1.5 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
                     下一页
                   </button>

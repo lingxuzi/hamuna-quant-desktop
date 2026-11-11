@@ -10,7 +10,7 @@ from pathlib import Path
 import polars as pl
 
 from app.services import minute_adjust
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 # 样本: AA 除权日 2026-07-01, ex_factor=1.25 (10送2.5量级);
 #       BB 无除权事件。分钟窗口 06-30 (除权前) / 07-01 (除权日)。

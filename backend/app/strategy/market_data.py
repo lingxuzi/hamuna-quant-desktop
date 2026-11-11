@@ -36,7 +36,7 @@ def _get_repo():
     if _repo is None:
         with _lock:
             if _repo is None:
-                from app.tickflow.repository import DataStore, KlineRepository
+                from app.data_providers.repository import DataStore, KlineRepository
                 _repo = KlineRepository(DataStore())
     return _repo
 

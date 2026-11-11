@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { HelpCircle } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from '@/components/Toast'
+import { useEscapeClose } from '@/lib/a11y'
 
 /** 单方向(涨停/跌停)的修正明细块 */
 function SealedDirBlock({ title, color, counts, rawTotal }: {
@@ -57,6 +58,7 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
   const [showHint, setShowHint] = useState(false)
   const [hintPos, setHintPos] = useState<{ left: number; top: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  useEscapeClose(showHint, () => setShowHint(false))
   const navigate = useNavigate()
   const qc = useQueryClient()
   const runFix = useMutation({
@@ -70,9 +72,9 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
 
   // 组装原因文案(仅降级时用)
   const reasons: string[] = []
-  if (!hasDepth) reasons.push('五档盘口数据不可用,涨停判定基于收盘价,可能含假涨停')
-  if (isHistorical) reasons.push('历史日期的盘口快照不可获取,无法判定真假板')
-  if (hasDepth && !isHistorical && !sealedReady) reasons.push('盘中 sealed 数据尚未就绪,收盘后自动恢复')
+  if (!hasDepth) reasons.push('五档盘口数据不可用，涨停判定基于收盘价，可能含假涨停')
+  if (isHistorical) reasons.push('历史日期的盘口快照不可获取，无法判定真假板')
+  if (hasDepth && !isHistorical && !sealedReady) reasons.push('盘中 sealed 数据尚未就绪，收盘后自动恢复')
 
   const label = degraded ? '降级' : '修正'
 
@@ -81,6 +83,8 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
       <div className="relative inline-flex items-center">
         <button
           ref={btnRef}
+          aria-haspopup="dialog"
+          aria-expanded={showHint}
           onClick={() => {
             // 基于徽章位置算弹层坐标, 通过 portal 渲染到 body
             // 脱离父级 overflow-hidden 裁剪 + backdrop-blur 的 containing block
@@ -96,11 +100,11 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
             }
             setShowHint(v => !v)
           }}
-          className="group inline-flex items-center gap-1 h-5 px-2 rounded-full bg-yellow-500/10 border border-yellow-500/30 cursor-help transition-all hover:bg-yellow-500/20 hover:border-yellow-500/50"
+          className="ctl ctl-sm ctl-btn group inline-flex items-center gap-1 px-1.5 rounded-full bg-yellow-500/10 border-yellow-500/30 cursor-help transition-all hover:bg-yellow-500/20 hover:border-yellow-500/50"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
           <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-500 leading-none">{label}</span>
-          <HelpCircle className="h-3 w-3 text-yellow-500/70 group-hover:text-yellow-500 transition-colors" />
+          <HelpCircle className="h-[12px] w-[12px] text-yellow-500/70 group-hover:text-yellow-500 transition-colors" />
         </button>
       </div>
       {createPortal(
@@ -109,6 +113,8 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowHint(false)} />
               <motion.div
+                role="dialog"
+                aria-label={degraded ? '真假涨停判定降级说明' : '五档盘口修正结果'}
                 initial={{ opacity: 0, y: -4, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.95 }}
@@ -126,7 +132,7 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
                       </div>
                     ))}
                     <div className="mt-1.5 pt-1.5 border-t border-border text-muted">
-                      真假板判定依赖五档盘口实时快照(卖一/买一量)。配置提供五档盘口的数据源后,当天数据在收盘后自动恢复。
+                      真假板判定依赖五档盘口实时快照(卖一/买一量)。配置提供五档盘口的数据源后，当天数据在收盘后自动恢复。
                     </div>
                   </>
                 ) : (
@@ -135,7 +141,7 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
                     <SealedDirBlock title="涨停" color="bull" counts={sealedCountsUp} rawTotal={rawUp} />
                     <SealedDirBlock title="跌停" color="bear" counts={sealedCountsDown} rawTotal={rawDown} />
                     <div className="mt-1.5 pt-1.5 border-t border-border text-muted">
-                      真封板显示封单量,假涨停/假跌停已归入炸板/翘板视图。{sealedReady && '数据为盘中快照,收盘后自动定版。'}
+                      真封板显示封单量，假涨停/假跌停已归入炸板/翘板视图。{sealedReady && '数据为盘中快照，收盘后自动定版。'}
                     </div>
                   </>
                 )}
@@ -144,14 +150,14 @@ export function SealedBadge({ degraded, hasDepth, isHistorical, sealedReady, sea
                     <button
                       onClick={() => { runFix.mutate(); setShowHint(false) }}
                       disabled={runFix.isPending}
-                      className="flex-1 px-2 py-1.5 rounded text-[11px] bg-accent/15 text-accent hover:bg-accent/25 transition-colors text-center disabled:opacity-50"
+                      className="ctl ctl-md ctl-btn soft flex-1 px-2.5 hover:bg-accent/25 text-center disabled:opacity-50 bg-accent/15"
                     >
                       {runFix.isPending ? '修正中…' : '立即修正'}
                     </button>
                   )}
                   <button
                     onClick={() => { setShowHint(false); navigate('/settings?tab=monitoring&highlight=depth-fix') }}
-                    className={`${hasDepth && !isHistorical ? '' : 'w-full'} px-2 py-1.5 rounded text-[11px] bg-elevated text-secondary hover:text-foreground transition-colors text-center`}
+                    className={`${hasDepth && !isHistorical ? '' : 'w-full'} ctl ctl-md ctl-ghost px-2.5 bg-elevated hover:text-foreground text-center`}
                   >
                     去设置 →
                   </button>

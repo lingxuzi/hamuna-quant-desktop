@@ -10,7 +10,7 @@ import pytest
 from app.indicators import pipeline
 from app.services import daily_health, data_integrity, integrity_check, kline_sync, preferences
 from app.services.pipeline_jobs import JobCancelledError
-from app.tickflow.repository import DataStore, KlineRepository, daily_dirname, enriched_dirname
+from app.data_providers.repository import DataStore, KlineRepository, daily_dirname, enriched_dirname
 
 OLD = date(2026, 8, 31)
 RECENT = date(2026, 10, 30)
@@ -50,7 +50,7 @@ def env(request, tmp_path, monkeypatch):
     daily_health.record_scan(tmp_path, [], assets=[asset], start=RECENT, end=RECENT)
     calls = []
 
-    def fetch(symbols, _caps, *, start_time, asset_type, **_kwargs):
+    def fetch(symbols, *, start_time, end_time, asset_type, on_chunk_done=None, **_kwargs):
         calls.append((asset_type, start_time.date(), list(symbols)))
         yield frame(start_time.date(), [symbol, other]).filter(pl.col("symbol").is_in(symbols))
 

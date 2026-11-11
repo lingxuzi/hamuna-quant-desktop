@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 
 from app.indicators.pipeline import compute_enriched_today, compute_indicators
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 TODAY = date(2026, 8, 3)
 COLUMNS = ("macd_dif", "macd_dea", "macd_hist", "rsi_6", "rsi_14", "rsi_24")

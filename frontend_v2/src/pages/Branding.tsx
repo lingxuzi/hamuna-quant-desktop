@@ -1,200 +1,176 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  RadioTower,
-  Square,
-  GitFork,
-  Sparkles,
-  Star,
-  LineChart,
-  ScanSearch,
-  History,
-  Signal as SignalIcon,
-  Eye,
-  FileText,
-} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { cn } from '@/lib/cn'
 
 interface Variant {
   id: string
   name: string
   tagline: string
   hint: string
-  icon: React.ComponentType<{ className?: string }>
-  iconAccent: string                  // tailwind text color
-  nameClass: string                   // 文字本身样式(字号/字重/字距/字体)
-  glow?: string                       // 名字下方的发光线条 hex
+  nameStyle: string                   // 名字的字体语言: 字族 / 字重 / 字距
+  glow: string                        // 强调色 (色块与发光线条)
 }
 
 // 同一个名字 "Tick Stock Panel" 在 4 种风格语言里的呈现
-// 长字符串自动用更小字号 + 更窄字距,免得撑爆卡片;但风格语言(字体/字重/配色/图标)保持不变
+// 强调色由侧栏色块与发光线条承载; 名字本身只改字体语言, 保持墨色以免在纸面上失读
 const VARIANTS: Variant[] = [
   {
     id: 'pulsar',
     name: 'Tick Stock Panel',
     tagline: 'A-SHARE · SIGNAL TERMINAL',
-    hint: '脉冲星、雷达波纹 — 青绿强调色,字重黑体,中等字距',
-    icon: RadioTower,
-    iconAccent: 'text-[#3DD68C]',
-    nameClass: 'font-sans font-black text-[16px] leading-6 tracking-[0.10em]',
+    hint: '脉冲星、雷达波纹 — 青绿强调色，字重黑体，中等字距',
+    nameStyle: 'font-sans font-extrabold tracking-[0.10em]',
     glow: '#3DD68C',
   },
   {
     id: 'vanta',
     name: 'Tick Stock Panel',
     tagline: 'MARKET · INTELLIGENCE',
-    hint: 'Vantablack — 纯白单色,字重最重,字距最宽,monochrome 高级感',
-    icon: Square,
-    iconAccent: 'text-[#FAFAFA]',
-    nameClass: 'font-sans font-black text-[16px] leading-6 tracking-[0.18em]',
+    hint: 'Vantablack — 纯白单色，字重最重，字距最宽，单色高级感',
+    nameStyle: 'font-sans font-black tracking-[0.18em]',
     glow: '#FAFAFA',
   },
   {
     id: 'helix',
     name: 'Tick Stock Panel',
     tagline: 'QUANT · TERMINAL',
-    hint: 'DNA 螺旋 — 紫色强调,等宽字体,赛博朋克经典意象',
-    icon: GitFork,
-    iconAccent: 'text-accent',
-    nameClass: 'font-mono font-bold text-[16px] leading-6 tracking-[0.08em]',
+    hint: 'DNA 螺旋 — 紫色强调，等宽字体，赛博朋克经典意象',
+    nameStyle: 'font-mono font-bold tracking-[0.08em]',
     glow: '#B7410E',
   },
   {
     id: 'aurora',
     name: 'Tick Stock Panel',
     tagline: 'A-SHARE · DASHBOARD',
-    hint: '极光 — 青色强调,细字优雅,适中字距,与涨跌语义色不冲突',
-    icon: Sparkles,
-    iconAccent: 'text-[#22D3EE]',
-    nameClass: 'font-sans font-light text-[16px] leading-6 tracking-[0.12em]',
+    hint: '极光 — 青色强调，细字优雅，适中字距，与涨跌语义色不冲突',
+    nameStyle: 'font-sans font-light tracking-[0.12em]',
     glow: '#22D3EE',
   },
 ]
 
-const MOCK_NAV = [
-  { icon: Star, label: '自选' },
-  { icon: LineChart, label: 'K 线' },
-  { icon: ScanSearch, label: '策略' },
-  { icon: History, label: '回测' },
-  { icon: SignalIcon, label: '信号' },
-  { icon: Eye, label: '监控' },
-  { icon: FileText, label: '财务概况' },
-]
+const MOCK_NAV = ['自选', 'K 线', '策略', '回测', '信号']
 
 export function Branding() {
+  // 选定方向只落在本页 (设计稿同款: 未落库), 选中即高亮对应预览卡
+  const [selected, setSelected] = useState('helix')
+  const current = VARIANTS.find(v => v.id === selected) ?? VARIANTS[0]
+
+  const exportPreview = () => {
+    const spec = {
+      id: current.id,
+      name: current.name,
+      tagline: current.tagline,
+      hint: current.hint,
+      nameStyle: current.nameStyle,
+      accent: current.glow,
+    }
+    const url = URL.createObjectURL(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `branding-${current.id}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <>
+    // pb-24 / pr-16: 给右下角常驻的「助」悬浮球 (视口右下 24px, 距底 152px) 留出空位
+    <div className="pb-24">
       <PageHeader seal="牌"
-        title="视觉风格预览"
-        subtitle="名字保持 Tick Stock Panel,4 种赛博朋克 + 高级感的视觉处理 — 字重、字距、配色、图标各不同。挑你最喜欢的告诉我。"
+        title="品牌"
+        subtitle="BRANDING"
+        titleExtra={
+          <>
+            <span className="tb-chip">{VARIANTS.length} 个方向</span>
+            <span className="tb-chip">{VARIANTS.map(v => v.id).join(' / ')}</span>
+          </>
+        }
+        right={<button className="ctl-btn ctl-sm" onClick={exportPreview}>导出预览</button>}
       />
 
-      <div className="px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {VARIANTS.map((v) => (
-            <Sample key={v.id} v={v} />
-          ))}
-        </div>
+      <div className="figcap mt-0.5 border-t border-rule-strong pt-2.5">
+        四 个 方 向 ｜ 同 一 个 名 字 在 四 种 视 觉 语 言 里 的 呈 现
+      </div>
 
-        <div className="mt-8 leaf-cell text-sm text-secondary leading-relaxed max-w-2xl">
-          <div className="font-medium text-foreground mb-2">挑哪个?</div>
-          回复 <code className="font-mono text-accent">pulsar / vanta / helix / aurora</code> 任一,
-          我把该风格的字体、配色、图标、发光效果应用到真实侧栏。
-          也可以告诉我你想微调哪里(比如"用 VANTA 但换青色"),都行。
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+        {VARIANTS.map((v) => (
+          <Sample key={v.id} v={v} active={v.id === selected} />
+        ))}
+      </div>
+
+      <div className="rowset mt-5 pr-16">
+        <div className="r">
+          <div className="lab">
+            <b>选定方向</b>
+            <small>选定后，字体、字重、字距、强调色与发光线条会应用到真实侧栏</small>
+          </div>
+          <div className="seg">
+            {VARIANTS.map(v => (
+              <button key={v.id} className={cn(v.id === selected && 'on')} aria-pressed={v.id === selected} onClick={() => setSelected(v.id)}>
+                {v.id}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
-function Sample({ v }: { v: Variant }) {
-  const Icon = v.icon
-
+function Sample({ v, active }: { v: Variant; active: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-card border border-border overflow-hidden bg-base flex"
+      className={cn(
+        'grid min-h-[236px] grid-cols-[186px_minmax(0,1fr)] overflow-hidden border bg-base',
+        active ? 'border-foreground' : 'border-border',
+      )}
     >
-      {/* 模拟侧边栏 */}
-      <div className="w-56 bg-surface border-r border-border flex flex-col">
-        {/* Logo 区 */}
-        <div className="px-5 py-5 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="grid place-items-center h-7 w-7 rounded-md"
-              style={{
-                background: `${v.glow}1a`,
-                boxShadow: `0 0 12px ${v.glow}33`,
-              }}
-            >
-              <Icon className={`h-4 w-4 ${v.iconAccent}`} />
-            </div>
-            <div className={`${v.nameClass} text-foreground leading-none`}>
-              {v.name}
-            </div>
-          </div>
-          <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-secondary">
-            {v.tagline}
-          </div>
-          <div
-            className="mt-3 h-px"
-            style={{
-              background: `linear-gradient(90deg, ${v.glow}66, transparent)`,
-            }}
+      {/* 迷你侧栏: 墨底纸字, 预览主题落到真实侧栏后的样子 */}
+      <div className="flex min-w-0 flex-col bg-foreground p-3.5 text-[var(--paper)]">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="grid h-[18px] w-[18px] shrink-0 place-items-center"
+            style={{ background: v.glow, boxShadow: `0 0 12px ${v.glow}55` }}
           />
-          <div className="mt-2 text-xs text-secondary">
-            档位 · <span className="text-foreground font-medium font-mono">Pro</span>
-          </div>
+          <b className={`truncate text-[11px] leading-none ${v.nameStyle}`}>{v.name}</b>
         </div>
-
-        {/* 模拟导航 */}
-        <nav className="px-2 py-3 space-y-0.5">
-          {MOCK_NAV.slice(0, 5).map(({ icon: I, label }, i) => (
-            <div
+        <div className="mt-2 truncate font-mono text-[8px] uppercase tracking-[0.16em] opacity-60">
+          {v.tagline}
+        </div>
+        <div
+          className="my-2.5 h-px"
+          style={{ background: `linear-gradient(90deg, ${v.glow}66, transparent)` }}
+        />
+        <div className="text-[8.5px] opacity-60">
+          档位 · <b className="font-mono font-normal opacity-100">Pro</b>
+        </div>
+        <ul className="mt-2.5 list-none border-t border-[hsl(var(--base)/0.14)] p-0">
+          {MOCK_NAV.map((label, i) => (
+            <li
               key={label}
-              className={`flex items-center gap-3 px-3 py-2 rounded-btn text-sm ${
+              className={cn(
+                'border-l-2 px-2 py-1 text-[9.5px] opacity-70',
                 i === 0
-                  ? 'bg-elevated text-foreground font-medium'
-                  : 'text-foreground/80'
-              }`}
+                  ? 'border-l-current bg-[hsl(var(--base)/0.07)] opacity-100'
+                  : 'border-transparent',
+              )}
             >
-              <I className="h-4 w-4" />
               {label}
-            </div>
+            </li>
           ))}
-        </nav>
+        </ul>
       </div>
 
-      {/* 右侧说明 + 大字预览 */}
-      <div className="flex-1 p-5 flex flex-col">
-        <div className="flex-1">
-          <div className="text-xs font-medium text-muted uppercase tracking-widest">{v.id}</div>
-          <div className="mt-2 leading-relaxed text-sm text-secondary">
-            {v.hint}
-          </div>
-        </div>
-
-        {/* 大字 wordmark 预览 */}
-        <div className="mt-6 pt-6 border-t border-border">
-          <div
-            className={`${v.nameClass} text-foreground`}
-            style={{
-              textShadow: `0 0 24px ${v.glow}55`,
-            }}
-          >
+      {/* 右侧: 方向名 + 说明 + 底部大字名 */}
+      <div className="flex min-w-0 flex-col p-3.5 pb-2.5">
+        <div className="font-mono text-[8.5px] tracking-[0.2em] text-muted">{v.id}</div>
+        <p className="mt-1.5 text-[10px] leading-[1.7] text-secondary">{v.hint}</p>
+        <div className="mt-auto border-t border-border pt-3">
+          <span className={`block text-[13px] leading-[1.5] text-foreground ${v.nameStyle}`}>
             {v.name}
-          </div>
-          <div className="mt-1.5 text-[10px] uppercase tracking-[0.2em] text-secondary">
-            {v.tagline}
-          </div>
-        </div>
-
-        {/* 模拟一个数据卡片,看与配色协调度 */}
-        <div className="mt-5 rounded-btn bg-surface border border-border px-3 py-2 flex items-baseline justify-between">
-          <span className="text-xs text-secondary">600519.SH</span>
-          <span className="font-mono text-sm" style={{ color: v.glow }}>
-            +1.85%
           </span>
         </div>
       </div>

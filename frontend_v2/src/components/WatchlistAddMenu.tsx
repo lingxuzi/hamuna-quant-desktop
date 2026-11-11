@@ -152,7 +152,7 @@ export function WatchlistGroupMenu({
     else items[(current - 1 + items.length) % items.length].focus()
   }
 
-  const menuItemClass = 'flex h-8 w-full items-center gap-2 rounded-btn px-2 text-left text-xs text-secondary outline-none transition-colors hover:bg-elevated hover:text-foreground focus:bg-elevated focus:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-secondary'
+  const menuItemClass = 'ctl ctl-md ctl-ghost w-full items-center gap-2 rounded-btn px-2 text-left text-xs outline-none hover:bg-elevated hover:text-foreground focus:bg-elevated focus:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-secondary'
   const showCounts = counts !== undefined
   const ungroupedCount = counts?.ungrouped ?? 0
 
@@ -182,12 +182,12 @@ export function WatchlistGroupMenu({
           data-watchlist-group-menu
           onKeyDown={handleMenuKeyDown}
           style={{ position: 'fixed', top: position.top, left: position.left }}
-          className="z-[10000] w-56 overflow-hidden leaf-cell p-1.5 shadow-[0_10px_32px_rgba(0,0,0,0.42)]"
+          className="z-[10000] w-56 overflow-hidden bg-surface border border-border p-1.5 shadow-[0_10px_32px_rgba(0,0,0,0.42)]"
         >
           <div className="px-2 pb-1.5 pt-1 text-[10px] font-medium text-muted">{menuLabel}</div>
           {groupsQuery.isPending ? (
             <div className="flex h-16 items-center justify-center text-muted">
-              <LoaderCircle className="h-4 w-4 animate-spin" />
+              <LoaderCircle className="h-[16px] w-[16px] animate-spin" />
             </div>
           ) : groupsQuery.isError ? (
             <button

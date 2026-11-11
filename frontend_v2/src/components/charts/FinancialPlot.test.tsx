@@ -45,7 +45,16 @@ vi.mock('lightweight-charts', () => ({
   CandlestickSeries: 'Candlestick', LineSeries: 'Line', AreaSeries: 'Area', BaselineSeries: 'Baseline', HistogramSeries: 'Histogram', customSeriesDefaultOptions: {},
   ColorType: { Solid: 'solid' }, CrosshairMode: { Normal: 0 },
 }))
-vi.mock('@/lib/theme', () => ({ useTheme: () => native.appearance.theme, useChartTheme: () => ({ text: '#888', border: '#333', grid: '#222', crosshair: '#777', crosshairLabelBg: '#111' }) }))
+vi.mock('@/lib/theme', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/theme')>()
+  // 调色板锁成旧 CHART_COLORS 的取值 —— 断言里的颜色不随实现改动漂移
+  const palette = { text: '#888', textStrong: '#eee', grid: '#222', border: '#333', crosshair: '#777',
+    crosshairLabelBg: '#111', tooltipBg: '#111', tooltipBorder: '#333', tooltipText: '#eee',
+    infoBarBg: '#111', zoomFill: '#222', fillSubtle: '#111',
+    bull: '#9B2C2C', bear: '#2C5F4A', accent: '#B7410E', warning: '#B7410E', neutral: '#8A8078',
+    series: [], ramp: [] }
+  return { ...actual, useTheme: () => native.appearance.theme, useChartTheme: () => palette, chartTheme: () => palette }
+})
 
 let host: HTMLDivElement, root: Root
 beforeEach(() => {

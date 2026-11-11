@@ -183,7 +183,7 @@ function BubbleItem({ task, isLast, onPointerDown }: {
         onPointerDown={onPointerDown}
         role="button"
         tabIndex={0}
-        title={isWorking ? '生成中,点击恢复对话框' : isError ? '分析失败,点击重试' : '点击查看报告'}
+        title={isWorking ? '生成中，点击恢复对话框' : isError ? '分析失败，点击重试' : '点击查看报告'}
         className={`group relative flex w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border bg-gradient-to-br px-2 py-1.5 backdrop-blur-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.99] ${accent}`}
       >
         {/* 生成中:顶部进度流光 */}
@@ -194,13 +194,13 @@ function BubbleItem({ task, isLast, onPointerDown }: {
         )}
 
         {/* 状态图标 */}
-        <span className="flex h-4 w-4 items-center justify-center shrink-0">
+        <span className="flex h-[16px] w-[16px] items-center justify-center shrink-0">
           {isWorking ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-[12px] w-[12px] animate-spin" />
           ) : isError ? (
-            <AlertCircle className="h-3 w-3" />
+            <AlertCircle className="h-[12px] w-[12px]" />
           ) : (
-            <Check className="h-3 w-3" />
+            <Check className="h-[12px] w-[12px]" />
           )}
         </span>
 

@@ -5,8 +5,10 @@ import { ChevronRight, CircleAlert, CircleCheck, FlaskConical, PenLine, Play, Sa
 import { toast } from '@/components/Toast'
 import { api, type FactorTrialResponse, type FactorValidateResponse } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
+import { INPUT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
-const INPUT_CLS = 'w-full rounded-input border border-border bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none'
+const INPUT_CLS = cn(INPUT_MD, 'w-full')
 const CHIP_CLS = 'shrink-0 rounded-btn border border-border bg-base/60 px-1.5 py-0.5 font-mono text-[10px] text-secondary transition-colors hover:border-accent/40 hover:text-accent cursor-pointer'
 
 const DEFAULT_FORMULA = 'rank(-ts_sum(change_pct, 5))'
@@ -223,15 +225,15 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-2">
+    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden xl:grid-cols-2 xl:gap-px xl:bg-border">
       {/* ── 左栏: 编辑 ── */}
-      <section className="flex min-h-0 flex-col gap-3 leaf-cell bg-surface/80 p-3 xl:overflow-y-auto">
+      <section className="flex min-h-0 flex-col gap-3 bg-surface p-3 xl:overflow-y-auto">
         <div className="flex flex-wrap items-center gap-2">
-          <FlaskConical className="h-4 w-4 shrink-0 text-accent" />
+          <FlaskConical className="h-[16px] w-[16px] shrink-0 text-accent" />
           <span className="shrink-0 text-sm font-medium text-foreground">因子编辑器</span>
           {editing && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-btn border border-accent/40 bg-accent/5 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-              <PenLine className="h-3 w-3" />
+              <PenLine className="h-[12px] w-[12px]" />
               编辑 {editing.id} · 当前 v{editing.version}
             </span>
           )}
@@ -242,7 +244,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                 if (!event.target.value) { setEditing(null); return }
                 loadForEdit(event.target.value)
               }}
-              className="ml-auto h-7 max-w-[14rem] shrink-0 rounded-input border border-border bg-surface px-1.5 text-[10px] text-secondary"
+              className="ctl ctl-md ctl-select ml-auto max-w-[14rem] shrink-0"
               aria-label="编辑已有自定义因子"
             >
               <option value="">编辑已有因子…</option>
@@ -257,7 +259,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
             <label className="shrink-0 text-xs font-medium text-secondary">公式 (DSL)</label>
             <select
-              className="h-7 shrink-0 rounded-input border border-border bg-surface px-1.5 text-[10px] text-secondary"
+              className="ctl ctl-md ctl-select shrink-0"
               onChange={event => {
                 const value = event.target.value
                 if (!value) return
@@ -302,7 +304,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
             className="group rounded-btn border border-border/60 bg-base/40 px-2.5 py-1.5 text-[10px]"
           >
             <summary className="flex cursor-pointer select-none items-center gap-1 font-medium text-foreground transition-colors hover:text-accent [&::-webkit-details-marker]:hidden">
-              <ChevronRight className="h-3 w-3 shrink-0 text-accent transition-transform group-open:rotate-90" />
+              <ChevronRight className="h-[12px] w-[12px] shrink-0 text-accent transition-transform group-open:rotate-90" />
               算子（{OPERATOR_COUNT} 个 · 时序 / 截面 / 工具）
               <span className="font-normal text-muted">· 点击签名插入</span>
             </summary>
@@ -331,7 +333,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
           </details>
           <details className="group rounded-btn border border-border/60 bg-base/40 px-2.5 py-1.5 text-[10px]">
             <summary className="flex cursor-pointer select-none items-center gap-1 font-medium text-foreground transition-colors hover:text-accent [&::-webkit-details-marker]:hidden">
-              <ChevronRight className="h-3 w-3 shrink-0 text-accent transition-transform group-open:rotate-90" />
+              <ChevronRight className="h-[12px] w-[12px] shrink-0 text-accent transition-transform group-open:rotate-90" />
               可用字段 ({columns.data?.columns.length ?? 0}) · 点击插入
             </summary>
             <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto">
@@ -361,7 +363,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
 
         {/* 动作行: nowrap 防止按钮文字折行 */}
         <div className="flex flex-wrap items-center gap-2">
-          <select value={assetType} onChange={event => setAssetType(event.target.value as typeof assetType)} className={`${INPUT_CLS} h-8 w-24 shrink-0`} aria-label="试算资产">
+          <select value={assetType} onChange={event => setAssetType(event.target.value as typeof assetType)} className={`${INPUT_CLS} w-24 shrink-0`} aria-label="试算资产">
             <option value="stock">股票</option>
             <option value="etf">ETF</option>
           </select>
@@ -369,7 +371,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
             type="button"
             onClick={runBoth}
             disabled={!formula.trim() || validate.isPending}
-            className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-btn border border-border bg-surface px-3 text-xs font-medium text-secondary transition-colors hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="ctl ctl-md ctl-btn ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 bg-surface"
           >
             <ShieldQuestion className="h-3.5 w-3.5" />
             {validate.isPending ? '校验中…' : '校验'}
@@ -378,7 +380,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
             type="button"
             onClick={() => runTrial.mutate()}
             disabled={!canTrial}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-btn bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ctl ctl-md ctl-btn pri inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             title={validation?.ok ? '用最近 40 个交易日数据试算 IC' : '请先校验通过'}
           >
             <Play className="h-3.5 w-3.5" />
@@ -394,7 +396,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
       </section>
 
       {/* ── 右栏: 校验 / 试算 / 保存 ── */}
-      <section className="flex min-h-0 flex-col gap-3 leaf-cell bg-surface/80 p-3 xl:overflow-y-auto">
+      <section className="flex min-h-0 flex-col gap-3 bg-surface p-3 xl:overflow-y-auto">
         <div className="text-sm font-medium text-foreground">校验与试算</div>
 
         {!validation && !validate.isPending && (
@@ -417,14 +419,14 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
           <div className="space-y-2">
             {validation.ok ? (
               <div className="flex items-center gap-2 rounded-btn border border-bull/30 bg-bull/10 px-3 py-2 text-xs text-bull">
-                <CircleCheck className="h-4 w-4 shrink-0" />
+                <CircleCheck className="h-[16px] w-[16px] shrink-0" />
                 公式有效。预热 {validation.warmup_bars} 个交易日
                 {validation.cross_sectional && '，含截面算子。'}
               </div>
             ) : (
               <div className="space-y-1.5 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2">
                 <div className="flex items-center gap-2 text-xs font-medium text-danger">
-                  <CircleAlert className="h-4 w-4 shrink-0" />公式未通过校验 (点击错误可定位):
+                  <CircleAlert className="h-[16px] w-[16px] shrink-0" />公式未通过校验 (点击错误可定位):
                 </div>
                 {validation.errors.map((error, index) => (
                   <button
@@ -456,7 +458,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
 
         {runTrial.isPending && (
           <div className="flex items-center gap-3 rounded-btn border border-accent/30 bg-accent/5 px-3 py-2.5 text-xs text-secondary">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent/25 border-t-accent" />
+            <span className="h-[16px] w-[16px] animate-spin rounded-full border-2 border-accent/25 border-t-accent" />
             正在加载面板并试算最近 40 个交易日…
           </div>
         )}
@@ -518,7 +520,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                         value={saveLabel}
                         onChange={event => { setSaveLabel(event.target.value); setSavedId('') }}
                         placeholder="名称 (必填, 如 我的反转)"
-                        className={`${INPUT_CLS} h-8`}
+                        className={INPUT_CLS}
                       />
                       <input
                         type="text"
@@ -528,11 +530,11 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                           else setSaveId(event.target.value)
                         }}
                         placeholder={editing ? '分组' : 'id (可空, 自动生成 uf_ 前缀)'}
-                        className={`${INPUT_CLS} h-8 font-mono`}
+                        className={`${INPUT_CLS} font-mono`}
                       />
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <select value={direction} onChange={event => setDirection(event.target.value as typeof direction)} className={`${INPUT_CLS} h-8 w-32 shrink-0`} aria-label="预期方向">
+                      <select value={direction} onChange={event => setDirection(event.target.value as typeof direction)} className={`${INPUT_CLS} w-32 shrink-0`} aria-label="预期方向">
                         <option value="none">方向未知</option>
                         <option value="high">值大看多</option>
                         <option value="low">值小看多</option>
@@ -542,7 +544,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                         value={saveDescription}
                         onChange={event => setSaveDescription(event.target.value)}
                         placeholder="描述 (可空, 记录设计意图, 如: 短线超跌反转)"
-                        className={`${INPUT_CLS} h-8 min-w-[12rem] flex-1`}
+                        className={`${INPUT_CLS} min-w-[12rem] flex-1`}
                         maxLength={500}
                       />
                     </div>
@@ -551,7 +553,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                         type="button"
                         onClick={() => save.mutate()}
                         disabled={!saveLabel.trim() || save.isPending}
-                        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-btn bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ctl ctl-md ctl-btn pri inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Save className="h-3.5 w-3.5" />
                         {save.isPending ? '保存中…' : editing ? (formulaDirty ? '保存新版本 (回草稿)' : '保存元数据') : '保存 (草稿态)'}
@@ -560,7 +562,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
                         <button
                           type="button"
                           onClick={() => navigate(`/factors?tab=discover&focus=${savedId}`)}
-                          className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-btn border border-accent/40 px-3 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+                          className="ctl ctl-md ctl-btn inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-accent/40 px-2.5 hover:bg-accent/10"
                         >
                           去检验 {savedId}
                         </button>

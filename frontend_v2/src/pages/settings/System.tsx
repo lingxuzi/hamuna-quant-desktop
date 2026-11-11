@@ -188,21 +188,24 @@ export function SettingsSystemPanel() {
         subtitle="全局行为开关"
       />
 
-      <section className="leaf-cell">
+      <section>
         <SectionHead icon={Settings2} title="策略页" className="mb-4" />
 
-        <ToggleRow
-          label="进入策略页自动运行策略"
-          desc="开启后进入策略页自动跑所有策略获取命中数; 关闭则需手动点击"
-          checked={screenerAutoRun}
-          disabled={saving}
-          onChange={(v) => save({ screener_auto_run: v })}
-        />
+        <div className="rowset">
+          <ToggleRow
+            label="进入策略页自动运行策略"
+            desc="开启后进入策略页自动跑所有策略获取命中数; 关闭则需手动点击"
+            checked={screenerAutoRun}
+            disabled={saving}
+            onChange={(v) => save({ screener_auto_run: v })}
+          />
+        </div>
       </section>
 
-      <section className="leaf-cell mt-6">
+      <section className="mt-10">
         <SectionHead icon={Bell} title="通知弹窗" className="mb-4" />
 
+        <div className="rowset">
         <ToggleRow
           label="开启监控通知弹窗"
           desc="收到监控告警时在右下角弹出通知卡片"
@@ -215,11 +218,7 @@ export function SettingsSystemPanel() {
           }}
         />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">最大弹窗个数</div>
-            <div className="text-[11px] text-muted truncate">同时显示的通知数量 (1-5), 超出丢弃最旧的</div>
-          </div>
+        <SettingRow label="最大弹窗个数" desc="同时显示的通知数量 (1-5), 超出丢弃最旧的">
           <select
             value={toastMax}
             disabled={!toastEnabled}
@@ -229,11 +228,11 @@ export function SettingsSystemPanel() {
               setToastMax(v)
               refreshAlertToastConfig()
             }}
-            className="w-16 h-8 px-1.5 rounded-btn border border-border bg-base text-xs text-foreground disabled:opacity-50"
+            className="ctl ctl-sm ctl-select w-16 shrink-0"
           >
             {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-        </div>
+        </SettingRow>
 
         <ToggleRow
           label="通知声效"
@@ -247,46 +246,30 @@ export function SettingsSystemPanel() {
           }}
         />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0 flex items-center gap-1.5">
-            <Volume2 className="h-3.5 w-3.5 text-muted" />
-            <div>
-              <div className="text-sm text-foreground">声效选择</div>
-              <div className="text-[11px] text-muted truncate">选择提示音风格</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={soundType}
-              disabled={!toastEnabled || !soundEnabled}
-              onChange={(e) => {
-                const v = e.target.value
-                setUiPref('alert_sound', v)
-                setSoundType(v)
-                if (v !== 'none') previewSound(v)
-              }}
-              className="w-44 h-8 px-1.5 rounded-btn border border-border bg-base text-xs text-foreground disabled:opacity-50"
-            >
-              {soundOptions.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <button
-              onClick={() => previewSound(soundType)}
-              disabled={!toastEnabled || !soundEnabled || soundType === 'none'}
-              className="px-2 h-8 rounded-btn border border-border bg-base text-xs text-secondary hover:text-foreground hover:border-accent/30 disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              试听
-            </button>
-          </div>
-        </div>
+        <SettingRow label="声效选择" desc="选择提示音风格">
+          <select
+            value={soundType}
+            disabled={!toastEnabled || !soundEnabled}
+            onChange={(e) => {
+              const v = e.target.value
+              setUiPref('alert_sound', v)
+              setSoundType(v)
+              if (v !== 'none') previewSound(v)
+            }}
+            className="ctl ctl-sm ctl-select w-44 shrink-0"
+          >
+            {soundOptions.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <button
+            onClick={() => previewSound(soundType)}
+            disabled={!toastEnabled || !soundEnabled || soundType === 'none'}
+            className="ctl-btn ctl-sm"
+          >
+            试听
+          </button>
+        </SettingRow>
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0 flex items-center gap-1.5">
-            <Upload className="h-3.5 w-3.5 text-muted" />
-            <div>
-              <div className="text-sm text-foreground">自定义语音包</div>
-              <div className="text-[11px] text-muted truncate">上传自己的提示音 (mp3/wav/ogg/m4a/flac/aac, ≤4MB), 同名重传替换</div>
-            </div>
-          </div>
+        <SettingRow label="自定义语音包" desc="上传自己的提示音 (mp3/wav/ogg/m4a/flac/aac, ≤4MB), 同名重传替换">
           <input
             ref={soundFileRef}
             type="file"
@@ -297,31 +280,31 @@ export function SettingsSystemPanel() {
           <button
             onClick={() => soundFileRef.current?.click()}
             disabled={uploadSoundPack.isPending}
-            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-btn text-xs bg-elevated text-secondary hover:text-foreground transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+            className="ctl-btn ctl-sm shrink-0"
           >
-            <Upload className="h-3.5 w-3.5" />
+            <Upload className="h-[12px] w-[12px]" />
             {uploadSoundPack.isPending ? '上传中…' : '上传'}
           </button>
-        </div>
+        </SettingRow>
         {soundPacks.length > 0 && (
-          <div className="mt-1 space-y-1">
+          <div>
             {soundPacks.map(p => (
-              <div key={p.name} className="flex items-center justify-between gap-2 pl-5 pr-1.5 py-1 rounded-btn bg-base/60">
-                <span className="text-xs text-foreground truncate">
+              <div key={p.name} className="flex items-center justify-between gap-2 py-1.5 pl-5 border-b border-border/60">
+                <span className="min-w-0 truncate text-[11px] text-foreground">
                   {p.name}
-                  <span className="text-muted ml-1.5">{p.size >= 1024 * 1024 ? `${(p.size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(p.size / 1024))}KB`}</span>
+                  <span className="text-muted ml-1.5 font-mono text-[10px]">{p.size >= 1024 * 1024 ? `${(p.size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(p.size / 1024))}KB`}</span>
                 </span>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     onClick={() => previewSound(CUSTOM_SOUND_PREFIX + p.name)}
-                    className="px-2 py-0.5 rounded-btn border border-border text-xs text-secondary hover:text-foreground hover:border-accent/30 transition-colors cursor-pointer"
+                    className="ctl-btn ctl-sm"
                   >
                     试听
                   </button>
                   <button
                     onClick={() => deleteSoundPack.mutate(p.name)}
                     disabled={deleteSoundPack.isPending && deleteSoundPack.variables === p.name}
-                    className="px-2 py-0.5 rounded-btn border border-border text-xs text-secondary hover:text-foreground hover:border-accent/30 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="ctl-btn ctl-sm"
                   >
                     {deleteSoundPack.isPending && deleteSoundPack.variables === p.name ? '删除中' : '删除'}
                   </button>
@@ -330,111 +313,99 @@ export function SettingsSystemPanel() {
             ))}
           </div>
         )}
+        </div>
       </section>
 
-      <section className="leaf-cell mt-6">
+      <section className="mt-10">
         <SectionHead icon={Volume2} title="语音播报" className="mb-4" />
 
-        <ToggleRow
-          label="监控告警语音播报"
-          desc="收到告警时用中文语音播报内容 (需浏览器支持, 默认关闭)"
-          checked={voiceEnabled}
-          disabled={!toastEnabled}
-          onChange={(v) => {
-            setUiPref('voice_broadcast_enabled', v ? '1' : '0')
-            setVoiceEnabled(v)
-            if (v) { activateVoice(); previewVoice() }   // 开启即激活 + 试听一句
-          }}
-        />
+        <div className="rowset">
+          <ToggleRow
+            label="监控告警语音播报"
+            desc="收到告警时用中文语音播报内容 (需浏览器支持, 默认关闭)"
+            checked={voiceEnabled}
+            disabled={!toastEnabled}
+            onChange={(v) => {
+              setUiPref('voice_broadcast_enabled', v ? '1' : '0')
+              setVoiceEnabled(v)
+              if (v) { activateVoice(); previewVoice() }   // 开启即激活 + 试听一句
+            }}
+          />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0 flex items-center gap-1.5">
-            <Volume2 className="h-3.5 w-3.5 text-muted" />
-            <div>
-              <div className="text-sm text-foreground">语音音色</div>
-              <div className="text-[11px] text-muted truncate">
-                {voices.length === 0
-                  ? '未检测到中文语音, 将用系统默认'
-                  : '默认优先 Google 中国大陆 (音质最佳)'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={voiceConfigured}
-              disabled={!toastEnabled || !voiceEnabled}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v) {
-                  // 手选某一语音包
-                  setUiPref('voice_broadcast_voice', v)
-                  setVoiceConfigured(v)
-                } else {
-                  // 选"默认偏好"(固定空值): 清空手选, 走 Google 中国大陆偏好
-                  setUiPref('voice_broadcast_voice', null)
-                  setVoiceConfigured('')
-                }
-              }}
-              className="w-32 h-8 px-1.5 rounded-btn border border-border bg-base text-xs text-foreground disabled:opacity-50"
-            >
-              <option value="">默认偏好</option>
-              {voices.map(v => (
-                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => previewVoice()}
-              disabled={!toastEnabled || !voiceEnabled}
-              className="px-2 h-8 rounded-btn border border-border bg-base text-xs text-secondary hover:text-foreground hover:border-accent/30 disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              试听
-            </button>
-          </div>
-        </div>
+        <SettingRow label="语音音色" desc={voices.length === 0 ? '未检测到中文语音, 将用系统默认' : '默认优先 Google 中国大陆 (音质最佳)'}>
+          <select
+            value={voiceConfigured}
+            disabled={!toastEnabled || !voiceEnabled}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v) {
+                // 手选某一语音包
+                setUiPref('voice_broadcast_voice', v)
+                setVoiceConfigured(v)
+              } else {
+                // 选"默认偏好"(固定空值): 清空手选, 走 Google 中国大陆偏好
+                setUiPref('voice_broadcast_voice', null)
+                setVoiceConfigured('')
+              }
+            }}
+            className="ctl ctl-sm ctl-select w-32 shrink-0"
+          >
+            <option value="">默认偏好</option>
+            {voices.map(v => (
+              <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => previewVoice()}
+            disabled={!toastEnabled || !voiceEnabled}
+            className="ctl-btn ctl-sm"
+          >
+            试听
+          </button>
+        </SettingRow>
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">语速</div>
-            <div className="text-[11px] text-muted truncate">0.5 慢 — 2.0 快</div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <input
-              type="range" min={0.5} max={2} step={0.1} value={voiceRate}
-              disabled={!toastEnabled || !voiceEnabled}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value)
-                setUiPref('voice_broadcast_rate', String(v))
-                setVoiceRate(v)
-              }}
-              className="w-32 disabled:opacity-50"
-            />
-            <span className="text-xs text-muted w-8 text-right">{voiceRate.toFixed(1)}</span>
-          </div>
+        <SettingRow label="语速" desc="0.5 慢 — 2.0 快">
+          <input
+            type="range" min={0.5} max={2} step={0.1} value={voiceRate}
+            disabled={!toastEnabled || !voiceEnabled}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value)
+              setUiPref('voice_broadcast_rate', String(v))
+              setVoiceRate(v)
+            }}
+            className="w-32 disabled:opacity-50"
+          />
+          <span className="font-mono text-xs tabular-nums text-muted w-8 text-right">{voiceRate.toFixed(1)}</span>
+        </SettingRow>
         </div>
       </section>
 
-      <section className="leaf-cell mt-6">
+      <section className="mt-10">
         <SectionHead icon={ExternalLink} title="个股详情外链" className="mb-4" />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">详情页 URL 模板</div>
-            <div className="text-[11px] text-muted truncate">{"支持 {code} {market} {symbol} · 留空关闭外链"}</div>
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>详情页 URL 模板</b>
+              <small className="truncate">{"支持 {code} {market} {symbol} · 留空关闭外链"}</small>
+            </div>
+            <div className="ctl">
+              <input
+                value={extTpl}
+                onChange={(e) => {
+                  setExtTpl(e.target.value)
+                  saveStockExternalTemplate(e.target.value)
+                }}
+                placeholder="https://..."
+                spellCheck={false}
+                className="ctl ctl-sm ctl-input min-w-0 w-[24rem] max-w-full px-1.5 font-mono focus:border-accent bg-base"
+              />
+            </div>
           </div>
-          <input
-            value={extTpl}
-            onChange={(e) => {
-              setExtTpl(e.target.value)
-              saveStockExternalTemplate(e.target.value)
-            }}
-            placeholder="https://..."
-            spellCheck={false}
-            className="w-[26rem] max-w-[60%] h-8 px-2.5 rounded-btn border border-border bg-base text-xs font-mono text-foreground focus:border-accent/50 focus:outline-none"
-          />
         </div>
       </section>
 
-      <section className="leaf-cell mt-6">
+      <section className="mt-10">
         <SectionHead icon={Layers} title="批量请求" className="mb-4" />
 
         <p className="text-[11px] leading-relaxed text-muted mb-3">
@@ -442,32 +413,33 @@ export function SettingsSystemPanel() {
           但单次内存峰值也越高。改完立即生效，无需重启。
         </p>
 
-        <BatchSymbolsRow
-          label="日K批量上限"
-          desc="每只约 12 根 K 线，成本较低"
-          min={DAILY_BATCH_SYMBOLS_MIN}
-          max={DAILY_BATCH_SYMBOLS_MAX}
-          value={prefs?.daily_batch_symbols ?? 400}
-          saving={saveDailyBatch.isPending}
-          onSave={(size) => saveDailyBatch.mutate(size)}
-          warnAt={2000}
-          warnText="超过 2000 只时，多标签页或分时同时刷新会叠加内存峰值，可能触发浏览器卡顿或后端内存告警。"
-        />
-        <div className="h-px bg-border/60 my-1" />
-        <BatchSymbolsRow
-          label="分时批量上限"
-          desc="每只约 240 根 K 线，内存约为日K的 20 倍"
-          min={MINUTE_BATCH_SYMBOLS_MIN}
-          max={MINUTE_BATCH_SYMBOLS_MAX}
-          value={prefs?.minute_batch_symbols ?? 400}
-          saving={saveMinuteBatch.isPending}
-          onSave={(size) => saveMinuteBatch.mutate(size)}
-          warnAt={800}
-          warnText="分时数据量是日K的 20 倍：超过 800 只时单次响应可达数十 MB，建议保持默认或更低。"
-        />
+        <div className="rowset">
+          <BatchSymbolsRow
+            label="日K批量上限"
+            desc="每只约 12 根 K 线，成本较低"
+            min={DAILY_BATCH_SYMBOLS_MIN}
+            max={DAILY_BATCH_SYMBOLS_MAX}
+            value={prefs?.daily_batch_symbols ?? 400}
+            saving={saveDailyBatch.isPending}
+            onSave={(size) => saveDailyBatch.mutate(size)}
+            warnAt={2000}
+            warnText="超过 2000 只时，多标签页或分时同时刷新会叠加内存峰值，可能触发浏览器卡顿或后端内存告警。"
+          />
+          <BatchSymbolsRow
+            label="分时批量上限"
+            desc="每只约 240 根 K 线，内存约为日K的 20 倍"
+            min={MINUTE_BATCH_SYMBOLS_MIN}
+            max={MINUTE_BATCH_SYMBOLS_MAX}
+            value={prefs?.minute_batch_symbols ?? 400}
+            saving={saveMinuteBatch.isPending}
+            onSave={(size) => saveMinuteBatch.mutate(size)}
+            warnAt={800}
+            warnText="分时数据量是日K的 20 倍：超过 800 只时单次响应可达数十 MB，建议保持默认或更低。"
+          />
+        </div>
       </section>
 
-      <section className="leaf-cell mt-6">
+      <section className="mt-10">
         <SectionHead icon={MemoryStick} title="性能与内存" className="mb-4" />
 
         <p className="text-[11px] leading-relaxed text-muted mb-3">
@@ -475,64 +447,69 @@ export function SettingsSystemPanel() {
           （避免把整机拖入卡顿）。保存后对新发起的任务生效，无需重启。
         </p>
 
-        <BatchSymbolsRow
-          label="回测内存上限"
-          desc="默认 6 · 0 = 不限制"
-          min={BACKTEST_RSS_LIMIT_GIB_MIN}
-          max={BACKTEST_RSS_LIMIT_GIB_MAX}
-          value={prefs?.backtest_worker_rss_limit_gib ?? 6}
-          saving={saveBacktestRssLimit.isPending}
-          onSave={(gib) => saveBacktestRssLimit.mutate(gib)}
-          warnAt={16}
-          warnText="上限超过物理内存时会触发系统交换（swap），回测速度反而断崖式下降；内存不足时优先缩小回测时间范围/标的数量。"
-          unit="GiB"
-          rangeUnit="GiB"
-        />
-      </section>
-
-      <section className="leaf-cell mt-6">
-        <SectionHead icon={Trash2} title="缓存" className="mb-4" />
-
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">刷新前端缓存</div>
-            <div className="text-[11px] text-muted truncate">
-              清除页面缓存并强制重新加载 (不影响个人配置和本地股票数据)
-            </div>
-          </div>
-          <button
-            onClick={handleClearCache}
-            disabled={clearing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                       bg-elevated text-secondary hover:text-foreground transition-colors
-                       disabled:opacity-50 shrink-0"
-          >
-            {clearing ? (
-              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            {clearing ? '清理中…' : '清理并刷新'}
-          </button>
+        <div className="rowset">
+          <BatchSymbolsRow
+            label="回测内存上限"
+            desc="默认 6 · 0 = 不限制"
+            min={BACKTEST_RSS_LIMIT_GIB_MIN}
+            max={BACKTEST_RSS_LIMIT_GIB_MAX}
+            value={prefs?.backtest_worker_rss_limit_gib ?? 6}
+            saving={saveBacktestRssLimit.isPending}
+            onSave={(gib) => saveBacktestRssLimit.mutate(gib)}
+            warnAt={16}
+            warnText="上限超过物理内存时会触发系统交换（swap），回测速度反而断崖式下降；内存不足时优先缩小回测时间范围/标的数量。"
+            unit="GiB"
+            rangeUnit="GiB"
+          />
         </div>
       </section>
 
-      <section className="leaf-cell mt-6">
-        <SectionHead icon={ZoomIn} title="界面" className="mb-4" />
+      <section className="mt-10">
+        <SectionHead icon={Trash2} title="缓存" className="mb-4" />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">界面缩放</div>
-            <div className="text-[11px] text-muted truncate">
-              整个界面等比缩放, 立即生效并记忆 (80%–150%)
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>刷新前端缓存</b>
+              <small>
+                清除页面缓存并强制重新加载 (不影响个人配置和本地股票数据)
+              </small>
+            </div>
+            <div className="ctl">
+              <button
+                onClick={handleClearCache}
+                disabled={clearing}
+                className="ctl-btn ctl-sm"
+              >
+                {clearing ? (
+                  <RefreshCw className="h-[12px] w-[12px] animate-spin" />
+                ) : (
+                  <RefreshCw className="h-[12px] w-[12px]" />
+                )}
+                {clearing ? '清理中…' : '清理并刷新'}
+              </button>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <SectionHead icon={ZoomIn} title="界面" className="mb-4" />
+
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>界面缩放</b>
+              <small>
+                整个界面等比缩放, 立即生效并记忆 (80%–150%)
+              </small>
+            </div>
+            <div className="ctl">
+            <div className="flex shrink-0 items-center gap-2">
             {pageZoom !== 1 && (
               <button
                 onClick={() => setPageZoomState(setPageZoom(1))}
-                className="px-2.5 py-1.5 rounded-btn text-xs bg-elevated text-secondary
-                           hover:text-foreground transition-colors"
+                className="ctl-btn ctl-sm"
               >
                 重置
               </button>
@@ -541,9 +518,7 @@ export function SettingsSystemPanel() {
               onClick={() => changeZoom(-ZOOM_STEP)}
               disabled={pageZoom <= ZOOM_MIN}
               aria-label="缩小界面"
-              className="inline-flex items-center justify-center h-7 w-7 rounded-btn
-                         bg-elevated text-secondary hover:text-foreground transition-colors
-                         disabled:opacity-40 disabled:cursor-not-allowed"
+              className="ctl ctl-md ctl-ghost inline-flex w-[28px] items-center justify-center px-2.5 disabled:opacity-40 disabled:cursor-not-allowed bg-elevated"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
@@ -554,12 +529,12 @@ export function SettingsSystemPanel() {
               onClick={() => changeZoom(ZOOM_STEP)}
               disabled={pageZoom >= ZOOM_MAX}
               aria-label="放大界面"
-              className="inline-flex items-center justify-center h-7 w-7 rounded-btn
-                         bg-elevated text-secondary hover:text-foreground transition-colors
-                         disabled:opacity-40 disabled:cursor-not-allowed"
+              className="ctl ctl-md ctl-ghost inline-flex w-[28px] items-center justify-center px-0 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
+          </div>
+            </div>
           </div>
         </div>
         <ExtensionSlot name="settings.system.section" context={{}} compact />
@@ -648,7 +623,7 @@ function UpgradeGuardCard() {
   const restorableFiles = reportFiles.filter(f => f.category === 'restorable' || f.category === 'added_lost')
 
   return (
-    <section className="leaf-cell mt-6">
+    <section className="mt-10">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <SectionHead
@@ -666,8 +641,8 @@ function UpgradeGuardCard() {
             <span className="text-[10px] text-muted">清单 {st?.manifest_version ?? '—'} · 当前 {st?.current_version}</span>
             <button onClick={scan} disabled={busy === 'scan' || !!st?.scanning}
               title="重新扫描程序目录, 刷新常备备份 (修改程序文件后可手动执行)"
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground disabled:opacity-50">
-              <RefreshCw className={`h-3 w-3 ${busy === 'scan' || st?.scanning ? 'animate-spin' : ''}`} />
+              className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1.5 px-1.5 hover:bg-elevated hover:text-foreground disabled:opacity-50">
+              <RefreshCw className={`h-[12px] w-[12px] ${busy === 'scan' || st?.scanning ? 'animate-spin' : ''}`} />
               {busy === 'scan' || st?.scanning ? '扫描中' : '重新扫描'}
             </button>
           </div>
@@ -677,7 +652,7 @@ function UpgradeGuardCard() {
       {st?.enabled && (
         <div className="mt-3 border-t border-border/60 pt-3">
           <button onClick={() => setListOpen(v => !v)} className="flex w-full items-center gap-1.5 text-left text-xs text-secondary hover:text-foreground">
-            <ChevronDown className={`h-3 w-3 transition-transform ${listOpen ? '' : '-rotate-90'}`} />
+            <ChevronDown className={`h-[12px] w-[12px] transition-transform ${listOpen ? '' : '-rotate-90'}`} />
             当前检测到 <b className="text-foreground">{st?.modified?.length ?? 0}</b> 个修改文件、<b className="text-foreground">{st?.added?.length ?? 0}</b> 个新增文件
             <span className="text-[10px] text-muted">（上次扫描 {st?.last_scan?.replace('T', ' ').slice(0, 19) ?? '—'}）</span>
           </button>
@@ -710,13 +685,13 @@ function UpgradeGuardCard() {
             <div className="flex shrink-0 gap-2">
               {restorableFiles.length > 0 && (
                 <button onClick={() => restoreAll(report.id, restorableFiles)} disabled={!!busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 text-[11px] text-white hover:bg-accent/90 disabled:opacity-50">
-                  <RotateCcw className="h-3 w-3" />
+                  className="ctl ctl-sm ctl-btn pri inline-flex items-center gap-1.5 px-1.5 hover:bg-accent/90 disabled:opacity-50">
+                  <RotateCcw className="h-[12px] w-[12px]" />
                   恢复可恢复项 ({restorableFiles.length})
                 </button>
               )}
               <button onClick={dismiss} disabled={busy === 'dismiss'}
-                className="rounded-lg px-2.5 py-1 text-[11px] text-secondary hover:bg-elevated hover:text-foreground disabled:opacity-50">
+                className="ctl ctl-sm ctl-ghost px-1.5 hover:bg-elevated hover:text-foreground disabled:opacity-50">
                 知道了
               </button>
             </div>
@@ -731,7 +706,7 @@ function UpgradeGuardCard() {
                   </span>
                   {(f.category === 'restorable' || f.category === 'added_lost') && (
                     <button onClick={() => restore(report.id, f.relpath)} disabled={busy === f.relpath}
-                      className="rounded px-1.5 py-0.5 text-[10px] text-accent hover:bg-accent/10 disabled:opacity-50">
+                      className="ctl ctl-sm ctl-ghost px-1.5 hover:bg-accent/10 disabled:opacity-50">
                       {busy === f.relpath ? '恢复中' : '恢复'}
                     </button>
                   )}
@@ -823,20 +798,18 @@ function BatchSymbolsRow({
                 if (e.key === 'Enter') commit()
                 if (e.key === 'Escape') { setEditing(false); setHint(null) }
               }}
-              className="w-24 h-8 px-2 rounded-btn border border-border bg-base text-right font-mono text-xs
-                         text-foreground tabular-nums focus:border-accent/50 focus:outline-none"
+              className="ctl ctl-md ctl-input w-24 px-2.5 bg-base text-right font-mono tabular-nums focus:border-accent/50"
             />
             <button
               onClick={commit}
               disabled={saving}
-              className="px-2.5 py-1.5 rounded-btn text-xs bg-accent/15 text-accent
-                         hover:bg-accent/25 transition-colors disabled:opacity-50"
+              className="ctl ctl-md ctl-btn soft px-2.5 bg-accent/15 hover:bg-accent/25 disabled:opacity-50"
             >
               {saving ? '…' : '保存'}
             </button>
             <button
               onClick={() => { setEditing(false); setHint(null) }}
-              className="px-2 py-1.5 rounded-btn text-xs bg-elevated text-muted hover:text-foreground transition-colors"
+              className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground bg-elevated"
             >
               取消
             </button>
@@ -844,8 +817,7 @@ function BatchSymbolsRow({
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="shrink-0 px-2.5 py-1 rounded-btn border border-border bg-surface font-mono text-xs
-                       text-foreground tabular-nums hover:border-accent/50 transition-colors"
+            className="ctl ctl-sm ctl-btn shrink-0 px-1.5 bg-surface font-mono tabular-nums hover:border-accent/50"
             title="点击修改"
           >
             {value} {unit}
@@ -863,6 +835,18 @@ function BatchSymbolsRow({
 }
 
 
+function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <div className="r">
+      <div className="lab">
+        <b>{label}</b>
+        {desc && <small>{desc}</small>}
+      </div>
+      <div className="ctl">{children}</div>
+    </div>
+  )
+}
+
 function ToggleRow({
   label,
   desc,
@@ -877,12 +861,8 @@ function ToggleRow({
   onChange: (v: boolean) => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="min-w-0">
-        <div className="text-sm text-foreground">{label}</div>
-        <div className="text-[11px] text-muted truncate">{desc}</div>
-      </div>
+    <SettingRow label={label} desc={desc}>
       <Switch checked={checked} onChange={onChange} disabled={disabled} />
-    </div>
+    </SettingRow>
   )
 }

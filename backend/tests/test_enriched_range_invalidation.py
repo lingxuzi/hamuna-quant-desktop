@@ -12,7 +12,7 @@ from app.enriched_generation import (
     bump_enriched_generation,
     get_enriched_generation_snapshot,
 )
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 DAY = date(2026, 10, 29)
 

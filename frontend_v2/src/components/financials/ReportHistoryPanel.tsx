@@ -32,7 +32,7 @@ export function ReportHistoryPanel() {
   if (reports.length === 0) {
     return (
       <div className="rounded-card border border-dashed border-border/50 bg-surface/50 px-6 py-8 text-center">
-        <History className="mx-auto h-6 w-6 text-muted/40" />
+        <History className="mx-auto h-[24px] w-[24px] text-muted/40" />
         <div className="mt-2 text-xs text-muted">暂无历史分析报告</div>
         <div className="mt-0.5 text-[10px] text-muted/60">选择个股后点击「AI 财务分析」生成,报告会自动保存在此</div>
       </div>
@@ -40,7 +40,7 @@ export function ReportHistoryPanel() {
   }
 
   return (
-    <div className="leaf-cell overflow-hidden">
+    <div className="border-t border-border-strong pt-4">
       {/* 标题栏 */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50 bg-elevated/20">
         <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export function ReportHistoryPanel() {
               onClick={() => openHistoryReport(r.id)}
             >
               {/* 图标 */}
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
+              <div className={`flex h-[32px] w-[32px] items-center justify-center rounded-lg shrink-0 ${
                 isGenerating
                   ? 'bg-accent/10 text-accent'
                   : 'bg-elevated text-secondary group-hover:text-accent'
@@ -98,7 +98,7 @@ export function ReportHistoryPanel() {
               {/* 删除按钮 */}
               <button
                 onClick={e => { e.stopPropagation(); deleteReport(r.id) }}
-                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-danger/10 text-muted hover:text-danger transition-all shrink-0"
+                className="ctl ctl-sm ctl-ghost ctl-icon opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-muted hover:text-danger transition-all shrink-0"
                 title="删除"
               >
                 <Trash2 className="h-3.5 w-3.5" />

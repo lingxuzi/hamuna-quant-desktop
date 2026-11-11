@@ -6,8 +6,10 @@ import { toast } from '@/components/Toast'
 import { api, type FactorLibraryItem } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { GenerateFactorStrategyDialog } from './GenerateFactorStrategyDialog'
+import { INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
-const INPUT_CLS = 'rounded-input border border-border bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none'
+const INPUT_CLS = INPUT_MD
 
 const KIND_META: Record<FactorLibraryItem['kind'], { label: string; cls: string }> = {
   base: { label: '基础', cls: 'bg-elevated text-secondary' },
@@ -27,7 +29,35 @@ const BUILTIN_STATUS = { label: '内置', cls: 'bg-elevated/60 text-muted' }
 const statusOf = (item: FactorLibraryItem) =>
   (item.status && STATUS_META[item.status]) || BUILTIN_STATUS
 
-export function FactorLibrary({ onInspect, onEdit }: { onInspect: (factorId: string) => void; onEdit?: (factorId: string) => void }) {
+/** 名录表列 (设计稿 .fac): 「因子」列恒显, 其余由页头「列设置」开关 */
+const COLS = [
+  { key: 'label', label: '因子', width: '', cls: 'px-2 py-[7px] text-xs text-foreground' },
+  { key: 'group', label: '维度', width: 'w-[88px]', cls: 'px-2 text-[10.5px] text-muted' },
+  { key: 'kind', label: '类型', width: 'w-[64px]', cls: 'px-2 font-mono text-[9.5px] text-muted' },
+  { key: 'formula', label: '公式 / 定义', width: '', cls: 'px-2 font-mono text-[10px] text-muted' },
+  { key: 'status', label: '', width: 'w-[110px]', cls: 'px-2 text-right' },
+] as const
+
+type ColKey = typeof COLS[number]['key']
+
+function cellOf(item: FactorLibraryItem, key: ColKey) {
+  switch (key) {
+    case 'label': return item.label
+    case 'group': return item.group
+    case 'kind': return item.kind
+    case 'formula': return item.formula || '—'
+    case 'status': return (
+      <span className={`text-[9.5px] ${item.status ? 'text-secondary' : 'text-muted/70'}`}>{statusOf(item).label}</span>
+    )
+  }
+}
+
+export function FactorLibrary({ onInspect, onEdit, hiddenCols }: {
+  onInspect: (factorId: string) => void
+  onEdit?: (factorId: string) => void
+  /** 页头「列设置」关掉的列 (因子列恒显) */
+  hiddenCols?: string[]
+}) {
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState('all')
   const [group, setGroup] = useState('all')
@@ -64,42 +94,31 @@ export function FactorLibrary({ onInspect, onEdit }: { onInspect: (factorId: str
     })
   }, [factors, query, kind, group, status])
 
-  // 按分组分区展示 (粘性组标题 + 响应式卡片网格), 替代旧八列宽表
-  const grouped = useMemo(() => {
-    const map = new Map<string, FactorLibraryItem[]>()
-    for (const item of filtered) {
-      const list = map.get(item.group) ?? []
-      list.push(item)
-      map.set(item.group, list)
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, 'zh'))
-  }, [filtered])
-
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden leaf-cell bg-surface/80">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-1.5 pb-2.5">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-[12px] w-[12px] -translate-y-1/2 text-muted" />
           <input
             type="text"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            placeholder="搜索因子 (id / 名称 / 公式)"
-            className={`${INPUT_CLS} w-56 pl-7`}
+            placeholder="搜索因子"
+            className={cn(INPUT_CLS, 'w-52 pl-7')}
           />
         </div>
-        <select value={kind} onChange={event => setKind(event.target.value)} className={`${INPUT_CLS} w-24`} aria-label="因子类型">
+        <select value={kind} onChange={event => setKind(event.target.value)} className={cn(SELECT_MD, 'w-24')} aria-label="因子类型">
           <option value="all">全部类型</option>
           <option value="base">基础</option>
           <option value="virtual">虚拟</option>
           <option value="composite">复合</option>
           <option value="custom">自定义</option>
         </select>
-        <select value={group} onChange={event => setGroup(event.target.value)} className={`${INPUT_CLS} w-28`} aria-label="因子分组">
+        <select value={group} onChange={event => setGroup(event.target.value)} className={cn(SELECT_MD, 'w-28')} aria-label="因子分组">
           <option value="all">全部分组</option>
           {groups.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
-        <select value={status} onChange={event => setStatus(event.target.value)} className={`${INPUT_CLS} w-24`} aria-label="生命周期状态">
+        <select value={status} onChange={event => setStatus(event.target.value)} className={cn(SELECT_MD, 'w-24')} aria-label="生命周期状态">
           <option value="all">全部状态</option>
           <option value="builtin">内置</option>
           <option value="active">激活</option>
@@ -110,110 +129,58 @@ export function FactorLibrary({ onInspect, onEdit }: { onInspect: (factorId: str
         <span className="ml-auto text-[10px] text-muted">{lib.isLoading ? '加载中…' : `${filtered.length} / ${factors.length} 个因子`}</span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* 名录表 (design/v2/05 的 .fac): 一行一个因子, 点行看详情 */}
+      <div className="min-h-0 overflow-y-auto border-t border-border">
         {lib.isError && (
           <div className="m-3 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
             {String((lib.error as Error).message)}
           </div>
         )}
-        {lib.isLoading && (
-          <div className="p-6 text-center text-xs text-muted">因子库加载中…</div>
-        )}
+        {lib.isLoading && <div className="py-10 text-center text-xs text-muted">因子库加载中…</div>}
         {!lib.isLoading && !lib.isError && filtered.length === 0 && (
-          <div className="p-6 text-center text-xs text-muted">无匹配因子</div>
+          <div className="py-10 text-center text-xs text-muted">无匹配因子</div>
         )}
-        {!lib.isLoading && grouped.length > 0 && (
-          <div className="space-y-4 p-3">
-            {grouped.map(([group, items]) => (
-              <section key={group}>
-                <header className="sticky top-0 z-10 -mx-3 mb-2 flex items-center gap-2 bg-surface/95 px-3 py-1.5 backdrop-blur-sm">
-                  <span className="text-xs font-semibold text-foreground">{group}</span>
-                  <span className="font-mono text-[10px] text-muted">{items.length}</span>
-                  <span className="h-px flex-1 bg-border/60" aria-hidden="true" />
-                </header>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3">
-                  {items.map(item => (
-                    <FactorCard
-                      key={item.id}
-                      item={item}
-                      onOpen={setDetail}
-                      onInspect={onInspect}
-                      onEdit={onEdit}
-                    />
+        {!lib.isLoading && filtered.length > 0 && (
+          <>
+            <table className="w-full table-fixed text-[11.5px]">
+              <colgroup>
+                {COLS.filter(col => col.key === 'label' || !hiddenCols?.includes(col.key)).map(col => (
+                  <col key={col.key} className={col.width} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr>
+                  {COLS.filter(col => col.key === 'label' || !hiddenCols?.includes(col.key)).map(col => (
+                    <th key={col.key} scope="col" className="whitespace-nowrap border-b border-border pb-[7px] px-2 text-left text-[9.5px] font-normal tracking-[.1em] text-muted">{col.label}</th>
                   ))}
-                </div>
-              </section>
-            ))}
-          </div>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(item => (
+                  <tr
+                    key={item.id}
+                    onClick={() => setDetail(item)}
+                    title={item.formula || item.label}
+                    className="cursor-pointer transition-colors duration-150 hover:bg-accent/[0.06]"
+                  >
+                    {COLS.filter(col => col.key === 'label' || !hiddenCols?.includes(col.key)).map(col => (
+                      <td key={col.key} className={`truncate ${col.cls}`}>{cellOf(item, col.key)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-between border-t border-border px-2 pt-2.5 text-[10px] text-muted">
+              <span>
+                {factors.length} 个因子 · 基础 {factors.filter(f => f.kind === 'base').length} · 派生 {factors.filter(f => f.kind !== 'base').length}
+              </span>
+              <span>{groups.length} 个维度</span>
+            </div>
+          </>
         )}
       </div>
 
       {detail && <FactorDetailModal item={detail} onClose={() => setDetail(null)} onInspect={onInspect} onEdit={onEdit} />}
-    </div>
-  )
-}
-
-/** 因子卡片: 分组网格的单个因子 — 公式完整换行展示 (旧表格列被截断),
- *  点击卡片开详情弹窗, 悬停直达 去检验/编辑。 */
-function FactorCard({
-  item,
-  onOpen,
-  onInspect,
-  onEdit,
-}: {
-  item: FactorLibraryItem
-  onOpen: (item: FactorLibraryItem) => void
-  onInspect: (factorId: string) => void
-  onEdit?: (factorId: string) => void
-}) {
-  const assetLabel = item.asset_types.includes('stock') && item.asset_types.includes('etf')
-    ? '股票/ETF'
-    : item.asset_types.join('/')
-  return (
-    <div
-      onClick={() => onOpen(item)}
-      title="点击查看完整详情"
-      className="group flex cursor-pointer flex-col gap-2 rounded-card border border-border bg-base/40 p-3 transition-colors duration-150 ease-smooth hover:border-accent/40 hover:bg-elevated/30"
-    >
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        <span className="truncate text-xs font-medium text-foreground">{item.label}</span>
-        <span className={`inline-flex shrink-0 rounded-btn px-1.5 py-0.5 text-[10px] font-medium ${KIND_META[item.kind].cls}`}>
-          {KIND_META[item.kind].label}
-        </span>
-        <span className={`inline-flex shrink-0 rounded-btn px-1.5 py-0.5 text-[10px] font-medium ${statusOf(item).cls}`}>
-          {statusOf(item).label}
-        </span>
-        {item.pit && (
-          <span className="shrink-0 text-[10px] text-amber-500" title="点时数据: 仅使用公告日不晚于当日的财务数据">点时</span>
-        )}
-      </div>
-      <div className="font-mono text-[10px] text-muted">{item.id}</div>
-      <p className="break-all font-mono text-[11px] leading-relaxed text-secondary">{item.formula}</p>
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 pt-2">
-        <span className="min-w-0 truncate text-[10px] text-muted" title={`预热: ${item.warmup_bars > 1 ? `${item.warmup_bars} 个交易日` : '无需滚动窗口'} · 适用: ${assetLabel}`}>
-          {item.warmup_bars > 1 ? `预热 ${item.warmup_bars} 日` : '无预热'} · {assetLabel}
-        </span>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {item.kind === 'custom' && onEdit && (
-            <button
-              type="button"
-              onClick={event => { event.stopPropagation(); onEdit(item.id) }}
-              className="rounded-btn px-2 py-1 text-[10px] text-secondary opacity-0 transition-opacity duration-150 ease-smooth hover:bg-elevated hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-              title="在编辑器中打开该公式"
-            >
-              编辑
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={event => { event.stopPropagation(); onInspect(item.id) }}
-            className="inline-flex items-center gap-0.5 rounded-btn px-2 py-1 text-[10px] text-accent transition-colors hover:bg-accent/10"
-            title="去检验该因子（切到发现页并只选它）"
-          >
-            去检验 <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -300,7 +267,7 @@ function FactorDetailModal({
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-4 w-4 shrink-0 text-accent" />
+            <FlaskConical className="h-[16px] w-[16px] shrink-0 text-accent" />
             <span id="factor-detail-title" className="truncate text-sm font-semibold text-foreground">{item.label}</span>
             <span className={`inline-flex shrink-0 rounded-btn px-1.5 py-0.5 text-[10px] font-medium ${KIND_META[item.kind].cls}`}>
               {KIND_META[item.kind].label}
@@ -314,10 +281,10 @@ function FactorDetailModal({
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted transition-colors hover:text-foreground"
+          className="ctl ctl-md ctl-ghost inline-flex w-[28px] px-0 shrink-0 items-center justify-center hover:text-foreground"
           aria-label="关闭"
         >
-          <X className="h-4 w-4" />
+          <X className="h-[16px] w-[16px]" />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -339,14 +306,14 @@ function FactorDetailModal({
                 value={groupDraft}
                 maxLength={24}
                 onChange={event => setGroupDraft(event.target.value)}
-                className="h-6 w-36 rounded-input border border-border bg-base/60 px-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+                className="ctl ctl-sm ctl-input w-36 bg-base/60 px-1.5 focus:border-accent"
                 aria-label="修改分组"
               />
               <button
                 type="button"
                 onClick={() => setGroup.mutate()}
                 disabled={setGroup.isPending || !groupDraft.trim() || groupDraft.trim() === item.group}
-                className="rounded-btn border border-border px-2 py-0.5 text-[10px] text-secondary transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-40"
+                className="ctl ctl-sm ctl-btn px-1.5 hover:border-accent/40 hover:text-accent disabled:opacity-40"
               >
                 {setGroup.isPending ? '保存中…' : '保存'}
               </button>
@@ -359,7 +326,7 @@ function FactorDetailModal({
                   type="button"
                   onClick={() => setStatus.mutate(statusKey)}
                   disabled={setStatus.isPending}
-                  className={`rounded-btn border px-2 py-0.5 text-[10px] transition-colors disabled:opacity-40 ${(item.status ?? '') === statusKey
+                  className={`ctl ctl-sm ctl-btn px-1.5 disabled:opacity-40 ${(item.status ?? '') === statusKey
                     ? 'border-accent/60 bg-accent/10 font-medium text-accent'
                     : 'border-border text-secondary hover:border-accent/40 hover:text-accent'
                   }`}
@@ -379,20 +346,20 @@ function FactorDetailModal({
         <button
           type="button"
           onClick={() => setGenerateOpen(true)}
-          className="inline-flex items-center gap-1 rounded-btn border border-accent/40 px-2.5 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10"
+          className="ctl ctl-md ctl-btn inline-flex items-center gap-1 border-accent/40 px-2.5 hover:bg-accent/10"
           title="按该因子生成单因子排名策略, 保存到自定义策略后可直接回测"
         >
-          <Sparkles className="h-3 w-3" />
+          <Sparkles className="h-[12px] w-[12px]" />
           生成策略
         </button>
         {item.kind === 'custom' && onEdit && (
           <button
             type="button"
             onClick={() => { onClose(); onEdit(item.id) }}
-            className="inline-flex items-center gap-1 rounded-btn border border-accent/40 px-2.5 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10"
+            className="ctl ctl-md ctl-btn inline-flex items-center gap-1 border-accent/40 px-2.5 hover:bg-accent/10"
             title="在编辑器中打开该公式, 修改后保存为新版本"
           >
-            <PenLine className="h-3 w-3" />
+            <PenLine className="h-[12px] w-[12px]" />
             编辑公式
           </button>
         )}
@@ -403,14 +370,14 @@ function FactorDetailModal({
                 type="button"
                 onClick={() => removeFactor.mutate(false)}
                 disabled={removeFactor.isPending}
-                className="inline-flex shrink-0 items-center gap-1 rounded-btn bg-danger px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-danger/90 disabled:opacity-40"
+                className="ctl ctl-md ctl-btn danger inline-flex shrink-0 items-center gap-1 px-2.5 hover:bg-danger/90 disabled:opacity-40"
               >
                 {removeFactor.isPending ? '删除中…' : '确认删除'}
               </button>
               <button
                 type="button"
                 onClick={() => { setConfirmDelete(false); setBlockedRefs(null) }}
-                className="inline-flex shrink-0 items-center rounded-btn border border-border px-2.5 py-1.5 text-[11px] text-secondary transition-colors hover:text-foreground"
+                className="ctl ctl-md ctl-btn inline-flex shrink-0 items-center px-2.5 hover:text-foreground"
               >
                 取消
               </button>
@@ -419,10 +386,10 @@ function FactorDetailModal({
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-btn border border-danger/40 px-2.5 py-1.5 text-[11px] font-medium text-danger transition-colors hover:bg-danger/10"
+              className="ctl ctl-md ctl-btn inline-flex shrink-0 items-center gap-1 border-danger/40 px-2.5 hover:bg-danger/10"
               title="删除该自定义/复合因子; 被策略或复合因子引用时需强制删除"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-[12px] w-[12px]" />
               删除
             </button>
           )
@@ -430,9 +397,9 @@ function FactorDetailModal({
         <button
           type="button"
           onClick={() => { onClose(); onInspect(item.id) }}
-          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-btn bg-accent px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-accent/90"
+          className="ctl ctl-md ctl-btn pri ml-auto inline-flex shrink-0 items-center gap-1 px-2.5 hover:bg-accent/90"
         >
-          检验此因子 <ArrowRight className="h-3 w-3" />
+          检验此因子 <ArrowRight className="h-[12px] w-[12px]" />
         </button>
         {blockedRefs && (
           <div className="w-full rounded-btn border border-danger/40 bg-danger/10 px-3 py-2 text-[11px] leading-relaxed text-danger">
@@ -443,7 +410,7 @@ function FactorDetailModal({
                 type="button"
                 onClick={() => removeFactor.mutate(true)}
                 disabled={removeFactor.isPending}
-                className="rounded-btn bg-danger px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-danger/90 disabled:opacity-40"
+                className="ctl ctl-sm ctl-btn danger px-1.5 hover:bg-danger/90 disabled:opacity-40"
               >
                 {removeFactor.isPending ? '删除中…' : '仍要强制删除'}
               </button>

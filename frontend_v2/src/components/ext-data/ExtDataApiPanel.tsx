@@ -39,7 +39,7 @@ export function ExtDataApiPanel({ config, copied, setCopied }: {
         <div className="flex items-center gap-1.5 bg-elevated rounded-md px-2.5 py-1.5">
           <code className="text-[11px] font-mono text-accent flex-1 select-all">{endpoint}</code>
           <button onClick={() => handleCopy(endpoint)} className="text-muted hover:text-secondary transition-colors">
-            {copied ? <Check className="h-3 w-3 text-accent" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-[12px] w-[12px] text-accent" /> : <Copy className="h-[12px] w-[12px]" />}
           </button>
         </div>
       </div>
@@ -58,7 +58,7 @@ export function ExtDataApiPanel({ config, copied, setCopied }: {
             onClick={() => handleCopy(curlCmd)}
             className="text-[10px] text-accent hover:text-accent/80 flex items-center gap-0.5 transition-colors"
           >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-[12px] w-[12px]" /> : <Copy className="h-[12px] w-[12px]" />}
             复制
           </button>
         </div>

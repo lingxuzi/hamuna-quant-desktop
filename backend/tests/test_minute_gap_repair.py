@@ -42,7 +42,7 @@ def repair_env(monkeypatch, tmp_path):
     monkeypatch.setattr(kline.kline_sync, "sync_and_persist_minute", sync)
     monkeypatch.setattr("app.jobs.daily_pipeline._refresh_single_view", refresh)
     monkeypatch.setattr("app.api.data.invalidate_storage_cache", invalidate)
-    monkeypatch.setattr("app.tickflow.pools.get_pool", pool)
+    monkeypatch.setattr("app.services.watchlist.symbols", pool)
     app = FastAPI()
     app.include_router(kline.router)
     app.state.repo = SimpleNamespace(

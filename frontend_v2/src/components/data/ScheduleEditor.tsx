@@ -22,18 +22,18 @@ export function ScheduleEditor({ value, onSave, loading, hint }: {
       <input
         type="number" min={0} max={23} value={h}
         onChange={e => setH(Math.max(0, Math.min(23, Number(e.target.value))))}
-        className="w-12 px-1.5 py-1 rounded-btn bg-base border border-border text-xs font-mono text-foreground text-center"
+        className="ctl ctl-sm ctl-input w-12 px-1.5 font-mono text-center bg-base"
       />
       <span className="text-xs text-muted">:</span>
       <input
         type="number" min={0} max={59} value={m}
         onChange={e => setM(Math.max(0, Math.min(59, Number(e.target.value))))}
-        className="w-12 px-1.5 py-1 rounded-btn bg-base border border-border text-xs font-mono text-foreground text-center"
+        className="ctl ctl-sm ctl-input w-12 px-1.5 font-mono text-center bg-base"
       />
       <button
         onClick={handleSave}
         disabled={loading || (h === value.hour && m === value.minute)}
-        className="px-2.5 py-1 rounded-btn bg-accent/15 text-accent text-[11px] font-medium hover:bg-accent/25 disabled:opacity-40 transition-colors"
+        className="ctl ctl-sm ctl-btn soft px-1.5 hover:bg-accent/25 disabled:opacity-40 bg-accent/15"
       >
         {loading ? '保存中…' : '保存'}
       </button>

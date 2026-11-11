@@ -1,6 +1,6 @@
 """短线风向标服务 (fuyao 专有) — 复盘页卡片 + AI 复盘上下文。
 
-非路由数据集: tickflow 无对应能力, 直接经 custom_sources 调 fuyao provider;
+非路由数据集: 直接经 custom_sources 调 fuyao provider;
 fuyao 未配置时返回 source_unavailable 状态, 前端降级提示。
 
 数据契约 (实测 2026-08-30, 60 交易日回测 353 样本):

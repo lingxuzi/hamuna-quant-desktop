@@ -233,7 +233,7 @@ def test_disable_uninstall_blocks_all_routing_references(isolated, monkeypatch):
 
 
 def test_confirmed_uninstall_resets_only_its_routes_and_preserves_keys(isolated):
-    from app.data_providers.capabilities import CAPABILITY_REGISTRY
+    from app.data_providers.capabilities import CAPABILITY_REGISTRY, default_provider_for
 
     install(bundle())
     routes = {cap["field"]: "demo_source" for cap in CAPABILITY_REGISTRY if cap["field"]}
@@ -242,10 +242,17 @@ def test_confirmed_uninstall_resets_only_its_routes_and_preserves_keys(isolated)
     preferences.save({**routes, "realtime_quotes_enabled": False})
     secrets_store.save({"demo_source_api_key": "keep-me"})
 
+    # 卸载重置写的是「实时计算的默认源」(注册表实时计算, 不读缓存快照),
+    # 用同一个函数取期望值 —— CAPABILITY_REGISTRY 里的 default 是被刷新过的
+    # 全局快照, 依赖测试顺序。
+    expected = {
+        cap["field"]: default_provider_for(cap["id"])
+        for cap in CAPABILITY_REGISTRY if cap["field"]
+    }
+    expected["daily_data_provider"] = "other_source"
+
     result = packages.manage("demo_source", "remove", reset_routes=True)
 
-    expected = {cap["field"]: cap["default"] for cap in CAPABILITY_REGISTRY if cap["field"]}
-    expected["daily_data_provider"] = "other_source"
     assert preferences.load() == {**expected, "realtime_quotes_enabled": False}
     assert "恢复默认" in result["message"]
     assert packages.read_state("demo_source")["remove"]
@@ -313,11 +320,11 @@ def test_uninstall_restores_routes_and_provider_when_refresh_fails(isolated, mon
 
 
 def test_management_api_accepts_confirmed_route_reset_and_refreshes_capabilities(isolated, monkeypatch):
-    from app.tickflow import policy
+    from app.data_providers import capabilities as capabilities_mod
 
     monkeypatch.setattr("app.services.auth.is_configured", lambda: False)
     sentinel = object()
-    monkeypatch.setattr(policy, "detect_capabilities", lambda: sentinel)
+    monkeypatch.setattr(capabilities_mod, "detect_capabilities", lambda: sentinel)
     install(bundle())
     preferences.save({"realtime_data_provider": "demo_source"})
     app = FastAPI()
@@ -327,7 +334,7 @@ def test_management_api_accepts_confirmed_route_reset_and_refreshes_capabilities
         assert refused.status_code == 400
         result = client.post("/api/custom/source-packages/demo_source/manage", json={"action": "remove", "reset_routes": True})
         assert result.status_code == 200
-        assert preferences.get_realtime_data_provider() == "tickflow"
+        assert preferences.get_realtime_data_provider() == ""  # 卸载后回退默认 (无内置 realtime 源装上时空串)
         assert app.state.capabilities is sentinel
 
 
@@ -371,7 +378,7 @@ def test_uninstall_serializes_with_a_concurrent_routing_request(isolated, monkey
         removal.result(timeout=3)
         with pytest.raises(HTTPException, match="等待卸载"):
             routing.result(timeout=3)
-    assert preferences.get_realtime_data_provider() == "tickflow"
+    assert preferences.get_realtime_data_provider() == ""
 
 
 def test_handle_delays_close_until_stream_consumed():

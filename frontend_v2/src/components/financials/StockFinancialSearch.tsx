@@ -10,6 +10,8 @@ interface Props {
   onSelect: (symbol: string, name: string) => void
   /** 搜索资产类型, 逗号分隔 (默认 'stock')。如 'stock,index' */
   assetTypes?: string
+  /** 输入框右侧显示「查 看」按钮 (设计稿 23 .srch-big), 点击选中首个匹配 */
+  showViewButton?: boolean
 }
 
 /**
@@ -17,7 +19,7 @@ interface Props {
  * 复用 instrumentSearch 后端(代码 / 名称模糊匹配),单选即跳转该股财务详情。
  * 模式对齐 Watchlist.StockSearchBox:useQuery + 外部点击关闭 + 键盘导航。
  */
-export function StockFinancialSearch({ onSelect, assetTypes }: Props) {
+export function StockFinancialSearch({ onSelect, assetTypes, showViewButton }: Props) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
@@ -72,22 +74,36 @@ export function StockFinancialSearch({ onSelect, assetTypes }: Props) {
   return (
     <div ref={containerRef} className="relative w-full max-w-xl mx-auto">
       <div className="relative flex items-center">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] text-muted pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
-          placeholder="输入股票代码或名称，如 600000 / 浦发"
+          placeholder="输入代码或名称，如 600519 / 贵州茅台"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); setActiveIdx(-1) }}
           onFocus={() => { if (trimmed) setOpen(true) }}
           onKeyDown={handleKeyDown}
           // 较宽、更醒目 —— 作为财务页主入口
-          className="w-full h-11 pl-11 pr-10 rounded-card bg-surface border border-border text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/50 focus:bg-base transition-colors"
+          className="ctl ctl-lg ctl-input w-full pl-11 pr-10 rounded-card placeholder:text-muted focus:border-accent/50 focus:bg-base bg-surface"
         />
         {search.isFetching && (
-          <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted animate-spin" />
+          <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] text-muted animate-spin" />
         )}
       </div>
+
+      {showViewButton && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            disabled={!trimmed || results.length === 0}
+            onClick={() => handleSelect(results[0])}
+            className="ctl-btn ctl-sm"
+            title={trimmed ? `查看 ${results[0]?.name ?? ''}` : '输入代码或名称后可查看'}
+          >
+            查 看
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {open && trimmed && (

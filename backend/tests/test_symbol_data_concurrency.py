@@ -10,8 +10,8 @@ import polars as pl
 from app.api import kline
 from app.services import daily_bootstrap, kline_sync
 from app.services.quote_service import QuoteService
-from app.tickflow.capabilities import CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def test_same_minute_sync_executes_once_and_notifies_both_windows(tmp_path, monkeypatch):

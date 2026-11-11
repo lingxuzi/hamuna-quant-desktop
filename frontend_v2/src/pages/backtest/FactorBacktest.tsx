@@ -12,6 +12,8 @@ import { QK } from '@/lib/queryKeys'
 import { FactorICChart } from './charts/FactorICChart'
 import { FactorGroupNavChart } from './charts/FactorGroupNavChart'
 import { factorResultCandidate } from './researchCandidates'
+import { INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10)
 const monthsAgo = (months: number) => {
@@ -22,22 +24,23 @@ const monthsAgo = (months: number) => {
 const TODAY = formatDate(new Date())
 const THREE_MONTHS_AGO = monthsAgo(3)
 
-const INPUT_CLS = `w-full px-2.5 py-1.5 rounded-input bg-surface border border-border text-xs
-  focus:outline-none focus:border-accent transition-colors duration-150 ease-smooth`
+const INPUT_CLS = cn(INPUT_MD, 'w-full transition-colors duration-150 ease-smooth')
 
-function StatCard({ label, value, highlight }: {
+const SELECT_CLS = cn(SELECT_MD, 'w-full transition-colors duration-150 ease-smooth')
+
+/** 读数带的一格: 标签 / 数值 / 旁注 (设计稿 .readout 的一格)。 */
+function ReadoutCell({ label, value, note, tone }: {
   label: string
-  value: string | null | undefined
-  highlight?: 'bull' | 'bear' | 'neutral'
+  value: string
+  note?: string
+  /** up = 涨色 (bull), down = 跌色 (bear) */
+  tone?: 'up' | 'down'
 }) {
-  const colorCls = highlight === 'bull'
-    ? 'text-bull' : highlight === 'bear' ? 'text-bear' : ''
   return (
-    <div>
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className={`mt-1 text-lg font-mono font-semibold tracking-tight num ${colorCls}`}>
-        {value ?? '—'}
-      </div>
+    <div className={tone}>
+      <span className="k">{label}</span>
+      <div className="v">{value}</div>
+      {note && <small>{note}</small>}
     </div>
   )
 }
@@ -45,37 +48,37 @@ function StatCard({ label, value, highlight }: {
 function LoadingPanel({ symbolsText }: { symbolsText: string }) {
   return (
     <div className="space-y-4">
-      <div className="rounded-card border border-accent/25 bg-accent/[0.04] p-4">
+      <div className="border-b border-border pb-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-foreground">正在计算因子分析</div>
             <div className="mt-1 text-xs text-muted">{symbolsText} · 完成后会一次性刷新 IC、分层收益和净值曲线。</div>
           </div>
-          <div className="h-8 w-8 rounded-full border-2 border-accent/25 border-t-accent animate-spin" />
+          <div className="h-[32px] w-[32px] rounded-full border-2 border-accent/25 border-t-accent animate-spin" />
         </div>
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-base">
           <div className="h-full w-1/2 rounded-full bg-accent/70 animate-pulse" />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="hgrid grid grid-cols-2 md:grid-cols-4">
         {['读取因子', '计算 IC', '分层回测', '汇总指标'].map(item => (
-          <div key={item} className="rounded-btn border border-border bg-surface p-3">
-            <div className="h-2 w-10 rounded bg-accent/30 animate-pulse" />
+          <div key={item} className="p-3.5">
+            <div className="h-2 w-10 bg-accent/30 animate-pulse" />
             <div className="mt-3 text-xs text-secondary">{item}</div>
           </div>
         ))}
       </div>
 
-      <div className="leaf-cell">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-medium text-secondary">分层净值预览</div>
-          <div className="text-[11px] text-muted">等待后端返回完整结果</div>
+      <div className="plot">
+        <div className="plot-hd">
+          <b>分层净值预览</b><span>GROUP NAV</span>
+          <div className="leg"><i className="m">等待后端返回完整结果</i></div>
         </div>
-        <div className="mt-4 h-[260px] rounded-btn border border-border bg-base/60 p-4">
-          <div className="flex h-full items-end gap-2 opacity-70">
+        <div className="plotbody p-4">
+          <div className="flex h-[220px] items-end gap-2 opacity-70">
             {[46, 38, 54, 50, 64, 58, 74, 68, 84, 78, 90, 86].map((h, i) => (
-              <div key={i} className="flex-1 rounded-t bg-accent/20 animate-pulse" style={{ height: `${h}%` }} />
+              <div key={i} className="flex-1 bg-accent/20 animate-pulse" style={{ height: `${h}%` }} />
             ))}
           </div>
         </div>
@@ -84,7 +87,12 @@ function LoadingPanel({ symbolsText }: { symbolsText: string }) {
   )
 }
 
-export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = false }: { initialFactorName?: string; autoRun?: boolean }) {
+export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = false, onRunStateChange }: {
+  initialFactorName?: string
+  autoRun?: boolean
+  /** 回测运行态上报 (独立页工具条的「本次未运行 / 运行中 / 已出结果」签) */
+  onRunStateChange?: (state: { running: boolean; hasResult: boolean }) => void
+}) {
   const queryClient = useQueryClient()
   const [factorName, setFactorName] = useState(initialFactorName)
   const [symbols, setSymbols] = useState('')
@@ -102,6 +110,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
     queryKey: QK.factorColumns,
     queryFn: api.factorColumns,
   })
+
 
   // 按 group 分类的因子
   const factorGroups = useMemo(() => {
@@ -155,6 +164,9 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRun])
 
+  useEffect(() => {
+    onRunStateChange?.({ running: run.isPending, hasResult: result != null })
+  }, [run.isPending, result, onRunStateChange])
   const saveCandidate = useMutation({
     mutationFn: () => {
       if (!result) throw new Error('暂无因子结果')
@@ -195,26 +207,25 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
         : rangeKey === 'all'
           ? '全部历史'
           : '自定义区间'
-  const rangeButtonCls = (key: string) => `rounded-btn px-2 py-1 text-[11px] font-medium transition-colors ${rangeKey === key
-    ? 'bg-accent/15 text-accent'
-    : 'text-muted hover:bg-elevated/70 hover:text-secondary'
-  }`
+
+  const hasIC = !!result && result.ic_series.length > 0
+  const hasNav = !!result && result.group_nav.length > 0
 
   return (
-    <div className="h-full min-h-0 overflow-hidden leaf-cell bg-surface/80 grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)]">
-      {/* 配置面板 */}
-      <section className="space-y-3 border-b xl:border-b-0 xl:border-r border-border bg-base/25 px-3 py-3 xl:overflow-y-auto">
+    <div className="h-full min-h-0 overflow-hidden border-t border-rule-strong grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)]">
+      {/* 配置栏 (design/v2/14 的 .cfg) */}
+      <section className="min-w-0 space-y-4 overflow-y-auto border-b border-border px-3 pb-4 xl:border-b-0 xl:border-r xl:pr-4">
         <div className="border-b border-border/70 pb-2">
           <div className="text-xs font-semibold text-foreground">因子配置</div>
           <div className="mt-0.5 text-[10px] leading-4 text-muted">选择因子、区间和分组方式。默认最近 3 个月。</div>
         </div>
 
         <div>
-          <label className="text-xs font-medium text-secondary block mb-1.5">因子</label>
+          <div className="figcap">因 子</div>
           <select
             value={factorName}
             onChange={e => setFactorName(e.target.value)}
-            className={INPUT_CLS}
+            className={SELECT_CLS}
           >
             {Object.entries(factorGroups).map(([group, cols]) => (
               <optgroup key={group} label={group}>
@@ -225,49 +236,49 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
             ))}
           </select>
           {factorDesc && (
-            <p className="mt-1 text-[11px] text-muted">{factorDesc}</p>
+            <p className="mt-1 text-[9.5px] leading-relaxed text-muted">{factorDesc}</p>
           )}
+          <p className="mt-1 text-[9.5px] leading-relaxed text-muted">
+            因子库 {columns.data?.columns.length ?? 0} 个, {Object.keys(factorGroups).length} 个维度。
+          </p>
         </div>
 
         <div>
-          <label className="text-xs font-medium text-secondary block mb-1.5">资产类型</label>
-          <div className="inline-flex h-8 rounded-btn border border-border overflow-hidden mb-2">
+          <div className="figcap">资 产 类 型</div>
+          <div className="seg">
             {(['stock', 'etf'] as const).map(t => (
               <button
                 key={t}
                 type="button"
                 onClick={() => { setAssetType(t); setSymbols('') }}
-                className={`h-full px-3 text-xs font-medium transition-colors cursor-pointer
-                  ${assetType === t ? 'bg-accent/10 text-accent' : 'text-muted hover:text-foreground'}`}
+                aria-pressed={assetType === t}
               >
                 {t === 'stock' ? '股票' : 'ETF'}
               </button>
             ))}
           </div>
-          <label className="text-xs font-medium text-secondary block mb-1.5">
-            标的(逗号分隔，留空=全市场{assetType === 'etf' ? ' ETF' : ''})
+        </div>
+
+        <div>
+          <div className="figcap">标 的 池</div>
+          <label className="mb-1 block text-[10.5px] text-secondary">
+            代码 (逗号分隔，留空=全市场{assetType === 'etf' ? ' ETF' : ''})
           </label>
           <input
             type="text"
             value={symbols}
             onChange={e => setSymbols(e.target.value)}
             placeholder="留空则使用全市场，建议最近3个月"
-            className={`w-full px-2.5 py-1.5 rounded-input bg-surface border border-border text-xs font-mono
-              focus:outline-none focus:border-accent transition-colors duration-150 ease-smooth`}
+            className={`ctl ctl-md ctl-input w-full px-2.5 bg-surface font-mono focus:border-accent duration-150 ease-smooth`}
           />
+          <p className="mt-1 text-[9.5px] leading-relaxed text-muted">留空表示全市场。</p>
         </div>
 
-        <div className="rounded-btn border border-border bg-surface p-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-medium text-foreground">回测区间</div>
-            <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-              {rangeTitle}
-            </span>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2">
+        <div>
+          <div className="figcap">回 测 范 围</div>
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-secondary block mb-1">开始</label>
+              <label className="mb-1 block text-[10.5px] text-secondary">开始</label>
               <DatePicker
                 value={start}
                 onChange={setStart}
@@ -279,7 +290,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
               />
             </div>
             <div>
-              <label className="text-[11px] text-secondary block mb-1">结束</label>
+              <label className="mb-1 block text-[10.5px] text-secondary">结束</label>
               <DatePicker
                 value={end}
                 onChange={setEnd}
@@ -289,73 +300,80 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
               />
             </div>
           </div>
-
-          <div className="mt-2 flex rounded-input bg-base/60 p-0.5">
-            <button type="button" onClick={() => applyRange(3)} className={`${rangeButtonCls('3m')} flex-1`}>3个月</button>
-            <button type="button" onClick={() => applyRange(6)} className={`${rangeButtonCls('6m')} flex-1`}>6个月</button>
-            <button type="button" onClick={() => applyRange(12)} className={`${rangeButtonCls('1y')} flex-1`}>1年</button>
-            <button type="button" onClick={applyAllRange} className={`${rangeButtonCls('all')} flex-1`}>全部</button>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[10.5px] text-secondary">{rangeTitle}</span>
+            <div className="seg">
+              <button type="button" onClick={() => applyRange(3)} aria-pressed={rangeKey === '3m'}>3个月</button>
+              <button type="button" onClick={() => applyRange(6)} aria-pressed={rangeKey === '6m'}>6个月</button>
+              <button type="button" onClick={() => applyRange(12)} aria-pressed={rangeKey === '1y'}>1年</button>
+              <button type="button" onClick={applyAllRange} aria-pressed={rangeKey === 'all'}>全部</button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-medium text-secondary block mb-1.5">分组数</label>
-            <select value={nGroups} onChange={e => setNGroups(Number(e.target.value))} className={INPUT_CLS}>
-              <option value={3}>3组</option>
-              <option value={5}>5组</option>
-              <option value={10}>10组</option>
-            </select>
+        <div>
+          <div className="figcap">分 组 与 调 仓</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-[10.5px] text-secondary">分组数</label>
+              <select value={nGroups} onChange={e => setNGroups(Number(e.target.value))} className={SELECT_CLS}>
+                <option value={3}>3组</option>
+                <option value={5}>5组</option>
+                <option value={10}>10组</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10.5px] text-secondary">权重</label>
+              <select value={weight} onChange={e => setWeight(e.target.value as any)} className={SELECT_CLS}>
+                <option value="equal">等权</option>
+                <option value="factor_weight">因子加权</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="text-xs font-medium text-secondary block mb-1.5">权重</label>
-            <select value={weight} onChange={e => setWeight(e.target.value as any)} className={INPUT_CLS}>
-              <option value="equal">等权</option>
-              <option value="factor_weight">因子加权</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] text-secondary block mb-1">调仓频率</label>
-            <select value={rebalance} onChange={e => setRebalance(e.target.value as any)} className={INPUT_CLS}>
-              <option value="daily">日度</option>
-              <option value="weekly">周度</option>
-              <option value="monthly">月度</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] text-secondary block mb-1">佣金(万分之)</label>
-            <input type="number" min="0" value={fees} onChange={e => setFees(e.target.value)}
-              className={INPUT_CLS} />
-          </div>
-          <div>
-            <label className="text-[11px] text-secondary block mb-1">滑点(bp)</label>
-            <input type="number" min="0" value={slippage} onChange={e => setSlippage(e.target.value)}
-              className={INPUT_CLS} />
+          <label className="mb-1 mt-2 block text-[10.5px] text-secondary">调仓频率</label>
+          <select value={rebalance} onChange={e => setRebalance(e.target.value as any)} className={SELECT_CLS}>
+            <option value="daily">日度</option>
+            <option value="weekly">周度</option>
+            <option value="monthly">月度</option>
+          </select>
+        </div>
+
+        <div>
+          <div className="figcap">成 本</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-[10.5px] text-secondary">佣金 (万分之)</label>
+              <input type="number" min="0" value={fees} onChange={e => setFees(e.target.value)}
+                className={INPUT_CLS} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10.5px] text-secondary">滑点 (bp)</label>
+              <input type="number" min="0" value={slippage} onChange={e => setSlippage(e.target.value)}
+                className={INPUT_CLS} />
+            </div>
           </div>
         </div>
 
         <button
           onClick={() => run.mutate()}
           disabled={run.isPending}
-          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-btn
-            bg-accent text-sm font-medium text-white hover:bg-accent/90
-            transition-colors duration-150 ease-smooth disabled:opacity-50"
+          className="ctl ctl-md ctl-btn pri w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent/90 duration-150 ease-smooth disabled:opacity-50"
         >
           <Play className="h-3.5 w-3.5" />
           {run.isPending ? '分析中…' : '开始因子分析'}
         </button>
       </section>
 
-      {/* 结果面板 */}
-      <section className="min-w-0 space-y-3 bg-base/15 px-3 py-3 xl:overflow-y-auto">
+      {/* 结果区 (design/v2/14 的 .main) */}
+      <section className="min-w-0 space-y-4 overflow-y-auto bg-base/15 px-3 pb-4 xl:pl-5">
         {result?.error && (
-          <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-btn px-3 py-2">
+          <div className="border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             {result.error}
           </div>
         )}
 
         {run.isError && (
-          <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-btn px-3 py-2">
+          <div className="border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             {String((run.error as any).message)}
           </div>
         )}
@@ -369,7 +387,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
         )}
 
         {run.isPending && result && (
-          <div className="rounded-card border border-accent/25 bg-accent/[0.04] px-4 py-3 text-xs text-secondary">
+          <div className="border-b border-border pb-3 text-xs text-secondary">
             正在重新计算，当前暂时展示上一次因子分析结果，完成后会自动替换。
           </div>
         )}
@@ -386,123 +404,138 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-4"
           >
-            {/* IC/IR 指标 */}
-            <div className="leaf-cell">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-foreground">因子历史有效性</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => saveCandidate.mutate()}
-                    disabled={saveCandidate.isPending}
-                    className="inline-flex items-center gap-1 rounded-btn border border-border bg-base/50 px-2 py-1 text-[11px] text-secondary transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
-                  >
-                    <BookmarkPlus className="h-3 w-3" />
-                    {saveCandidate.isPending ? '保存中' : '保存候选'}
-                  </button>
-                  <span className="text-[11px] text-muted">
-                    Rank IC · {rebalance === 'daily' ? '日度' : rebalance === 'weekly' ? '周度' : '月度'}调仓
+            {/* 跑完之后的读数带 */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="figcap mb-0">因 子 历 史 有 效 性</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveCandidate.mutate()}
+                  disabled={saveCandidate.isPending}
+                  className="ctl-btn ctl-sm inline-flex items-center gap-1"
+                >
+                  <BookmarkPlus className="h-[12px] w-[12px]" />
+                  {saveCandidate.isPending ? '保存中' : '保存候选'}
+                </button>
+                <span className="text-[10px] text-muted">
+                  Rank IC · {rebalance === 'daily' ? '日度' : rebalance === 'weekly' ? '周度' : '月度'}调仓
+                </span>
+                {result.elapsed_ms > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] text-muted">
+                    <Clock className="h-[12px] w-[12px]" />
+                    <span className="num">{result.elapsed_ms.toFixed(0)} ms</span>
                   </span>
-                  {result.elapsed_ms > 0 && (
-                    <span className="flex items-center gap-1 text-[11px] text-muted">
-                      <Clock className="h-3 w-3" />
-                      <span className="num">{result.elapsed_ms.toFixed(0)} ms</span>
-                    </span>
-                  )}
-                </div>
+                )}
               </div>
-              {result.ic_mean != null ? (
-                <div className="grid grid-cols-4 gap-4">
-                  <StatCard
-                    label="IC 均值"
-                    value={fmtPct(result.ic_mean)}
-                    highlight={result.ic_mean > 0.03 ? 'bull' : result.ic_mean < -0.03 ? 'bear' : 'neutral'}
-                  />
-                  <StatCard label="IC 标准差" value={result.ic_std != null ? fmtPct(result.ic_std) : null} />
-                  <StatCard
-                    label="ICIR"
-                    value={result.ir != null ? result.ir.toFixed(2) : null}
-                    highlight={result.ir != null
-                      ? Math.abs(result.ir) > 0.5 ? (result.ir > 0 ? 'bull' : 'bear') : 'neutral'
-                      : undefined}
-                  />
-                  <StatCard label="IC 胜率" value={result.ic_win_rate != null ? fmtPct(result.ic_win_rate) : null} />
-                </div>
-              ) : (
-                <div className="rounded-btn border border-border bg-base/40 px-3 py-3 text-xs text-muted">
-                  标的数量过少，无法计算 IC/IR（需 ≥2 只）。可清空标的使用全市场，或补充更多标的。
-                </div>
-              )}
             </div>
 
-            {/* IC 时序图 */}
-            {result.ic_series.length > 0 && (
-              <div className="rounded-card border border-border overflow-hidden">
-                <div className="bg-elevated px-4 py-2">
-                  <span className="text-xs font-medium text-secondary">IC 时序</span>
-                </div>
-                <div className="p-2">
-                  <FactorICChart result={result} />
-                </div>
+            <div className="readout">
+              <ReadoutCell
+                label="IC 均 值"
+                value={result.ic_mean != null ? fmtPct(result.ic_mean) : '—'}
+                note="|IC| > 0.03 视为有效"
+                tone={result.ic_mean == null ? undefined : result.ic_mean > 0.03 ? 'up' : result.ic_mean < -0.03 ? 'down' : undefined}
+              />
+              <ReadoutCell
+                label="IC 标 准 差"
+                value={result.ic_std != null ? fmtPct(result.ic_std) : '—'}
+                note="日频横截面相关波动"
+              />
+              <ReadoutCell
+                label="ICIR"
+                value={result.ir != null ? result.ir.toFixed(2) : '—'}
+                note="|ICIR| > 0.5 视为稳定"
+                tone={result.ir == null ? undefined : Math.abs(result.ir) > 0.5 ? (result.ir > 0 ? 'up' : 'down') : undefined}
+              />
+              <ReadoutCell
+                label="IC 胜 率"
+                value={result.ic_win_rate != null ? fmtPct(result.ic_win_rate) : '—'}
+                note="IC 为正的天数占比"
+              />
+              <ReadoutCell
+                label="多 空 收 益"
+                value={result.long_short_stats?.total_return != null ? fmtPct(result.long_short_stats.total_return) : '—'}
+                note="最高组 − 最低组"
+                tone={result.long_short_stats?.total_return == null ? undefined : result.long_short_stats.total_return > 0 ? 'up' : 'down'}
+              />
+              <ReadoutCell
+                label="样 本"
+                value={`${result.n_symbols} / ${result.n_dates}`}
+                note="标的数 / 交易日数"
+              />
+            </div>
+
+            {result.ic_mean == null && (
+              <div className="border-l-2 border-border pl-3 text-xs leading-relaxed text-muted">
+                标的数量过少，无法计算 IC/IR（需 ≥2 只）。可清空标的使用全市场，或补充更多标的。
               </div>
             )}
 
-            {/* 分层净值 */}
-            {result.group_nav.length > 0 && (
-              <div className="rounded-card border border-border overflow-hidden">
-                <div className="bg-elevated px-4 py-2">
-                  <span className="text-xs font-medium text-secondary">分层净值曲线</span>
-                </div>
-                <div className="p-2">
-                  <FactorGroupNavChart result={result} />
-                </div>
+            {/* IC 时序 + 分层净值 */}
+            {(hasIC || hasNav) && (
+              <div className={`grid gap-4 ${hasIC && hasNav ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
+                {hasIC && (
+                  <div className="plot">
+                    <div className="plot-hd">
+                      <b>IC 时序</b><span>IC SERIES</span>
+                    </div>
+                    <div className="plotbody p-2">
+                      <FactorICChart result={result} />
+                    </div>
+                  </div>
+                )}
+                {hasNav && (
+                  <div className="plot">
+                    <div className="plot-hd">
+                      <b>分层净值</b><span>GROUP NAV</span>
+                    </div>
+                    <div className="plotbody p-2">
+                      <FactorGroupNavChart result={result} />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* 分层统计表 */}
             {result.group_stats.length > 0 && (
-              <div className="rounded-card border border-border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-elevated">
-                    <tr className="text-left text-secondary">
-                      <th className="px-4 py-2.5 font-medium">分组</th>
-                      <th className="px-4 py-2.5 font-medium text-right">总收益</th>
-                      <th className="px-4 py-2.5 font-medium text-right">年化</th>
-                      <th className="px-4 py-2.5 font-medium text-right">最大回撤</th>
-                      <th className="px-4 py-2.5 font-medium text-right">夏普</th>
-                      <th className="px-4 py-2.5 font-medium text-right">胜率</th>
+              <div>
+                <div className="figcap">分 组 统 计</div>
+                <table className="dt">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="text-left">分组</th>
+                      <th scope="col">总收益</th>
+                      <th scope="col">年化</th>
+                      <th scope="col">最大回撤</th>
+                      <th scope="col">夏普</th>
+                      <th scope="col">胜率</th>
                     </tr>
                   </thead>
                   <tbody>
                     {result.group_stats.map((g: GroupStat) => (
-                      <tr key={g.group} className="border-t border-border hover:bg-elevated/50 transition-colors">
-                        <td className="px-4 py-2 text-sm font-medium">{g.label}</td>
-                        <td className={`px-4 py-2 text-right num ${priceColorClass(g.total_return)}`}>
-                          {fmtPct(g.total_return)}
-                        </td>
-                        <td className={`px-4 py-2 text-right num ${priceColorClass(g.annual_return)}`}>
-                          {fmtPct(g.annual_return)}
-                        </td>
-                        <td className="px-4 py-2 text-right num text-bear">{fmtPct(g.max_drawdown)}</td>
-                        <td className="px-4 py-2 text-right num">{g.sharpe?.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right num">{fmtPct(g.win_rate)}</td>
+                      <tr key={g.group}>
+                        <td>{g.label}</td>
+                        <td className={priceColorClass(g.total_return)}>{fmtPct(g.total_return)}</td>
+                        <td className={priceColorClass(g.annual_return)}>{fmtPct(g.annual_return)}</td>
+                        <td className="text-bear">{fmtPct(g.max_drawdown)}</td>
+                        <td>{g.sharpe?.toFixed(2)}</td>
+                        <td>{fmtPct(g.win_rate)}</td>
                       </tr>
                     ))}
                     {/* 多空行 */}
                     {result.long_short_stats?.total_return != null && (
-                      <tr className="border-t-2 border-accent/30 bg-accent/[0.03]">
-                        <td className="px-4 py-2 text-sm font-medium text-accent">
+                      <tr className="bg-accent/[0.04]">
+                        <td className="font-medium text-accent">
                           多空({result.long_short_stats.top_group ?? ''}-{result.long_short_stats.bottom_group ?? ''})
                         </td>
-                        <td className={`px-4 py-2 text-right num font-medium ${priceColorClass(result.long_short_stats.total_return)}`}>
+                        <td className={`font-medium ${priceColorClass(result.long_short_stats.total_return as number)}`}>
                           {fmtPct(result.long_short_stats.total_return as number)}
                         </td>
-                        <td className="px-4 py-2 text-right num">—</td>
-                        <td className="px-4 py-2 text-right num text-bear">
-                          {fmtPct(result.long_short_stats.max_drawdown as number)}
-                        </td>
-                        <td className="px-4 py-2 text-right num">—</td>
-                        <td className="px-4 py-2 text-right num">—</td>
+                        <td>—</td>
+                        <td className="text-bear">{fmtPct(result.long_short_stats.max_drawdown as number)}</td>
+                        <td>—</td>
+                        <td>—</td>
                       </tr>
                     )}
                   </tbody>
@@ -511,10 +544,10 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
             )}
 
             {/* 数据概要 */}
-            <div className="flex items-center gap-4 text-[11px] text-muted">
+            <div className="flex flex-wrap items-center gap-4 text-[10px] text-muted">
               <span>{result.n_symbols} 只标的</span>
               <span>{result.n_dates} 个交易日</span>
-              <span>run_id: {result.run_id}</span>
+              <span className="num">run_id: {result.run_id}</span>
             </div>
           </motion.div>
         )}

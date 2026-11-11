@@ -1,9 +1,7 @@
 """全量分钟能力 (Cap.INTRADAY_UNIVERSE) 契约。
 
 - 能力位存在且值为 "intraday.universe"
-- tiers.yaml 仅 expert 档声明该能力 (Pro/自定义源天然没有)
-- 探测层注册了该能力的探测调用, 显示标签为「全量分钟」
-- 缓存 schema 已 bump (旧 capabilities.json 触发重探测)
+- 生效源声明 full_minute 数据集 → 本地能力计算授予该能力位
 - 盘中分钟服务门控挂在该能力位上
 """
 from pathlib import Path
@@ -12,24 +10,15 @@ from types import SimpleNamespace
 import polars as pl
 
 from app.services.minute_refresh import MinuteRefreshService
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
-from app.tickflow.policy import _CACHE_SCHEMA_VERSION, _CAP_ALIASES, _load_tiers_yaml
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 
 def test_capability_enum_value():
     assert Cap("intraday.universe") is Cap.INTRADAY_UNIVERSE
 
 
-def test_tiers_yaml_grants_universe_to_expert_only():
-    tiers = _load_tiers_yaml()
-    assert "intraday.universe" in tiers["expert"]
-    for tier in ("free", "starter", "pro"):
-        assert "intraday.universe" not in tiers[tier]
 
 
-def test_policy_labels_and_cache_schema():
-    assert _CAP_ALIASES[Cap.INTRADAY_UNIVERSE] == "全量分钟"
-    assert _CACHE_SCHEMA_VERSION >= 6
 
 
 def test_service_gate_requires_universe_not_batch_alone():

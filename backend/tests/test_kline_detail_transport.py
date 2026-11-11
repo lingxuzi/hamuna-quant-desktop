@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import indices, kline
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 _SYMBOL = "600000.SH"
 _TRADE_DATE = date(2026, 1, 15)
@@ -149,10 +149,10 @@ def test_detail_kline_responses_use_configured_gzip(
 
 
 @pytest.mark.parametrize("live", [False, True])
-def test_free_tier_skips_tickflow_minute_fallback(monkeypatch, live):
-    get_client = MagicMock(side_effect=AssertionError("must not call TickFlow"))
-    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "tickflow")
-    monkeypatch.setattr("app.services.kline_sync.get_client", get_client)
+def test_unresolvable_minute_source_fails_closed(monkeypatch, live):
+    """生效分钟源无法解析时 fail-closed: 不跨源取数, 响应 source=none。"""
+    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "missing_src")
+    monkeypatch.setattr("app.services.preferences.load", lambda: {"minute_data_provider": "missing_src"})
 
     response = _client(_DetailRepo(pl.DataFrame())).get(
         "/api/kline/minute",
@@ -161,20 +161,16 @@ def test_free_tier_skips_tickflow_minute_fallback(monkeypatch, live):
 
     assert response.status_code == 200
     assert response.json()["source"] == "none"
-    get_client.assert_not_called()
 
 
-def test_custom_minute_source_remains_available_without_tickflow_capability(monkeypatch):
+def test_custom_minute_source_remains_available_without_capability_grant(monkeypatch):
+    """源可解析即取数: 运行时能力集未授予分钟能力也不影响生效源自己的取数。"""
     provider = MagicMock()
     provider.config.datasets = {"minute": object()}
     provider.get_minute.return_value = _minute_rows(1)
     monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "custom")
-    monkeypatch.setattr(
-        "app.data_providers.custom.provider_has_dataset", lambda name, dataset: True
-    )
+    monkeypatch.setattr("app.services.preferences.load", lambda: {"minute_data_provider": "custom"})
     monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: provider)
-    get_client = MagicMock(side_effect=AssertionError("must not call TickFlow"))
-    monkeypatch.setattr("app.services.kline_sync.get_client", get_client)
 
     response = _client(_DetailRepo(pl.DataFrame())).get(
         "/api/kline/minute",
@@ -184,20 +180,16 @@ def test_custom_minute_source_remains_available_without_tickflow_capability(monk
     assert response.status_code == 200
     assert response.json()["source"] == "live"
     provider.get_minute.assert_called_once()
-    get_client.assert_not_called()
 
 
-def test_failed_custom_source_does_not_fall_back_to_unsupported_tickflow(monkeypatch):
+def test_failed_custom_source_does_not_fall_back_to_another_source(monkeypatch):
+    """生效源请求失败时 fail-closed: 不跨源补数, 响应 source=none。"""
     provider = MagicMock()
     provider.config.datasets = {"minute": object()}
     provider.get_minute.side_effect = RuntimeError("custom source unavailable")
     monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "custom")
-    monkeypatch.setattr(
-        "app.data_providers.custom.provider_has_dataset", lambda name, dataset: True
-    )
+    monkeypatch.setattr("app.services.preferences.load", lambda: {"minute_data_provider": "custom"})
     monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: provider)
-    get_client = MagicMock(side_effect=AssertionError("must not call TickFlow"))
-    monkeypatch.setattr("app.services.kline_sync.get_client", get_client)
 
     capset = CapabilitySet({Cap.KLINE_MINUTE_BATCH: CapabilityLimits()})
     response = _client(_DetailRepo(pl.DataFrame()), capset).get(
@@ -207,7 +199,6 @@ def test_failed_custom_source_does_not_fall_back_to_unsupported_tickflow(monkeyp
 
     assert response.status_code == 200
     assert response.json()["source"] == "none"
-    get_client.assert_not_called()
 
 
 def test_gzip_payload_strips_nonfinite_floats() -> None:
@@ -259,13 +250,11 @@ def test_uncompressed_payload_strips_nonfinite_floats() -> None:
 
 
 
-def test_pro_tier_keeps_tickflow_minute_fallback(monkeypatch):
+def test_capability_grant_alone_does_not_bypass_source_resolution(monkeypatch):
+    """能力集授予分钟能力也不能凭空取数: 源不可解析仍 fail-closed。"""
     capset = CapabilitySet({Cap.KLINE_MINUTE_BY_SYMBOL: CapabilityLimits()})
-    tickflow = MagicMock()
-    tickflow.klines.batch.side_effect = RuntimeError("upstream unavailable")
-    get_client = MagicMock(return_value=tickflow)
-    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "tickflow")
-    monkeypatch.setattr("app.services.kline_sync.get_client", get_client)
+    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "missing_src")
+    monkeypatch.setattr("app.services.preferences.load", lambda: {"minute_data_provider": "missing_src"})
 
     response = _client(_DetailRepo(pl.DataFrame()), capset).get(
         "/api/kline/minute",
@@ -274,13 +263,12 @@ def test_pro_tier_keeps_tickflow_minute_fallback(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["source"] == "none"
-    get_client.assert_called_once()
 
 
-def test_free_tier_skips_tickflow_index_minute_fallback(monkeypatch):
-    get_client = MagicMock(side_effect=AssertionError("must not call TickFlow"))
-    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "tickflow")
-    monkeypatch.setattr("app.services.kline_sync.get_client", get_client)
+def test_index_minute_fails_closed_on_unresolvable_source(monkeypatch):
+    """指数分时同样 fail-closed: 源不可解析时 source=none, 不跨源。"""
+    monkeypatch.setattr("app.services.preferences.get_minute_data_provider", lambda: "missing_src")
+    monkeypatch.setattr("app.services.preferences.load", lambda: {"minute_data_provider": "missing_src"})
 
     response = _client(_IndexRepo()).get(
         "/api/index/minute",
@@ -289,7 +277,6 @@ def test_free_tier_skips_tickflow_index_minute_fallback(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["source"] == "none"
-    get_client.assert_not_called()
 
 
 def test_gzip_payload_fast_path_skips_deep_copy() -> None:

@@ -32,8 +32,8 @@ from pathlib import Path
 
 import polars as pl
 
-from app.tickflow.capabilities import Cap
-from app.tickflow.rate_limits import (
+from app.data_providers.capabilities import Cap
+from app.data_providers.rate_limits import (
     apply_safety_rpm,
     chunked,
     resolve_limit,
@@ -43,16 +43,8 @@ from app.tickflow.rate_limits import (
 logger = logging.getLogger(__name__)
 
 
-# 套餐 → (轮询间隔下限s, 上限s)
-TIER_INTERVAL_RANGE: dict[str, tuple[float, float]] = {
-    "pro": (10.0, 120.0),
-    "expert": (3.0, 120.0),
-}
-# 兜底: 其他有 DEPTH5_BATCH 的套餐按 pro 范围
-DEFAULT_RANGE = (10.0, 120.0)
-
 # 限速余量: 只用 rpm 的 80%, 给系统其他 depth 调用留空间
-# 间隔硬下限/上限(任何套餐)
+# 间隔硬下限/上限
 INTERVAL_HARD_MIN = 10.0
 INTERVAL_HARD_MAX = 300.0
 
@@ -302,24 +294,18 @@ class DepthService:
 
     def _call_depth_batch(self, symbols: list[str]) -> dict:
         """按独立五档路由取数; 所有 provider 共用分片限速且失败不跨源回退。"""
+        from app.data_providers import custom as custom_sources
         from app.services import preferences
 
         provider_name = preferences.get_depth5_data_provider()
-        if provider_name == "tickflow":
-            from app.data_providers.registry import get_provider
-
-            provider = get_provider("tickflow")
-        else:
-            from app.data_providers import custom as custom_sources
-
-            try:
-                if not custom_sources.provider_has_dataset(provider_name, "depth5"):
-                    logger.warning("depth provider %s 未声明 depth5, 跳过本轮", provider_name)
-                    return {}
-                provider = custom_sources.get_provider(provider_name)
-            except Exception as e:
-                logger.warning("depth provider %s 解析失败, 跳过本轮: %s", provider_name, e)
+        try:
+            if not custom_sources.provider_has_dataset(provider_name, "depth5"):
+                logger.warning("depth provider %s 未声明 depth5, 跳过本轮", provider_name)
                 return {}
+            provider = custom_sources.get_provider(provider_name)
+        except Exception as e:
+            logger.warning("depth provider %s 解析失败, 跳过本轮: %s", provider_name, e)
+            return {}
 
         fetch_depth = getattr(provider, "get_depth_batch", None)
         if not callable(fetch_depth):
@@ -547,21 +533,18 @@ class DepthService:
         返回 (actual_interval, taken_over, user_interval)
         - actual_interval: 实际使用的间隔(秒)
         - taken_over: 是否被系统接管(用户设置会超限)
-        - user_interval: 用户设置(经套餐 clamp 后)的间隔
+        - user_interval: 用户设置(经硬区间 clamp 后)的间隔
         """
         from app.services import preferences
-        from app.tickflow.policy import tier_label
 
         capset = self._get_capset()
-        lim = capset.limits(__import__("app.tickflow.capabilities", fromlist=["Cap"]).Cap.DEPTH5_BATCH)
+        lim = capset.limits(Cap.DEPTH5_BATCH)
         batch_size = (lim.batch if lim and lim.batch else 100)
         rpm = (lim.rpm if lim and lim.rpm else 30)
 
-        # ① 套餐范围 clamp
-        tier = tier_label().split()[0].split("+")[0].strip().lower()
-        lo, hi = TIER_INTERVAL_RANGE.get(tier, DEFAULT_RANGE)
+        # ① 用户间隔 (套餐体系已下线, 只受硬区间约束)
         raw_user = preferences.get_depth_polling_interval()
-        user_interval = max(lo, min(hi, raw_user))
+        user_interval = max(INTERVAL_HARD_MIN, min(INTERVAL_HARD_MAX, raw_user))
 
         # ② 限速安全 clamp（与 resolve_limit 共用 SAFETY_RPM_FACTOR，不叠乘）
         batches = max(1, math.ceil(n_symbols / batch_size))
@@ -633,8 +616,7 @@ class DepthService:
     def _has_capability(self) -> bool:
         """五档能力是否可用 — 以【生效源】为准, 与取数路径 (_call_depth_batch) 同口径。
 
-        不能只看 TickFlow 档位: 五档路由到声明了 depth5 的插件 (如 tdxquant) 时,
-        TickFlow 档位无关; 反之路由到 TickFlow 但档位不足时, 插件声明不该算数。
+        五档路由按「生效源是否声明 depth5 数据集」判断, 与历史档位无关。
         本轮修复前此处只查 capset, 导致「五档已切到插件但启动补跑被跳过」。
         """
         from app.data_providers.capabilities import capability_gate
@@ -653,7 +635,7 @@ class DepthService:
             cs = getattr(self._app_state, "capabilities", None)
             if cs:
                 return cs
-        from app.tickflow.policy import detect_capabilities
+        from app.data_providers.capabilities import detect_capabilities
         return detect_capabilities()
 
     @staticmethod

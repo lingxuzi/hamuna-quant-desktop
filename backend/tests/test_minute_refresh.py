@@ -2,15 +2,15 @@
 
 覆盖:
 - 连续竞价时段判定 (含边界)
-- 门控链: 开关关闭 / 能力缺失 / 时段外 / 放行 (自定义源与 TickFlow 统一口径)
-- 数据源路由: full_minute 偏好 → 自定义源 (get_intraday_batch / get_intraday_latest /
-  get_minute 回退) 或降级 TickFlow; 仅修复轮源 60s 节奏下限
+- 门控链: 开关关闭 / 能力缺失 / 时段外 / 放行 (统一能力口径)
+- 数据源路由: full_minute 偏好 → 生效源 (get_intraday_batch / get_intraday_latest /
+  get_minute 回退); 源失效 fail-closed; 仅修复轮源 60s 节奏下限
 - 单轮: mock 边界层脉冲 + 落盘, 校验状态字段与 universe 来源
 - 偏好读写: 默认关闭、间隔 clamp [3, 120]
 - API: /minute-refresh/status 无服务时 available=false
 
-不发起真实网络请求: TickFlow 侧边界函数与 _write_minute_partition 均
-monkeypatch 替换; 自定义源侧用内存 fake provider 走真实边界包装。
+不发起真实网络请求: 取数边界经内存 fake provider 走真实包装;
+_write_minute_partition monkeypatch 替换。
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class _FakeCapSet:
         self._has = has_intraday_batch
 
     def has(self, cap) -> bool:
-        from app.tickflow.capabilities import Cap
+        from app.data_providers.capabilities import Cap
 
         # 服务门控挂 INTRADAY_UNIVERSE, 修复轮用 INTRADAY_BATCH — 两者同档, 一起授/不授
         return self._has and cap in (Cap.INTRADAY_BATCH, Cap.INTRADAY_UNIVERSE)
@@ -76,18 +76,21 @@ def test_continuous_session_boundaries():
 
 
 def _svc(tmp_path, monkeypatch, *, enabled=True, capability=True, in_hours=True,
-         full_minute_provider="tickflow", custom=None):
-    """custom 非 None 时模拟「full_minute 路由到声明该数据集的自定义源」:
-    resolver 直接返回 fake provider (注册表在测试环境未加载)。"""
+         full_minute_provider="myfm", custom=None):
+    """模拟「full_minute 路由到声明该数据集的源」: resolver 直接返回 fake
+    provider (注册表在测试环境未加载)。custom 为 "_unresolved" 时不 patch,
+    走真实 resolver (用于 fail-closed 用例); 其余默认给全实现 fake。"""
     _isolated_prefs(tmp_path, monkeypatch)
     preferences.save({"minute_refresh_enabled": enabled})
     monkeypatch.setattr(
         preferences, "get_full_minute_data_provider", lambda: full_minute_provider,
     )
-    if custom is not None:
+    if custom is None:
+        custom = _FakeCustomProvider(batch=True, latest=True)
+    if custom != "_unresolved":
         monkeypatch.setattr(
             "app.services.kline_sync._resolve_full_minute_provider",
-            lambda name: (custom, False, None),
+            lambda name: (custom, None),
         )
     svc = MinuteRefreshService(_FakeRepo(["600000.SH"]))
     svc.set_app_state(_FakeAppState(capability))
@@ -127,39 +130,37 @@ def test_gate_outside_trading_hours(tmp_path, monkeypatch):
 def test_gate_pass(tmp_path, monkeypatch):
     svc = _svc(tmp_path, monkeypatch)
     assert svc._gate_reason() is None
-    assert svc.capability_ok() and svc.active_provider() == "tickflow"
+    assert svc.capability_ok() and svc.active_provider() == "myfm"
 
 
 # ── 单轮 ────────────────────────────────────────────────────────────
 
 
 def test_run_round_writes_partition_and_updates_status(tmp_path, monkeypatch):
-    svc = _svc(tmp_path, monkeypatch)
     minute_df = pl.DataFrame({
         "symbol": ["600000.SH"],
         "datetime": [datetime(2026, 8, 25, 1, 30)],
         "open": [10.0], "high": [10.5], "low": [9.9], "close": [10.2],
         "volume": [1000.0], "amount": [10200.0],
     })
+    provider = _FakeCustomProvider(batch=True)
+    provider.get_intraday_batch = (
+        lambda symbols, count=300, asset_type="stock":
+        (provider.calls.update({"batch": list(symbols)}), minute_df)[1]
+    )
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     calls: dict = {}
-
-    def fake_burst(symbols, capset, *, count=300):
-        calls["symbols"] = list(symbols)
-        return (minute_df, 1)
 
     def fake_write(df, minute_dir):
         calls["dir"] = minute_dir
         calls["rows"] = df.height
         return df.height
 
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_full_market_burst", fake_burst
-    )
     monkeypatch.setattr("app.services.kline_sync._write_minute_partition", fake_write)
 
     svc._run_round()
 
-    assert calls["symbols"] == ["600000.SH"]
+    assert provider.calls["batch"] == ["600000.SH"]
     assert calls["rows"] == 1
     st = svc.status()
     assert st["rounds"] == 1
@@ -172,41 +173,41 @@ def test_run_round_writes_partition_and_updates_status(tmp_path, monkeypatch):
 
 
 def test_run_round_records_error_when_burst_empty(tmp_path, monkeypatch):
-    svc = _svc(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_full_market_burst",
-        lambda symbols, capset, *, count=300: (pl.DataFrame(), 3),
-    )
+    provider = _FakeCustomProvider(batch=True)
+    provider.get_intraday_batch = lambda symbols, count=300, asset_type="stock": pl.DataFrame()
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     svc._run_round()
     st = svc.status()
     assert st["rounds"] == 0
     assert "no data" in st["last_error"]
-    assert st["last_requests"] == 3
+    assert st["last_requests"] == 1
 
 
 # ── 两段式模式选择: 冷启动全天 → 稳态增量 ───────────────────────────
 
 
 def _patch_round(monkeypatch, *, lag, inc_df, burst_df):
+    """返回 (calls, provider): provider 以方法调用记录轮次模式, 交给 _svc 注入。"""
     calls: dict = {"modes": []}
+
+    class _SpyProvider:
+        def get_intraday_latest(self, symbols=None, count=3):
+            calls["modes"].append("increment")
+            return inc_df
+
+        def get_intraday_batch(self, symbols, count=300, asset_type="stock"):
+            calls["modes"].append("full")
+            return burst_df
 
     monkeypatch.setattr(
         minute_refresh.MinuteRefreshService, "_today_coverage_lag_minutes",
         lambda self: lag, raising=True,
     )
     monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_universe_increment",
-        lambda *a, **k: (calls["modes"].append("increment"), (inc_df, 1))[1],
-    )
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_full_market_burst",
-        lambda symbols, capset, *, count=300: (calls["modes"].append("full"), (burst_df, 28))[1],
-    )
-    monkeypatch.setattr(
         "app.services.kline_sync._write_minute_partition",
         lambda df, minute_dir: df.height,
     )
-    return calls
+    return calls, _SpyProvider()
 
 
 def _inc_df():
@@ -224,8 +225,8 @@ def _full_df():
 
 def test_cold_start_no_local_data_uses_full_mode(tmp_path, monkeypatch):
     """当日无数据 (lag=None, 如 10 点冷启动) → 全天修复轮。"""
-    svc = _svc(tmp_path, monkeypatch)
-    calls = _patch_round(monkeypatch, lag=None, inc_df=_inc_df(), burst_df=_full_df())
+    calls, provider = _patch_round(monkeypatch, lag=None, inc_df=_inc_df(), burst_df=_full_df())
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     svc._run_round()
     assert calls["modes"] == ["full"]
     st = svc.status()
@@ -235,8 +236,8 @@ def test_cold_start_no_local_data_uses_full_mode(tmp_path, monkeypatch):
 
 def test_healthy_coverage_uses_increment_mode(tmp_path, monkeypatch):
     """当日覆盖新鲜 (lag ≤ 3 分钟) → universe 单请求增量, 不打 burst。"""
-    svc = _svc(tmp_path, monkeypatch)
-    calls = _patch_round(monkeypatch, lag=0.2, inc_df=_inc_df(), burst_df=_full_df())
+    calls, provider = _patch_round(monkeypatch, lag=0.2, inc_df=_inc_df(), burst_df=_full_df())
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     svc._run_round()
     assert calls["modes"] == ["increment"]
     st = svc.status()
@@ -248,21 +249,21 @@ def test_healthy_coverage_uses_increment_mode(tmp_path, monkeypatch):
 
 def test_stale_coverage_beyond_bar_headroom_falls_back_to_full(tmp_path, monkeypatch):
     """覆盖滞后超过 3 分钟 (超过 universe 3 根余量) → 全天修复轮。"""
-    svc = _svc(tmp_path, monkeypatch)
-    calls = _patch_round(monkeypatch, lag=5.0, inc_df=_inc_df(), burst_df=_full_df())
+    calls, provider = _patch_round(monkeypatch, lag=5.0, inc_df=_inc_df(), burst_df=_full_df())
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     svc._run_round()
     assert calls["modes"] == ["full"]
 
 
 def test_consecutive_empty_rounds_escalate_to_full(tmp_path, monkeypatch):
     """universe 连续 2 轮空返回 → 第 3 轮自动升级全天修复 (自愈)。"""
-    svc = _svc(tmp_path, monkeypatch)
-    calls = _patch_round(
+    calls, provider = _patch_round(
         monkeypatch,
         lag=0.2,
-        inc_df=pl.DataFrame(),   # 增量恒空 (模拟 universe 端点持续异常)
+        inc_df=pl.DataFrame(),   # 增量恒空 (模拟 latest 端点持续异常)
         burst_df=_full_df(),
     )
+    svc = _svc(tmp_path, monkeypatch, custom=provider)
     svc._run_round()
     svc._run_round()
     assert calls["modes"] == ["increment", "increment"]
@@ -373,24 +374,15 @@ def test_custom_provider_latest_missing_forces_full_with_minute_fallback(tmp_pat
 
 
 def test_custom_provider_unresolved_fails_closed(tmp_path, monkeypatch):
-    """失效的 full_minute 自定义源不再静默降级并请求 TickFlow。"""
-    svc = _svc(tmp_path, monkeypatch, full_minute_provider="not-registered")
+    """失效的 full_minute 自定义源 fail-closed, 不发任何取数请求。"""
+    svc = _svc(tmp_path, monkeypatch, full_minute_provider="not-registered", custom="_unresolved")
     monkeypatch.setattr(
         minute_refresh.MinuteRefreshService, "_today_coverage_lag_minutes",
         lambda self: 0.2,
     )
-    _patch_write(monkeypatch)
-    modes: list[str] = []
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_universe_increment",
-        lambda *a, **k: (modes.append("tf-inc"), (_inc_df(), 1))[1],
-    )
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_full_market_burst",
-        lambda symbols, capset, *, count=300: (modes.append("tf-full"), (_full_df(), 28))[1],
-    )
+    write_calls = _patch_write(monkeypatch)
     svc._run_round()
-    assert modes == []
+    assert write_calls["rows"] is None
     st = svc.status()
     assert st["provider_effective"] == "unavailable:not-registered"
     assert "provider unavailable" in st["last_error"]
@@ -398,37 +390,29 @@ def test_custom_provider_unresolved_fails_closed(tmp_path, monkeypatch):
     assert st["last_symbols"] == 0
 
 
-def test_unloaded_full_minute_provider_does_not_fall_back_to_tickflow(tmp_path, monkeypatch):
-    """偏好仍选自定义源但插件卸载后，不能借旧能力快照发 TickFlow 请求。"""
-    svc = _svc(tmp_path, monkeypatch, full_minute_provider="tickflow")
+def test_unloaded_full_minute_provider_does_not_silently_fall_back(tmp_path, monkeypatch):
+    """偏好仍选某自定义源但该源已不存在时，不能借默认源发请求。"""
+    svc = _svc(tmp_path, monkeypatch, full_minute_provider="myfm", custom="_unresolved")
     preferences.save({"full_minute_data_provider": "missing_src"})
-    calls: list[str] = []
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_universe_increment",
-        lambda *args, **kwargs: (calls.append("tickflow"), (pl.DataFrame(), 1))[1],
-    )
+    write_calls = _patch_write(monkeypatch)
     svc._run_round()
-    assert calls == []
+    assert write_calls["rows"] is None
     assert svc.status()["provider_effective"] == "unavailable:missing_src"
 
 
 def test_custom_provider_without_full_minute_dataset_fails_closed(tmp_path, monkeypatch):
-    """已注册但未声明 full_minute 的源不能借共享能力集合请求 TickFlow。"""
+    """已注册但未声明 full_minute 的源 fail-closed, 不借默认源发请求。"""
     from app.data_providers import custom as custom_sources
 
-    svc = _svc(tmp_path, monkeypatch, full_minute_provider="other")
+    svc = _svc(tmp_path, monkeypatch, full_minute_provider="other", custom="_unresolved")
     provider = type("Provider", (), {"config": type("Config", (), {"datasets": {"minute": object()}})()})()
     monkeypatch.setattr(custom_sources, "get_provider", lambda name: provider)
-    calls: list[str] = []
-    monkeypatch.setattr(
-        "app.services.kline_sync.fetch_intraday_universe_increment",
-        lambda *args, **kwargs: (calls.append("tickflow"), (pl.DataFrame(), 1))[1],
-    )
+    write_calls = _patch_write(monkeypatch)
     monkeypatch.setattr(minute_refresh.MinuteRefreshService, "_today_coverage_lag_minutes", lambda self: 0.2)
 
     svc._run_round()
 
-    assert calls == []
+    assert write_calls["rows"] is None
     assert svc.status()["provider_effective"] == "unavailable:other"
     assert "provider unavailable" in svc.status()["last_error"]
 

@@ -44,7 +44,7 @@ export function RegimeConfigCard() {
       qc.invalidateQueries({ queryKey: QK.preferences })
       toast('分批参数已保存', 'success')
     },
-    onError: () => toast('保存失败,请检查输入范围', 'error'),
+    onError: () => toast('保存失败，请检查输入范围', 'error'),
   })
 
   const saveBatch = () => {
@@ -66,7 +66,7 @@ export function RegimeConfigCard() {
     if (n !== warmupDays) updateParams.mutate({ warmup_days: n })
   }
 
-  // 默认关闭: 未设置过时视为 false
+  // 默认关闭:未设置过时视为 false
   const on = prefs.data?.pipeline_regime_enabled ?? false
 
   return (
@@ -79,13 +79,13 @@ export function RegimeConfigCard() {
           type="button"
           onClick={() => updateEnabled.mutate(!on)}
           disabled={updateEnabled.isPending}
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+          className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded border transition-colors ${
             on ? 'bg-accent border-accent' : 'bg-base border-border'
           }`}
           role="checkbox"
           aria-checked={on}
         >
-          {on && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+          {on && <Check className="h-[12px] w-[12px] text-on-solid" strokeWidth={3} />}
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -93,7 +93,7 @@ export function RegimeConfigCard() {
             <span className="text-xs font-medium text-foreground">盘后自动计算</span>
           </div>
           <div className="text-[10px] text-muted leading-snug mt-0.5">
-            默认关闭。开启后每次盘后管道自动增量计算环境状态; 首次或数据缺口较大时全量回填, 耗时与内存较高。
+            默认关闭。开启后每次盘后管道自动增量计算环境状态；首次或数据缺口较大时全量回填, 耗时与内存较高。
           </div>
         </div>
       </label>
@@ -120,7 +120,7 @@ export function RegimeConfigCard() {
               onBlur={saveBatch}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               disabled={updateParams.isPending}
-              className="mt-1 h-7 w-full rounded-input border border-border bg-base px-2 text-xs text-foreground outline-none focus:border-accent disabled:opacity-50"
+              className="ctl ctl-md ctl-input mt-1 w-full px-2.5 focus:border-accent disabled:opacity-50 bg-base"
             />
             <div className="mt-0.5 text-[9px] text-muted">范围 25 ~ 500 · 默认 60</div>
           </div>
@@ -135,7 +135,7 @@ export function RegimeConfigCard() {
               onBlur={saveWarmup}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               disabled={updateParams.isPending}
-              className="mt-1 h-7 w-full rounded-input border border-border bg-base px-2 text-xs text-foreground outline-none focus:border-accent disabled:opacity-50"
+              className="ctl ctl-md ctl-input mt-1 w-full px-2.5 focus:border-accent disabled:opacity-50 bg-base"
             />
             <div className="mt-0.5 text-[9px] text-muted">范围 35 ~ 90 · 默认 40</div>
           </div>
@@ -143,7 +143,7 @@ export function RegimeConfigCard() {
 
         {/* 快捷预设 */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-muted">快捷:</span>
+          <span className="text-[10px] text-muted">快捷：</span>
           {[
             { label: '省内存', batch: 30, warmup: 40 },
             { label: '默认', batch: 60, warmup: 40 },
@@ -153,7 +153,7 @@ export function RegimeConfigCard() {
               key={p.label}
               onClick={() => updateParams.mutate({ batch_days: p.batch, warmup_days: p.warmup })}
               disabled={updateParams.isPending}
-              className={`h-5 rounded-btn border px-2 text-[10px] transition-colors disabled:opacity-50 ${
+              className={`ctl ctl-sm ctl-btn px-1.5 disabled:opacity-50 ${
                 batchDays === p.batch
                   ? 'border-accent/40 bg-accent/10 text-accent'
                   : 'border-border bg-base text-secondary hover:text-accent hover:border-accent/40'
@@ -167,7 +167,7 @@ export function RegimeConfigCard() {
 
       {(updateEnabled.isPending || updateParams.isPending) && (
         <div className="flex items-center gap-1.5 text-[10px] text-muted">
-          <Loader2 className="h-3 w-3 animate-spin" />保存中…
+          <Loader2 className="h-[12px] w-[12px] animate-spin" />保存中…
         </div>
       )}
     </div>

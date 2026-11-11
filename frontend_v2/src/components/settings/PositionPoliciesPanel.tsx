@@ -13,9 +13,11 @@ import { api, type StrategyParamDef } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { toast } from '@/components/Toast'
 import { Modal } from '@/components/Modal'
+import { INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
-const INPUT_CLS =
-  'w-full rounded-input border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-accent'
+const INPUT_CLS = cn(INPUT_MD, 'w-full')
+const SELECT_CLS = cn(SELECT_MD, 'w-full')
 
 interface EditorState {
   id: string
@@ -143,8 +145,8 @@ export function PositionPoliciesPanel() {
   const errors = listQ.data?.errors ?? {}
 
   return (
-    <div className="leaf-cell">
-      <div className="flex items-center justify-between gap-2">
+    <section>
+      <div className="flex items-center justify-between gap-2 pb-3">
         <div>
           <div className="text-sm font-medium text-foreground">仓位策略</div>
           <div className="mt-0.5 text-[11px] text-muted">
@@ -154,52 +156,54 @@ export function PositionPoliciesPanel() {
         </div>
         <button
           onClick={openNew}
-          className="flex shrink-0 items-center gap-1 rounded-btn bg-accent px-2.5 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+          className="ctl-btn ctl-sm shrink-0"
         >
           <Plus className="h-3.5 w-3.5" /> 新建仓位策略
         </button>
       </div>
 
-      <div className="mt-3 space-y-1.5">
+      <div className="rowset">
         {policies.length === 0 && Object.keys(errors).length === 0 && (
-          <div className="border-t border-border px-1 py-4 text-[11px] text-muted">
+          <div className="py-3 text-[11px] text-muted">
             还没有仓位策略 — 点「新建」从模板开始, 只需写一个 compute 函数。
           </div>
         )}
         {policies.map(p => (
-          <div key={p.id} className="flex items-center gap-2 rounded-btn border border-border px-3 py-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-medium text-foreground">{p.label}</div>
-              <div className="truncate text-[10px] text-muted">
+          <div key={p.id} className="r">
+            <div className="lab min-w-0">
+              <b className="truncate">{p.label}</b>
+              <small className="truncate">
                 {p.id}
                 {p.params.length > 0 ? ` · ${p.params.length} 个参数` : ''}
                 {p.description ? ` · ${p.description}` : ''}
-              </div>
+              </small>
             </div>
-            <button
-              onClick={() => openEdit(p.id)}
-              className="rounded-btn border border-border p-1.5 text-secondary transition-colors hover:text-accent"
-              title="编辑"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm(`删除仓位策略「${p.label}」? 引用它的回测配置将报错。`)) deleteMut.mutate(p.id)
-              }}
-              className="rounded-btn border border-border p-1.5 text-secondary transition-colors hover:text-danger"
-              title="删除"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="ctl">
+              <button
+                onClick={() => openEdit(p.id)}
+                className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-accent"
+                title="编辑"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`删除仓位策略「${p.label}」? 引用它的回测配置将报错。`)) deleteMut.mutate(p.id)
+                }}
+                className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-danger"
+                title="删除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         ))}
         {Object.entries(errors).map(([file, msg]) => (
-          <div key={file} className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2">
-            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
-            <div className="min-w-0 text-[11px] text-danger">
+          <div key={file} className="flex items-start gap-2 py-2 text-[11px] text-danger">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0">
               <span className="font-medium">{file}</span> — 加载失败: {msg}
-            </div>
+            </span>
           </div>
         ))}
       </div>
@@ -213,8 +217,8 @@ export function PositionPoliciesPanel() {
           {/* 头部 */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-btn bg-accent/10 text-accent">
-                <Scale className="h-4 w-4" />
+              <div className="flex h-[32px] w-[32px] items-center justify-center rounded-btn bg-accent/10 text-accent">
+                <Scale className="h-[16px] w-[16px]" />
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground">
@@ -225,10 +229,10 @@ export function PositionPoliciesPanel() {
             </div>
             <button
               onClick={() => setEditor(null)}
-              className="rounded-btn p-1.5 text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+              className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:bg-elevated hover:text-foreground"
               title="关闭"
             >
-              <X className="h-4 w-4" />
+              <X className="h-[16px] w-[16px]" />
             </button>
           </div>
 
@@ -243,7 +247,7 @@ export function PositionPoliciesPanel() {
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] text-secondary">从模板开始</label>
-                  <select className={INPUT_CLS} value={tplKey} onChange={e => applyTemplate(e.target.value)}>
+                  <select className={SELECT_CLS} value={tplKey} onChange={e => applyTemplate(e.target.value)}>
                     <option value="">选择模板…</option>
                     {(templatesQ.data?.templates ?? []).map(t => (
                       <option key={t.key} value={t.key}>
@@ -294,7 +298,7 @@ export function PositionPoliciesPanel() {
                         onChange={e => setParam(i, { label: e.target.value })}
                       />
                       <select
-                        className={INPUT_CLS}
+                        className={SELECT_CLS}
                         value={pd.type}
                         onChange={e => setParam(i, { type: e.target.value as StrategyParamDef['type'] })}
                       >
@@ -313,7 +317,7 @@ export function PositionPoliciesPanel() {
                         }
                       />
                       <button
-                        className="justify-self-center rounded-btn p-1 text-secondary transition-colors hover:text-danger"
+                        className="ctl ctl-sm ctl-ghost ctl-icon justify-self-center text-secondary hover:text-danger"
                         title="删除参数"
                         onClick={() => setEditor({ ...editor, params: editor.params.filter((_, j) => j !== i) })}
                       >
@@ -384,7 +388,7 @@ export function PositionPoliciesPanel() {
             <div className="text-[10px] text-muted">保存时自动执行安全校验 + 冒烟</div>
             <div className="flex items-center gap-2">
               <button
-                className="rounded-btn border border-border px-3 py-1.5 text-xs text-secondary transition-colors hover:text-foreground disabled:opacity-50"
+                className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground disabled:opacity-50"
                 disabled={validateMut.isPending || !editor.code.trim()}
                 onClick={() =>
                   validateMut.mutate({
@@ -399,7 +403,7 @@ export function PositionPoliciesPanel() {
                 校验并冒烟
               </button>
               <button
-                className="rounded-btn bg-accent px-4 py-1.5 text-xs text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="ctl ctl-md ctl-btn pri px-2.5 hover:opacity-90 disabled:opacity-50"
                 disabled={saveMut.isPending || !editor.code.trim() || !editor.label.trim()}
                 onClick={() =>
                   saveMut.mutate({
@@ -417,6 +421,6 @@ export function PositionPoliciesPanel() {
           </div>
         </Modal>
       )}
-    </div>
+    </section>
   )
 }

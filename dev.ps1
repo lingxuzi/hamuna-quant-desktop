@@ -2,6 +2,7 @@
 #
 # Usage:
 #   .\dev.ps1
+#   $env:FRONTEND_APP='v1'; .\dev.ps1   # 旧版前端 frontend(v1):3011
 #   .\dev.ps1 -BackendPort 8000 -FrontendPort 5173
 #   .\dev.ps1 -NoReload          # 内测/长时间运行: 不启用 uvicorn --reload
 #   .\dev.ps1 -Force             # 已有实例时先结束它再启动
@@ -28,8 +29,18 @@ $ErrorActionPreference = 'Stop'
 
 $Root        = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir  = Join-Path $Root 'backend'
-$FrontendDir = Join-Path $Root 'frontend'
 $EnvFile     = Join-Path $Root '.env'
+
+# 前端版本: v2 = frontend_v2 (新, 默认), v1 = frontend (旧)
+$FrontendApp = if ($env:FRONTEND_APP) { $env:FRONTEND_APP } else { 'v2' }
+switch ($FrontendApp) {
+    'v2' { $FrontendDir = Join-Path $Root 'frontend_v2'; $FrontendDefaultPort = 3012 }
+    'v1' { $FrontendDir = Join-Path $Root 'frontend';    $FrontendDefaultPort = 3011 }
+    default {
+        Write-Host "[dev] unknown FRONTEND_APP: $FrontendApp (v1 / v2)" -ForegroundColor Red
+        exit 1
+    }
+}
 
 # Read only launcher-owned keys. Do not execute .env as PowerShell code.
 function Read-DotEnvValue($Path, $Name) {
@@ -62,7 +73,7 @@ if ($BackendPort -le 0) {
     elseif ($DotEnvPort)   { $BackendPort = [int]$DotEnvPort }
     else                   { $BackendPort = 3018 }
 }
-if ($FrontendPort -le 0) { $FrontendPort = if ($env:FRONTEND_PORT) { [int]$env:FRONTEND_PORT } else { 3011 } }
+if ($FrontendPort -le 0) { $FrontendPort = if ($env:FRONTEND_PORT) { [int]$env:FRONTEND_PORT } else { $FrontendDefaultPort } }
 
 # 单实例守卫: 重复运行 dev.ps1 会各自拉起一套后端, 每个实例常驻 1GB+;
 # 靠端口检测杀不干净 (--reload 的父进程持有 socket 并会重生子进程), 因此改为
@@ -261,6 +272,12 @@ $BackendArgs += @('--host', $BindAddress, '--port', [string]$BackendPort)
 
 $env:BACKEND_HOST = $BindAddress
 $env:BACKEND_PORT = [string]$BackendPort
+# STATIC_DIR 决定三件事: 托管哪份 SPA、源码扩展根目录(frontend_root =
+# static_dir.parent)、esbuild 发现路径。必须与本次启动的前端同源 —— 否则 v2
+# 模式下「源码导入 / 从项目导入 / 删除源码扩展」会去编译 v1 的扩展源码。
+if (-not $env:STATIC_DIR) {
+    $env:STATIC_DIR = Join-Path $FrontendDir 'dist'
+}
 $pnpmExe = (Get-Command 'pnpm.cmd' -ErrorAction SilentlyContinue).Source
 if (-not $pnpmExe) { $pnpmExe = (Get-Command 'pnpm' -ErrorAction SilentlyContinue).Source }
 if (-not $pnpmExe) {

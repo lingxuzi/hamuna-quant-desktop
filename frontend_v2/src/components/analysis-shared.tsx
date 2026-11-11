@@ -98,8 +98,8 @@ export function AnalysisConfigDialog({
       >
         <div className="flex items-center justify-between px-4 pt-3 pb-2">
           <span className="text-sm font-medium">配置数据源</span>
-          <button onClick={onClose} className="p-0.5 text-muted hover:text-foreground">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground">
+            <X className="h-[16px] w-[16px]" />
           </button>
         </div>
 
@@ -110,7 +110,7 @@ export function AnalysisConfigDialog({
             <select
               value={draft.configId ?? ''}
               onChange={e => setDraft(d => ({ ...d, configId: e.target.value || undefined, dimensionField: undefined }))}
-              className="w-full h-8 bg-elevated border border-border rounded text-xs text-foreground px-2 focus:outline-none focus:border-accent/50"
+              className="ctl ctl-md ctl-select w-full"
             >
               <option value="">自动选择</option>
               {configs.map(c => (
@@ -126,7 +126,7 @@ export function AnalysisConfigDialog({
               <select
                 value={draft.dimensionField ?? ''}
                 onChange={e => setDraft(d => ({ ...d, dimensionField: e.target.value || undefined }))}
-                className="w-full h-8 bg-elevated border border-border rounded text-xs text-foreground px-2 focus:outline-none focus:border-accent/50"
+                className="ctl ctl-md ctl-select w-full"
               >
                 <option value="">自动探测</option>
                 {nonMetaFields.map(f => (
@@ -142,7 +142,7 @@ export function AnalysisConfigDialog({
               <select
                 value={draft.hierarchyLevel ?? 2}
                 onChange={e => setDraft(d => ({ ...d, hierarchyLevel: Number(e.target.value) as 1 | 2 | 3 }))}
-                className="w-full h-8 bg-elevated border border-border rounded text-xs text-foreground px-2 focus:outline-none focus:border-accent/50"
+                className="ctl ctl-md ctl-select w-full"
               >
                 <option value={1}>一级行业</option>
                 <option value={2}>二级行业（默认）</option>
@@ -158,10 +158,10 @@ export function AnalysisConfigDialog({
         </div>
 
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-border">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs text-secondary hover:text-foreground">取消</button>
+          <button onClick={onClose} className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground">取消</button>
           <button
             onClick={() => { onSave(draft); onClose() }}
-            className="px-3 py-1.5 text-xs bg-accent/15 text-accent rounded hover:bg-accent/25"
+            className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-accent/25 bg-accent/15"
           >
             保存
           </button>
@@ -199,12 +199,12 @@ export function OverviewStatCards({
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="hgrid grid grid-cols-2 md:grid-cols-4">
       {cards.map(card => (
-        <div key={card.label} className="leaf-cell">
+        <div key={card.label} className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">{card.label}</span>
-            <card.icon className="h-4 w-4" style={{ color: accentColor }} />
+            <card.icon className="h-[16px] w-[16px]" style={{ color: accentColor }} />
           </div>
           <div className="mt-2 text-xl font-semibold tracking-tight text-foreground truncate">
             {card.value}
@@ -256,7 +256,7 @@ export function DimensionHeatmap({
           className="text-[10px] text-muted hover:text-foreground flex items-center gap-0.5"
         >
           {showAll ? '收起' : `展开全部 (${enriched.length})`}
-          <ChevronDown className={`h-3 w-3 transition-transform ${showAll ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-[12px] w-[12px] transition-transform ${showAll ? 'rotate-180' : ''}`} />
         </button>
       </div>
       <div
@@ -275,7 +275,7 @@ export function DimensionHeatmap({
             <button
               key={g.key}
               onClick={() => onSelect(active ? null : g.key)}
-              className="px-2.5 py-1.5 rounded-sm text-[11px] whitespace-nowrap cursor-pointer hover:brightness-125 transition-all"
+              className="ctl ctl-md ctl-ghost px-2.5 rounded-sm whitespace-nowrap hover:brightness-125 transition-all"
               style={{
                 fontSize: `${10 + size * 2}px`,
                 color: active ? '#fff' : `rgba(${r},${gr},${b},${0.6 + upRatio * 0.4})`,
@@ -333,7 +333,7 @@ export function DimensionGroupSidebar({
   const accentBorder = colorScheme === 'blue' ? 'rgba(59,130,246,0.25)' : 'rgba(245,158,11,0.25)'
 
   return (
-    <section className="leaf-cell overflow-hidden">
+    <section className="overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
         <h3 className="text-sm font-medium text-foreground">{kindLabel}榜单</h3>
         <p className="mt-0.5 text-[11px] text-muted">按覆盖标的数量排序</p>
@@ -345,7 +345,7 @@ export function DimensionGroupSidebar({
             value={searchValue}
             onChange={e => onSearchChange(e.target.value)}
             placeholder={`搜索${kindLabel}`}
-            className="h-8 w-full rounded-btn border border-border bg-base pl-8 pr-3 text-xs text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent/50"
+            className="ctl ctl-md ctl-input w-full pl-8 pr-3 placeholder:text-muted/50 focus:border-accent/50 bg-base"
           />
         </div>
       </div>
@@ -449,7 +449,7 @@ export function ConfigButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="p-1.5 hover:bg-surface text-muted hover:text-accent transition-colors"
+      className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-surface text-muted hover:text-accent"
       title="配置数据源"
     >
       <Settings2 className="h-3.5 w-3.5" />
@@ -485,18 +485,18 @@ export function PresetFetchState({
   return (
     <div className="h-full grid place-items-center px-8 py-16">
       <div className="text-center max-w-md">
-        <DownloadCloud className="mx-auto h-10 w-10 text-muted" strokeWidth={1.5} />
+        <DownloadCloud className="mx-auto h-[40px] w-[40px] text-muted" strokeWidth={1.5} />
         <h2 className="mt-4 text-[16px] leading-6 font-medium text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-secondary leading-relaxed">{hint}</p>
         <button
           onClick={onFetch}
           disabled={isLoading}
-          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:brightness-110 disabled:opacity-60"
+          className="ctl ctl-md ctl-btn pri mt-5 inline-flex items-center gap-2 px-2.5 hover:brightness-110 disabled:opacity-60"
         >
           {isLoading ? (
-            <><RefreshCw className="h-4 w-4 animate-spin" /> 获取中...</>
+            <><RefreshCw className="h-[16px] w-[16px] animate-spin" /> 获取中...</>
           ) : (
-            <><DownloadCloud className="h-4 w-4" /> 获取数据</>
+            <><DownloadCloud className="h-[16px] w-[16px]" /> 获取数据</>
           )}
         </button>
         {errMsg && (
@@ -513,7 +513,7 @@ export function PresetFetchState({
                 to="/settings?tab=data-sources&highlight=fuyao"
                 className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
               >
-                前往 设置 → 数据源 配置 <ArrowRight className="h-3 w-3" />
+                前往 设置 → 数据源 配置 <ArrowRight className="h-[12px] w-[12px]" />
               </Link>
             </div>
           ) : (

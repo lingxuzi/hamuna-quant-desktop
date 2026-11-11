@@ -13,8 +13,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 from app.market_time import CN_TZ, cn_today
-from app.tickflow.capabilities import CapabilitySet
-from app.tickflow.repository import KlineRepository
+from app.data_providers.capabilities import CapabilitySet
+from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def repair_integrity_issues(repo, capset, issues, *, backup_dir: Path, on_progre
 
     from app.indicators.pipeline import recompute_daily_symbols
     from app.services import daily_health, data_integrity, kline_sync
-    from app.tickflow.repository import daily_dirname
+    from app.data_providers.repository import daily_dirname
 
     root = Path(repo.store.data_dir)
     targets = plan_daily_repair(issues)
@@ -81,7 +81,7 @@ def repair_integrity_issues(repo, capset, issues, *, backup_dir: Path, on_progre
 
             frames = []
             for incoming in kline_sync.iter_daily_frames(
-                symbols, capset, start_time=datetime.combine(target.day, datetime.min.time(), tzinfo=CN_TZ),
+                symbols, start_time=datetime.combine(target.day, datetime.min.time(), tzinfo=CN_TZ),
                 end_time=datetime.combine(target.day, datetime.max.time(), tzinfo=CN_TZ), asset_type=target.asset_type,
                 on_chunk_done=progress,
             ):

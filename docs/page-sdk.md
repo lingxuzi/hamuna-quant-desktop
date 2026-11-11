@@ -5,7 +5,7 @@
 ## 快速开始
 
 ```bash
-cp -r frontend/page-pack-template my-pack && cd my-pack
+cp -r frontend_v2/page-pack-template my-pack && cd my-pack
 pnpm install && pnpm build      # → dist/extension.js
 ```
 
@@ -35,7 +35,7 @@ const extension = {
 export default extension
 ```
 
-校验与冲突规则由宿主注册表统一执行（与源码级扩展 `frontend/src/custom/` 同一机制）；上传时即时试载校验，启动时再次校验，失败会停用该包并在面板显示原因。
+校验与冲突规则由宿主注册表统一执行（与源码级扩展 `frontend_v2/src/custom/` 同一机制）；上传时即时试载校验，启动时再次校验，失败会停用该包并在面板显示原因。
 
 ## 能力桥 ctx
 
@@ -96,7 +96,7 @@ import { openStockPreview, closeStockPreview } from '@/extensions/stockPreview'
 
 ## 图标白名单
 
-`navigation[].icon` 按名称解析，白名单：`Activity BarChart3 Bell BookOpen Brain Calendar Database Globe LineChart PieChart Shield Sparkles Star Table TrendingUp Zap`（缺省 `Sparkles`）。需要扩充时在 `frontend/src/extensions/runtime.tsx` 的 `ICON_ALLOWLIST` 增补。
+`navigation[].icon` 按名称解析，白名单：`Activity BarChart3 Bell BookOpen Brain Calendar Database Globe LineChart PieChart Shield Sparkles Star Table TrendingUp Zap`（缺省 `Sparkles`）。需要扩充时在 `frontend_v2/src/extensions/runtime.tsx` 的 `ICON_ALLOWLIST` 增补。
 
 ## 约束与边界
 
@@ -112,7 +112,7 @@ import { openStockPreview, closeStockPreview } from '@/extensions/stockPreview'
 | 方式 | 适用 | 见 |
 | --- | --- | --- |
 | 页面插件（运行时产物） | 免重建挂载、独立分发 | 本文档 |
-| 源码级扩展 `frontend/src/custom/<ns>/extension.tsx` | 随宿主一起构建维护、可用全部核心模块 | `docs/secondary-development.md` §3 |
+| 源码级扩展 `frontend_v2/src/custom/<ns>/extension.tsx` | 随宿主一起构建维护、可用全部核心模块 | `docs/secondary-development.md` §3 |
 | 声明式分析页面（零代码） | 扩展数据 + 模板化列表/分组页 | 设置 → 扩展页面 |
 
 配套后台扩展可使用 [前后端完整包](extension-packages.md)；单独上传 JS/TSX 只导入前端页面。

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.api import indices
 from app.market_time import CN_TZ
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 _fetch_minute_single = indices.kline_sync.fetch_minute_single
 
@@ -20,9 +20,14 @@ _fetch_minute_single = indices.kline_sync.fetch_minute_single
 @pytest.fixture
 def context(monkeypatch):
     indices._index_minute_cache.clear()
+    indices.kline_sync._single_minute_work.clear()
+    monkeypatch.setattr(indices, "cn_now", lambda: datetime(2026, 9, 14, 10, 0, tzinfo=CN_TZ))
     monkeypatch.setattr(indices, "cn_today", lambda: date(2026, 9, 13))
     monkeypatch.setattr(indices.trading_day, "is_trading_day", lambda: False)
+    # 存量偏好与生效 getter 必须一致 —— _selected_minute_provider_name 在两者
+    # 不一致时判为「源已失效」(unavailable:<存量>) 并 fail-closed。
     monkeypatch.setattr(indices.preferences, "get_minute_data_provider", lambda: "custom_a")
+    monkeypatch.setattr(indices.preferences, "load", lambda: {"minute_data_provider": "custom_a"})
     repo = MagicMock()
     repo.get_index_instruments.return_value = pl.DataFrame({
         "symbol": ["000001.SH"], "name": ["上证指数"],
@@ -108,23 +113,26 @@ def test_cache_ttl_and_provider_switch(context, monkeypatch):
     clock[0] += 11
     indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
     assert fetch.call_count == 2
+    # 换源 = 换缓存键 (键含生效源名): 存量偏好必须跟着一起换, 否则判为源失效
     monkeypatch.setattr(indices.preferences, "get_minute_data_provider", lambda: "custom_b")
+    monkeypatch.setattr(indices.preferences, "load", lambda: {"minute_data_provider": "custom_b"})
     indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
     assert fetch.call_count == 3
 
 
-def test_unavailable_custom_source_does_not_poison_tickflow_cache(context, monkeypatch):
+def test_unavailable_custom_source_does_not_poison_active_source_cache(context, monkeypatch):
+    """存量偏好指向失效源 → 键为 unavailable:<存量>, 与生效源各自的缓存互不污染。"""
     request, fetch = context
     day = date(2026, 9, 11)
     fetch.side_effect = [pl.DataFrame(), pl.DataFrame({
         "datetime": [datetime(2026, 9, 11, 9, 35)], "close": [3000.0],
     })]
     monkeypatch.setattr(indices.preferences, "load", lambda: {"minute_data_provider": "missing_src"})
-    monkeypatch.setattr(indices.preferences, "get_minute_data_provider", lambda: "tickflow")
+    monkeypatch.setattr(indices.preferences, "get_minute_data_provider", lambda: "custom_a")
 
     first = indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
     assert first["source"] == "none"
-    monkeypatch.setattr(indices.preferences, "load", lambda: {"minute_data_provider": "tickflow"})
+    monkeypatch.setattr(indices.preferences, "load", lambda: {"minute_data_provider": "custom_a"})
     second = indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
 
     assert second["source"] == "live"
@@ -186,31 +194,49 @@ def test_http_date_alias_and_default(context):
     fetch.assert_called_once()
 
 
-@pytest.mark.parametrize("native_allowed", [False, True])
-def test_history_preserves_native_permissions_and_requested_window(context, monkeypatch, native_allowed):
+@pytest.mark.parametrize("capset", [
+    CapabilitySet({Cap.KLINE_MINUTE_BY_SYMBOL: CapabilityLimits()}),
+    CapabilitySet(),
+])
+def test_history_uses_effective_minute_source_window(context, monkeypatch, capset):
+    """指数历史分钟只走生效分钟源的 provider 契约 (无内置原生档位):
+    窗口为当日 09:25 → 15:05 (北京墙钟), asset_type="index", freq="1m";
+    capability 不再决定取数档位 (只参与去重键)。"""
     request, _ = context
-    request.app.state.capabilities = CapabilitySet(
-        {Cap.KLINE_MINUTE_BY_SYMBOL: CapabilityLimits()} if native_allowed else {},
-    )
+    request.app.state.capabilities = capset
     monkeypatch.setattr(indices.kline_sync, "fetch_minute_single", _fetch_minute_single)
-    custom = MagicMock(return_value=(None, True))
-    monkeypatch.setattr(indices.kline_sync, "_try_custom_minute", custom)
-    client = MagicMock()
-    client.klines.batch.return_value = []
-    get_client = MagicMock(return_value=client)
-    monkeypatch.setattr(indices.kline_sync, "get_client", get_client)
+    calls: list[dict] = []
+
+    def fake_try_custom_minute(symbols, start_time, end_time, asset_type,
+                               freq="1m", on_chunk_done=None):
+        calls.append({
+            "symbols": list(symbols), "start_time": start_time, "end_time": end_time,
+            "asset_type": asset_type, "freq": freq,
+        })
+        return pl.DataFrame(), True
+
+    monkeypatch.setattr(indices.kline_sync, "_try_custom_minute", fake_try_custom_minute)
     day = date(2026, 9, 11)
     first = indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
     assert first["rows"] == []
     assert indices.get_index_minute(request, symbol="000001.SH", trade_date=day) == first
-    custom.assert_called_once()
-    assert custom.call_args.kwargs["asset_type"] == "index"
-    if not native_allowed:
-        get_client.assert_not_called()
-        return
-    client.klines.batch.assert_called_once()
-    args, kwargs = client.klines.batch.call_args
-    assert args == (["000001.SH"],)
-    assert kwargs["period"] == "1m"
-    assert kwargs["start_time"] == int(datetime(2026, 9, 11, 9, 25, tzinfo=CN_TZ).timestamp() * 1000)
-    assert kwargs["end_time"] == int(datetime(2026, 9, 11, 15, 5, tzinfo=CN_TZ).timestamp() * 1000)
+    assert len(calls) == 1          # 二次请求命中进程内缓存, 不再打源
+    call = calls[0]
+    assert call["symbols"] == ["000001.SH"]
+    assert call["asset_type"] == "index"
+    assert call["freq"] == "1m"
+    assert call["start_time"] == datetime(2026, 9, 11, 9, 25, tzinfo=CN_TZ)
+    assert call["end_time"] == datetime(2026, 9, 11, 15, 5, tzinfo=CN_TZ)
+
+
+def test_history_fails_closed_when_minute_source_unresolved(context, monkeypatch):
+    """生效分钟源解析不出来 → fail-closed: 空结果, 不跨源回退。"""
+    request, _ = context
+    monkeypatch.setattr(indices.kline_sync, "fetch_minute_single", _fetch_minute_single)
+    monkeypatch.setattr(
+        indices.kline_sync, "_try_custom_minute", lambda *a, **k: (None, False),
+    )
+    day = date(2026, 9, 11)
+    result = indices.get_index_minute(request, symbol="000001.SH", trade_date=day)
+    assert result["rows"] == []
+    assert result["source"] == "none"

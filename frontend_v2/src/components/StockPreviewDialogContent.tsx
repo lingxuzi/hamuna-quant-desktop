@@ -201,7 +201,7 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
   }, [symbol])
 
   // 焦点股票注册: SSE quotes_updated 推送时精准 invalidate 当前股票日K,
-  // 让对话框日K最后一根蜡烛随实时价变化 (后端只读内存, 不调 TickFlow)。
+  // 让对话框日K最后一根蜡烛随实时价变化 (后端只读内存, 不调数据源)。
   // 关闭/切股时清除, 避免无谓刷新。
   useEffect(() => {
     if (!symbol) return
@@ -215,8 +215,8 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
   const { data: prefs } = usePreferences()
   const intradayRefetchMs = (prefs?.minute_intraday_refresh_interval ?? 6) * 1000
 
-  // 分时档位按分钟源历史深度收窄: 浅源(如仅 5 日)只显示可行档位、默认 5日;
-  // 深源(tickflow/未声明)全档位、默认 20日。用户已保存的可行选择优先保留。
+  // 分时可选周期按分钟源历史深度收窄: 浅源(如仅 5 日)只显示可行周期、默认 5日;
+  // 深源(内置源/未声明)全周期、默认 20日。用户已保存的可行选择优先保留。
   const minuteHistoryDays = prefs?.minute_history_days ?? null
   const dayOptions = useMemo<number[]>(
     () => INTRADAY_DAY_OPTIONS.filter(d => minuteHistoryDays == null || d <= minuteHistoryDays),
@@ -305,11 +305,11 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                     role="tab"
                     aria-selected={view === 'daily'}
                     onClick={() => setView('daily')}
-                    className={`inline-flex h-6 items-center gap-1 rounded px-2.5 text-[11px] transition-colors ${
+                    className={`ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 ${
                       view === 'daily' ? 'bg-accent/20 text-accent font-medium' : 'text-muted hover:text-secondary hover:bg-elevated/60'
                     }`}
                   >
-                    <LineChart className="h-3 w-3" />
+                    <LineChart className="h-[12px] w-[12px]" />
                     日 K
                   </button>
                   <button
@@ -317,11 +317,11 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                     role="tab"
                     aria-selected={view === 'intraday'}
                     onClick={() => setView('intraday')}
-                    className={`inline-flex h-6 items-center gap-1 rounded px-2.5 text-[11px] transition-colors ${
+                    className={`ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 ${
                       view === 'intraday' ? 'bg-accent/20 text-accent font-medium' : 'text-muted hover:text-secondary hover:bg-elevated/60'
                     }`}
                   >
-                    <Clock className="h-3 w-3" />
+                    <Clock className="h-[12px] w-[12px]" />
                     分时
                   </button>
                 </div>
@@ -345,7 +345,7 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                             ns.setMonth(ns.getMonth() - p.months)
                             setDateRange({ start: ns.toISOString().slice(0, 10), end })
                           }}
-                          className={`h-6 shrink-0 whitespace-nowrap rounded px-2.5 text-[11px] transition-colors cursor-pointer
+                          className={`ctl ctl-sm ctl-ghost shrink-0 whitespace-nowrap px-1.5
                             ${isActive
                               ? 'bg-accent/20 text-accent font-medium'
                               : 'text-muted hover:text-secondary hover:bg-elevated/60'
@@ -379,7 +379,7 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                           type="button"
                           aria-pressed={effectiveIntradayDays === days}
                           onClick={() => selectIntradayDays(days)}
-                          className={`h-6 rounded px-2.5 text-[11px] transition-colors ${
+                          className={`ctl ctl-sm ctl-ghost px-1.5 ${
                             effectiveIntradayDays === days
                               ? 'bg-accent/20 text-accent font-medium'
                               : 'text-muted hover:text-secondary hover:bg-elevated/60'
@@ -400,11 +400,11 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                     type="button"
                     onClick={() => toggleWatchlist.mutate({ action: 'remove' })}
                     disabled={toggleWatchlist.isPending}
-                    className="rounded-btn p-1.5 text-[#FACC15] transition-colors cursor-pointer hover:bg-elevated disabled:opacity-50"
+                    className="ctl ctl-sm ctl-ghost ctl-icon text-[#FACC15] hover:bg-elevated disabled:opacity-50"
                     title="移出自选"
                     aria-label={`将 ${symbol} 移出自选`}
                   >
-                    <Star className="h-4 w-4" />
+                    <Star className="h-[16px] w-[16px]" />
                   </button>
                 ) : (
                   <WatchlistAddMenu
@@ -413,25 +413,25 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                     triggerClassName="rounded-btn p-1.5 text-muted transition-colors cursor-pointer hover:bg-elevated hover:text-foreground disabled:opacity-50"
                     ariaLabel={`将 ${symbol} 加入自选`}
                   >
-                    <Star className="h-4 w-4" />
+                    <Star className="h-[16px] w-[16px]" />
                   </WatchlistAddMenu>
                 )}
                 {/* 加监控 */}
                 <button
                   onClick={() => setShowMonitorEditor(true)}
-                  className="p-1.5 rounded-btn text-amber-400 hover:bg-amber-400/10 transition-colors cursor-pointer"
+                  className="ctl ctl-sm ctl-ghost ctl-icon text-amber-400 hover:bg-amber-400/10"
                   title="加监控"
                 >
-                  <RadioTower className="h-4 w-4" />
+                  <RadioTower className="h-[16px] w-[16px]" />
                 </button>
 
                 {/* 刷新 */}
                 <button
                   onClick={handleRefresh}
-                  className="p-1.5 rounded-btn text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+                  className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-foreground hover:bg-elevated"
                   title="刷新"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-[16px] w-[16px]" />
                 </button>
 
                 {/* 放大 / 缩小 */}
@@ -440,16 +440,16 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                   className="p-1.5 rounded-btn text-secondary hover:text-foreground hover:bg-elevated transition-colors"
                   title={maximized ? '缩小' : '放大'}
                 >
-                  {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  {maximized ? <Minimize2 className="h-[16px] w-[16px]" /> : <Maximize2 className="h-[16px] w-[16px]" />}
                 </button>
 
                 <button
                   onClick={onClose}
-                  className="shrink-0 rounded-btn p-1.5 text-secondary transition-colors hover:bg-danger/15 hover:text-danger"
+                  className="ctl ctl-sm ctl-ghost ctl-icon shrink-0 text-secondary hover:bg-danger/15 hover:text-danger"
                   aria-label="关闭个股详情"
                   title="关闭"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-[16px] w-[16px]" />
                 </button>
               </div>
               </div>

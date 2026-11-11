@@ -21,7 +21,7 @@ import polars as pl
 import pytest
 
 from app.services import kline_sync
-from app.tickflow import repository
+from app.data_providers import repository
 
 try:
     import psutil
@@ -142,7 +142,7 @@ def test_minute_date_queries_do_not_pin_partition_handles(tmp_path):
     旧实现 self.db.execute(...).fetchone() 的未消费结果集经 DuckDB buffer
     manager 钉住首个分区句柄, 后续同步 os.replace 永久 PermissionError。
     """
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     minute_dir = tmp_path / "kline_minute"
     kline_sync._write_minute_partition(

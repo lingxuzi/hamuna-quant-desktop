@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { usePreferences, useCapabilities } from '@/lib/useSharedQueries'
 import { MissingCapChip } from '@/lib/capability-labels'
+import { INPUT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 /**
  * 五档盘口 sealed(真假涨停) 配置内容(纯内容, 无外框, 由父级 Card 包裹)。
@@ -59,7 +61,11 @@ export function DepthConfigContent({ disabled }: { disabled?: boolean }) {
     )
   }
 
-  const inputCls = `w-16 h-7 bg-elevated border border-border rounded text-xs text-center px-1 focus:outline-none focus:border-accent/50 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`
+  const inputCls = cn(
+    INPUT_MD,
+    'w-16 bg-elevated text-center px-1 focus:border-accent/50',
+    disabled ? 'opacity-40 cursor-not-allowed' : '',
+  )
 
   return (
     <div className="space-y-3">
@@ -116,7 +122,7 @@ export function DepthConfigContent({ disabled }: { disabled?: boolean }) {
               if (h * 60 + m > 18 * 60) { h = 18; m = 0 }
               saveFinalize.mutate({ hour: h, minute: m })
             }}
-            className={`w-12 h-7 bg-elevated border border-border rounded text-xs text-center px-1 focus:outline-none focus:border-accent/50 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`ctl ctl-md ctl-input w-12 bg-elevated text-center px-2.5 focus:border-accent/50 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
           />
           <span className="text-xs text-muted">:</span>
           <input
@@ -138,7 +144,7 @@ export function DepthConfigContent({ disabled }: { disabled?: boolean }) {
               if (h * 60 + m > 18 * 60) { h = 18; m = 0 }
               saveFinalize.mutate({ hour: h, minute: m })
             }}
-            className={`w-12 h-7 bg-elevated border border-border rounded text-xs text-center px-1 focus:outline-none focus:border-accent/50 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`ctl ctl-md ctl-input w-12 bg-elevated text-center px-2.5 focus:border-accent/50 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
           />
         </div>
       </div>

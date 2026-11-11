@@ -10,8 +10,11 @@ import { api, type SettingsState, type SponsorModelItem } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { AnchorWrap } from '@/lib/useCardFlash'
 import { Switch } from '@/components/Switch'
+import { Modal } from '@/components/Modal'
 import { copyText } from '@/lib/clipboard'
 import { DEEPSEEK_FALLBACK_RANGE, MAX_DISCOUNT_FALLBACK_PCT, bandDiscountLabel, discountRangeLabel, loadSponsorModelItems, maxDiscountPct, useSponsorModelItems } from '@/lib/sponsor-discount'
+import { BTN_MD, CTL_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 // 折扣率 → 中文折数: 0.6→"6折", 0.35→"3.5折", 0.2→"2折"
 const fmtDiscount = (rate: number) => {
@@ -28,8 +31,10 @@ const fmtContext = (n?: number | null) => {
 }
 
 // 统一的输入框样式(与项目其他设置页一致)
-const INPUT_CLS =
-  'w-full h-9 px-2.5 rounded-lg bg-base border-0 ring-1 ring-border/30 text-xs font-mono text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30 transition-shadow'
+const INPUT_CLS = cn(
+  CTL_MD,
+  'w-full rounded-btn bg-base border-0 ring-1 ring-border/30 font-mono placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30 transition-shadow',
+)
 
 // 空/非法输入 → undefined (后端保持原值), 合法正整数 → int
 const toPositiveInt = (v: string) => {
@@ -495,7 +500,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <Sparkles className="h-4 w-4 shrink-0 text-secondary" />
+            <Sparkles className="h-[16px] w-[16px] shrink-0 text-secondary" />
             <h2 className="text-sm font-medium text-foreground">AI 服务</h2>
           </div>
           <div className="mt-2 flex items-center gap-2">
@@ -524,15 +529,15 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
           {(configured || canTest) && (
             <button onClick={handleTest} disabled={testing}
               title="测试当前表单的连接, 不保存配置"
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98] disabled:opacity-50">
-              {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wifi className="h-3 w-3" />}
+              className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1.5 px-1.5 hover:bg-elevated hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98] disabled:opacity-50">
+              {testing ? <Loader2 className="h-[12px] w-[12px] animate-spin" /> : <Wifi className="h-[12px] w-[12px]" />}
               {testing ? '测试中' : '测试'}
             </button>
           )}
         </div>
       </div>
 
-      <section className="overflow-hidden leaf-cell">
+      <section className="mt-10 first:mt-0">
         {/* 服务商 */}
         <div className="px-5 py-4">
           <SectionHeader label="服务商" />
@@ -553,7 +558,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                       active ? 'opacity-100' : 'opacity-0'
                     }`} />
                   <span className="flex items-center gap-2">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
+                    <span className={`flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md transition-colors ${
                       active ? 'bg-accent/20 text-accent' : 'bg-elevated/60 text-muted group-hover:text-secondary'
                     }`}>
                       <Icon className="h-3.5 w-3.5" />
@@ -573,7 +578,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                 <a href={selectedPreset.website} target="_blank" rel="noreferrer"
                   className={`mt-1.5 inline-flex items-center gap-1 text-[11px] transition-colors ${selectedPreset.sponsor ? 'font-medium text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300' : 'text-muted hover:text-accent'}`}>
                   {selectedPreset.websiteLabel}
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="h-[12px] w-[12px]" />
                 </a>
               )}
             </div>
@@ -581,7 +586,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
         </div>
       </section>
 
-      <section className="overflow-hidden leaf-cell">
+      <section className="mt-10 first:mt-0">
         {/* 接口配置 */}
         <div className="px-5 py-4">
           {/* 标题行: 左侧区段名, 右侧请求方式 (属于本区段内可编辑项, 与下方表单同组) */}
@@ -592,8 +597,8 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                 title="Chat Completions 兼容面最广; Responses 为 OpenAI 官方新协议, 仅官方及少数网关支持。不确定就保持默认。">
                 {(['chat_completions', 'responses'] as const).map(p => (
                   <button key={p} type="button" onClick={() => setProtocol(p)} aria-pressed={protocol === p}
-                    className={`rounded-full px-2.5 py-1 font-mono text-[10px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
-                      protocol === p ? 'bg-accent/15 text-accent' : 'text-muted hover:text-secondary'
+                    className={`ctl ctl-sm ctl-ghost rounded-full px-1.5 font-mono leading-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+                      protocol === p ? 'bg-accent/15 text-accent' : 'text-secondary hover:text-foreground'
                     }`}>
                     {p === 'chat_completions' ? 'Chat Completions' : 'Responses'}
                   </button>
@@ -646,7 +651,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                     <input type="text" value={model} onChange={e => handleModelChange(e.target.value)} placeholder="gpt-5.6-sol" className={`${INPUT_CLS} ${selectedPreset?.sponsor ? 'pr-9' : ''}`} />
                     {selectedPreset?.sponsor && (
                       <button type="button" onClick={fetchModelOptions} aria-label="获取模型列表"
-                        className="absolute right-1.5 top-1/2 flex h-6 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-border/40 bg-base text-muted transition-colors hover:border-accent/40 hover:text-accent">
+                        className="ctl ctl-sm ctl-btn absolute right-1.5 top-1/2 flex w-[24px] px-0 -translate-y-1/2 items-center justify-center border-border/40 hover:border-accent/40 hover:text-accent bg-base">
                         {modelsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
                     )}
@@ -655,7 +660,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                         <div className="border-b border-border/30 p-2">
                           <input type="text" value={modelFilter} onChange={e => setModelFilter(e.target.value)}
                             placeholder="搜索模型..." autoFocus
-                            className="h-7 w-full rounded-md bg-base px-2 text-xs ring-1 ring-border/30 focus:outline-none focus:ring-accent/40" />
+                            className="ctl ctl-md ctl-input w-full px-2.5 ring-1 ring-border/30 focus:ring-accent/40 bg-base" />
                         </div>
                         <div className="max-h-56 overflow-y-auto py-1">
                           {modelsLoading ? (
@@ -723,7 +728,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
               <Field label="API Key">
                 <div className="relative">
                   <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={configured ? `${s?.ai_api_key_masked} · 留空不修改` : 'sk-...'} className={`${INPUT_CLS} pr-9`} />
-                  <button onClick={() => setShowKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted/40 hover:text-muted" tabIndex={-1} aria-label={showKey ? '隐藏' : '显示'}>
+                  <button onClick={() => setShowKey(v => !v)} className="ctl ctl-md ctl-ghost absolute right-1.5 top-1/2 inline-flex h-ctl-md w-[24px] px-0 -translate-y-1/2 items-center justify-center text-muted/40 hover:text-muted" tabIndex={-1} aria-label={showKey ? '隐藏' : '显示'}>
                     {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 </div>
@@ -737,8 +742,8 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
               {customUa && (
                 <div className="flex gap-2">
                   <input type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder="粘贴浏览器 User-Agent" className={`${INPUT_CLS} flex-1`} />
-                  <button type="button" onClick={genRandomUa} title="随机生成浏览器 User-Agent" className="h-9 px-2.5 rounded-lg border border-border/50 text-xs text-secondary hover:text-accent hover:border-accent/30 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:scale-[0.98]">
-                    <Shuffle className="h-3 w-3" /> 随机
+                  <button type="button" onClick={genRandomUa} title="随机生成浏览器 User-Agent" className={cn(BTN_MD, 'shrink-0 active:scale-[0.98]')}>
+                    <Shuffle className="h-[12px] w-[12px]" /> 随机
                   </button>
                 </div>
               )}
@@ -748,7 +753,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
         </div>
       </section>
 
-      <section className="overflow-hidden leaf-cell">
+      <section className="mt-10 first:mt-0">
         {/* 高级参数 (折叠) */}
         <div>
           <button type="button" onClick={() => setAdvancedOpen(v => !v)} aria-expanded={advancedOpen}
@@ -774,7 +779,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
 
       {/* 操作卡: 安全说明 + 保存/清空 + 配置文件入口。
           独立成卡让「保存」始终在视觉收尾处, 不必滚过长表单才找到。 */}
-      <section className="overflow-hidden leaf-cell">
+      <section className="mt-10 first:mt-0">
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-start gap-2 sm:flex-1">
             <Shield className="mt-px h-3.5 w-3.5 shrink-0 text-muted/70" />
@@ -793,17 +798,17 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
               </span>
             )}
             {configured && (
-              <button onClick={() => setConfirmClear(true)} disabled={clear.isPending} className="h-9 px-3.5 rounded-lg text-secondary hover:bg-danger/10 hover:text-danger text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]" title="Clear AI provider configuration">
+              <button onClick={() => setConfirmClear(true)} disabled={clear.isPending} className="ctl ctl-lg ctl-ghost px-3.5 hover:bg-danger/10 hover:text-danger flex items-center justify-center gap-1.5 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-danger/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]" title="Clear AI provider configuration">
                 <Trash2 className="h-3.5 w-3.5" />
                 清空
               </button>
             )}
-            <button onClick={handleTest} disabled={testing || !canTest} className="h-9 px-3.5 rounded-lg text-secondary hover:bg-elevated hover:text-foreground text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]" title="测试当前表单的连接, 不保存配置">
+            <button onClick={handleTest} disabled={testing || !canTest} className="ctl ctl-lg ctl-ghost px-3.5 hover:bg-elevated hover:text-foreground flex items-center justify-center gap-1.5 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]" title="测试当前表单的连接, 不保存配置">
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
               {testing ? '测试中' : '测试连接'}
             </button>
-            <button onClick={() => save.mutate()} disabled={save.isPending || !canSave} className="h-9 px-5 rounded-lg bg-accent text-white text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]">
-              {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            <button onClick={() => save.mutate()} disabled={save.isPending || !canSave} className="ctl ctl-lg ctl-btn pri px-3.5 flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-40 transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:scale-[0.98]">
+              {save.isPending ? <Loader2 className="h-[16px] w-[16px] animate-spin" /> : saved ? <Check className="h-[16px] w-[16px]" /> : <Save className="h-[16px] w-[16px]" />}
               {save.isPending ? '保存中...' : saved ? '已保存' : '保存配置'}
             </button>
           </div>
@@ -820,13 +825,13 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
               </code>
               <span className="ml-auto flex shrink-0 items-center gap-1">
                 <button type="button" onClick={copySecretsPath}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted transition-colors hover:bg-elevated hover:text-secondary">
-                  {pathCopied ? <Check className="h-3 w-3 text-bear" /> : null}
+                  className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 hover:bg-elevated hover:text-secondary">
+                  {pathCopied ? <Check className="h-[12px] w-[12px] text-bear" /> : null}
                   {pathCopied ? '已复制' : '复制路径'}
                 </button>
                 <button type="button" onClick={reloadFromFile} disabled={settings.isFetching}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted transition-colors hover:bg-elevated hover:text-secondary disabled:opacity-50">
-                  {reloaded ? <Check className="h-3 w-3 text-bear" /> : <RefreshCw className={`h-3 w-3 ${settings.isFetching ? 'animate-spin' : ''}`} />}
+                  className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 hover:bg-elevated hover:text-secondary disabled:opacity-50">
+                  {reloaded ? <Check className="h-[12px] w-[12px] text-bear" /> : <RefreshCw className={`h-[12px] w-[12px] ${settings.isFetching ? 'animate-spin' : ''}`} />}
                   {reloaded ? '已同步' : '重新加载'}
                 </button>
               </span>
@@ -841,23 +846,25 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
       </AnchorWrap>
 
       {confirmClear && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmClear(false)} />
-          <div className="relative w-[90vw] max-w-[380px] rounded-card border border-border bg-base p-6">
-            <h3 className="text-sm font-medium text-foreground mb-2">清空 AI 配置</h3>
-            <p className="text-xs text-secondary mb-5 leading-relaxed">
-              这会清空已保存的 provider、API Key、API 地址、模型和 Codex CLI 命令。之后可以重新配置。
-            </p>
-            <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setConfirmClear(false)} className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors">
-                取消
-              </button>
-              <button onClick={() => clear.mutate()} disabled={clear.isPending} className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:opacity-50">
-                {clear.isPending ? '清空中...' : '确认'}
-              </button>
-            </div>
+        <Modal
+          onClose={() => setConfirmClear(false)}
+          labelledBy="ai-clear-title"
+          panelClassName="w-[90vw] max-w-[380px] rounded-card border border-border bg-base p-6"
+          overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        >
+          <h3 id="ai-clear-title" className="text-sm font-medium text-foreground mb-2">清空 AI 配置</h3>
+          <p className="text-xs text-secondary mb-5 leading-relaxed">
+            这会清空已保存的 provider、API Key、API 地址、模型和 Codex CLI 命令。之后可以重新配置。
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={() => setConfirmClear(false)} className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 bg-elevated">
+              取消
+            </button>
+            <button onClick={() => clear.mutate()} disabled={clear.isPending} className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger/25 disabled:opacity-50 bg-danger/15">
+              {clear.isPending ? '清空中...' : '确认'}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
@@ -866,8 +873,15 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
 // ===== 分区小标题 =====
 
 function SectionHeader({ label, inline }: { label: string; inline?: boolean }) {
+  if (inline) {
+    return (
+      <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted">
+        {label}
+      </div>
+    )
+  }
   return (
-    <div className={`${inline ? '' : 'mb-3'} text-[10px] font-medium uppercase tracking-[0.14em] text-muted`}>
+    <div className="sec-h">
       {label}
     </div>
   )

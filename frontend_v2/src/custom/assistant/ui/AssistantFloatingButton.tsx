@@ -48,7 +48,9 @@ function loadPos(): BallPos {
     }
   } catch { /* 存储不可用时用默认位置 */ }
   const z = pageZoom()
-  return { x: window.innerWidth / z - SIZE - 24, y: window.innerHeight / z - SIZE - 152 }
+  // 贴右下角 (离边 24px): 原来的 -152px 是为了避开吐司, 结果正好落在右栏
+  // 数据上 (复盘页压住「站上 20 日线 / 60 日线」两行数值)。吐司改到球上方堆叠。
+  return { x: window.innerWidth / z - SIZE - 24, y: window.innerHeight / z - SIZE - 24 }
 }
 
 function savePos(pos: BallPos) {
@@ -147,16 +149,18 @@ export function AssistantFloatingButton() {
         // z-30 = 常驻入口层: 在页面内容之上, 但低于 z-40 遮罩与 z-50 弹窗 —
         // 弹窗打开时悬浮球被盖住, 不再悬浮遮挡弹窗内容 (与 AiConfigEntry 同层)。
         'fixed z-30 flex touch-none cursor-pointer items-center justify-center',
-        // 墨色方印 (规范 .assist-fab): 无渐变/阴影/光晕, 文字用纸色
-        'border border-foreground bg-foreground font-serif text-[15px] leading-none text-surface',
+        // 素印: 纸底 + 加重发丝线。实心墨块在暖白纸上比页面题头还重,
+        // 且是不透明的, 压住底下的数据就再也看不见了。
+        'border border-rule-strong bg-surface font-serif text-[15px] leading-none text-secondary',
         'transition-colors duration-150 ease-smooth',
-        open && 'border-accent bg-accent',
+        'hover:border-accent/60 hover:text-accent',
+        open && 'border-accent bg-accent text-on-solid hover:text-on-solid',
       )}
     >
       <span aria-hidden="true">助</span>
       {sending && (
         <span
-          className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-surface bg-warning"
+          className="absolute -right-0.5 -top-0.5 h-[12px] w-[12px] animate-pulse rounded-full border-2 border-surface bg-warning"
           title="生成中"
         />
       )}

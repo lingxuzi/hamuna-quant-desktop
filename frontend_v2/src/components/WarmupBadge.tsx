@@ -55,7 +55,7 @@ export function WarmupBadge() {
         className="inline-flex items-center gap-0.5 rounded-full px-1.5 text-[10px] text-amber-500/70 transition-colors hover:bg-amber-400/10 hover:text-amber-500"
         title="为什么开头可能没交易?"
       >
-        <Info className="h-3 w-3" strokeWidth={1.5} />
+        <Info className="h-[12px] w-[12px]" strokeWidth={1.5} />
         预热 ≥120 天
       </button>
 
@@ -92,7 +92,7 @@ export function WarmupBadge() {
                 </div>
                 {/* 小箭头指向锚点 */}
                 <div
-                  className="absolute -top-1 h-2 w-2 rotate-45 border-l border-t border-border bg-surface"
+                  className="absolute -top-1 h-[8px] w-[8px] rotate-45 border-l border-t border-border bg-surface"
                   style={{ left: 12 }}
                 />
               </motion.div>

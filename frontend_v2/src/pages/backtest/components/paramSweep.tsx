@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import type { StrategyDetail, StrategyParamDef } from '@/lib/api'
 import { paramDisplayLabel, visibleParams } from '@/lib/strategyParams'
+import { INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 /** 参数扫描配置的共享逻辑与 UI — 优化器与 walk-forward 复用。 */
 
-export const INPUT_CLS =
-  'w-full px-2.5 py-1.5 rounded-input bg-surface border border-border text-xs focus:outline-none focus:border-accent'
+export const INPUT_CLS = cn(INPUT_MD, 'w-full')
+
+export const SELECT_CLS = cn(SELECT_MD, 'w-full')
 
 // 可选优化目标 (对齐后端 VALID_OBJECTIVES) + 中文标签
 export const OBJECTIVES: { id: string; label: string }[] = [
@@ -140,7 +143,7 @@ export function StrategySelect({ strategies, value, onChange }: {
   onChange: (id: string) => void
 }) {
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} className={INPUT_CLS}>
+    <select value={value} onChange={e => onChange(e.target.value)} className={SELECT_CLS}>
       <option value="">选择策略…</option>
       {strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
     </select>

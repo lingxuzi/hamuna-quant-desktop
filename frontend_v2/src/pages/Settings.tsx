@@ -1,12 +1,14 @@
 /**
- * 统一设置页面 — Tab 切换外壳。
+ * 统一设置页面 — Tab 切换外壳 (设计稿 26-settings-pages 的 .set .tabs)。
  *
  * 通过 URL query param ?tab=xxx 同步 Tab 状态。
  */
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Database, KeyRound, LayoutGrid, Library, Radio, Sparkles, Settings2, PanelLeftClose, PanelLeftOpen, Clock3, Info, PackageOpen } from 'lucide-react'
+import { toast } from '@/components/Toast'
 // 面板按 tab 按需加载: 8 个面板源码 270KB+, 同步打包会让设置页 chunk 膨胀
 const SettingsAIPanel = lazy(() => import('./settings/AI').then(m => ({ default: m.SettingsAIPanel })))
 const SettingsApiTokensPanel = lazy(() => import('./settings/ApiTokens').then(m => ({ default: m.SettingsApiTokensPanel })))
@@ -21,6 +23,11 @@ const SettingsDataSourcesPanel = lazy(() => import('./settings/DataSources').the
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/cn'
 import { setUiPref } from '@/lib/uiPrefs'
+import { api } from '@/lib/api'
+import { QK } from '@/lib/queryKeys'
+import { usePreferences } from '@/lib/useSharedQueries'
+import { getFrontendExtensionNavigation } from '@/extensions/registry'
+import { BUILTIN_CATALOG } from './settings/PageAdmin'
 
 // ===== Tab 定义 =====
 
@@ -91,31 +98,70 @@ export function Settings() {
     })
   }
 
+  // design/v2/26: 页面管理子页有独立卷首; 其它子页沿用「设置」
+  const pagesTab = activeTab.key === 'pages'
+
+  // ===== 工具条 (设计稿 26): 状态签 + 保存 =====
+  // 目录计数与 PageAdmin 同口径: 内建目录常量 + analysisMenus + 源码扩展注册表
+  const { data: prefs } = usePreferences()
+  const menus = useQuery({ queryKey: QK.analysisMenus, queryFn: api.analysisMenus })
+  const builtinCount = BUILTIN_CATALOG.length
+  const extCount = getFrontendExtensionNavigation().length + (menus.data?.items?.length ?? 0)
+  const catalogCount = builtinCount + extCount
+
+  // 保存: 各面板改动均即时落库, 这里把当前目录顺序/显隐再持久化一次 (幂等),
+  // 与设计稿工具条的「保存」语义对齐, 也覆盖个别浏览器丢弃未完成请求的边缘情况
+  const [saving, setSaving] = useState(false)
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api.saveNavOrder(prefs?.nav_order ?? [])
+      await api.saveNavHidden(prefs?.nav_hidden ?? [])
+      toast('设置已保存', 'success')
+    } catch (e) {
+      toast((e as Error).message || '保存失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <>
       <PageHeader seal="设"
-        title="设置"
-        subtitle="管理账户、数据刷新策略和高级功能配置。"
-        className="pl-14 md:pl-5"
+        title={pagesTab ? '设置 · 页面管理' : '设置'}
+        subtitle={pagesTab ? 'SETTINGS / PAGES' : 'SETTINGS'}
+        titleExtra={
+          <>
+            <span className="tb-chip">{TABS.length} 个设置页</span>
+            <span className="tb-chip">{catalogCount} 页目录</span>
+            <span className="tb-chip">内建 {builtinCount} · 扩展 {extCount}</span>
+          </>
+        }
+        right={
+          <button className="ctl-btn ctl-sm pri" disabled={saving} onClick={handleSave}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+        }
+        className="mb-0"
       />
 
-      <div className="px-4 py-5 sm:px-8 sm:py-6">
+      <div className="pt-1">
         <div className="flex flex-col gap-6 md:flex-row md:items-stretch">
           <label className="flex items-center gap-3 text-xs text-secondary md:hidden">
             设置分类
-            <select aria-label="设置分类" value={activeTab.key} onChange={e => setSearchParams({ tab: e.target.value }, { replace: true })} className="min-h-11 min-w-0 flex-1 rounded-input border border-border bg-surface px-3 text-sm text-foreground">
+            <select aria-label="设置分类" value={activeTab.key} onChange={e => setSearchParams({ tab: e.target.value }, { replace: true })} className="ctl ctl-lg ctl-select min-w-0 flex-1">
               {TABS.map(tab => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
             </select>
           </label>
-          {/* ===== 竖向 Tab 侧栏 ===== */}
-          <nav aria-label="设置分类" className={cn('hidden shrink-0 transition-all duration-200 ease-smooth md:block', collapsed ? 'w-10' : 'w-36')}>
-            <div className="flex flex-col gap-0.5 justify-center min-h-[60vh] sticky top-6">
+          {/* ===== 竖向 Tab 侧栏 (design/v2/26 .set .tabs: 176px 纯文字 + 左竖条) ===== */}
+          <nav aria-label="设置分类" className={cn('hidden shrink-0 transition-all duration-200 ease-smooth md:block', collapsed ? 'w-10' : 'w-44')}>
+            <div className="flex flex-col justify-center min-h-[60vh] sticky top-6 border-r border-border pr-3 pt-2.5 pb-6">
               {/* 收起/展开 按钮 */}
               <button
                 onClick={toggleCollapsed}
                 className={cn(
                   'group relative flex items-center gap-2 text-muted transition-colors duration-150 ease-smooth mb-1',
-                  collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 text-xs',
+                  collapsed ? 'ctl ctl-sm ctl-ghost justify-center px-1.5' : 'px-2.5 py-2 text-[11px]',
                   'hover:bg-foreground/[0.04] hover:text-foreground',
                 )}
                 title={collapsed ? '展开菜单' : '收起菜单'}
@@ -134,21 +180,14 @@ export function Settings() {
                   onClick={() => setSearchParams({ tab: key }, { replace: true })}
                   title={collapsed ? label : undefined}
                   className={cn(
-                    'group relative flex items-center text-[12.5px] transition-colors duration-150 ease-smooth',
-                    collapsed ? 'justify-center px-0 py-2' : 'items-center gap-2.5 px-3 py-[7px] text-left',
+                    'group relative flex items-center text-[11px] leading-[1.4] transition-colors duration-150 ease-smooth',
+                    collapsed ? 'ctl ctl-sm ctl-ghost justify-center px-1.5' : 'ctl ctl-md ctl-ghost pl-2.5 pr-1 text-left border-l-2',
                     activeTab.key === key
-                      ? 'bg-accent/[0.06] text-accent'
-                      : 'text-secondary hover:bg-foreground/[0.04] hover:text-foreground',
+                      ? 'border-accent text-accent bg-accent/[0.055]'
+                      : 'border-transparent text-secondary hover:text-foreground',
                   )}
                 >
-                  {/* active 左侧赭石竖条, 与主侧栏同一记号 */}
-                  <span
-                    className={cn(
-                      'pointer-events-none absolute inset-y-0 left-0 w-[2px] origin-top bg-accent transition-transform duration-[220ms] ease-smooth group-hover:scale-y-100',
-                      activeTab.key === key ? 'scale-y-100' : 'scale-y-0',
-                    )}
-                  />
-                  <Icon className={cn('h-[13px] w-[13px] shrink-0 transition-colors', activeTab.key === key ? 'text-accent' : 'text-muted group-hover:text-foreground')} />
+                  <Icon className={cn('h-[13px] w-[13px] shrink-0 transition-colors mr-2', activeTab.key === key ? 'text-accent' : 'text-muted group-hover:text-foreground')} />
                   {!collapsed && <span>{label}</span>}
                   {!collapsed && badge && (
                     <span className="ml-auto inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400 shrink-0">
@@ -166,7 +205,7 @@ export function Settings() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.15 }}
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-1 pl-6 pt-3.5"
           >
             <Suspense fallback={<div className="py-12 text-center text-xs text-muted">加载中…</div>}>
               {activeTab.key === 'monitoring'

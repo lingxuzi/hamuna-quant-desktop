@@ -235,8 +235,8 @@ def test_get_minute_returns_partial_instead_of_dropping(tmp_path, monkeypatch):
     回归: 此前把不完整当无数据 → 补拉历史日期恒空 → 前端白屏。
     """
     from app.api import kline as kline_api
-    from app.tickflow.capabilities import CapabilitySet
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.capabilities import CapabilitySet
+    from app.data_providers.repository import DataStore, KlineRepository
 
     repo = KlineRepository(DataStore(tmp_path))
     rows = _full_day("600519.SH")[:171]

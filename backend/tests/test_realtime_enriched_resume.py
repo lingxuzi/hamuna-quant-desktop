@@ -11,7 +11,7 @@ from app.indicators.pipeline import (
     compute_indicators,
 )
 from app.strategy import custom_signals
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 @pytest.fixture(autouse=True)

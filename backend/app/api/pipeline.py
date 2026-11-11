@@ -7,6 +7,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.api.data import invalidate_storage_cache
 from app.jobs import daily_pipeline
 from app.services.pipeline_jobs import (
     JobCancelledError,
@@ -15,7 +16,6 @@ from app.services.pipeline_jobs import (
     run_with_capacity,
     try_acquire_run_slot,
 )
-from app.api.data import invalidate_storage_cache
 
 # 长时间任务专用线程池（隔离于 FastAPI 默认线程池，防止阻塞请求处理）
 _long_task_executor = _cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="long-task")
@@ -112,13 +112,16 @@ async def run_adj_factor_now(request: Request) -> dict:
     """独立同步除权因子(全历史 + 受影响个股 enriched 局部重算), 任务化+进度轮询。
 
     与盘后管道共用单飞与重任务槽 (两者写同一批 parquet); 门控与矩阵
-    usable 同口径: TickFlow 档位不足且未路由到其他可用源时 400。
+    usable 同口径: 生效源未声明 adj_factor 且无其他可用源时 400。
     """
+    from app.data_providers import custom as custom_sources
+    from app.data_providers.capabilities import Cap
     from app.services import preferences
-    from app.tickflow.capabilities import Cap
 
     capset = request.app.state.capabilities
-    if not (capset.has(Cap.ADJ_FACTOR) or preferences.get_adj_factor_provider() != "tickflow"):
+    adj_provider = preferences.get_adj_factor_provider()
+    if not (capset.has(Cap.ADJ_FACTOR)
+            or custom_sources.provider_has_dataset(adj_provider, "adj_factor")):
         raise HTTPException(
             status_code=400,
             detail="除权因子能力不可用: 请先在 设置 → 数据源 中配置可用数据源",

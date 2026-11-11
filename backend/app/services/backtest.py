@@ -17,7 +17,7 @@ import polars as pl
 
 from app.config import settings
 from app.parquet import scan_enriched_parquet
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +165,7 @@ class BacktestService:
         asset_type='etf' 时读 ETF enriched。
         """
         try:
-            from app.tickflow.repository import enriched_dirname
+            from app.data_providers.repository import enriched_dirname
             enriched_glob = str(self.repo.store.data_dir / enriched_dirname(asset_type) / "**" / "*.parquet")
             # 指标 warmup (#201): MA/MACD/RSI/BOLL 需要区间前的历史窗口,
             # 直接按 [start,end] 过滤后 compute_all 会让区间头部的指标失真。

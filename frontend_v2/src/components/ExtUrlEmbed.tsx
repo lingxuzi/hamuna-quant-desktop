@@ -16,8 +16,8 @@ export function ExtUrlEmbed({ label, url }: { label: string; url: string }) {
 
   if (!safeUrl) {
     return (
-      <div className="mx-auto max-w-xl leaf-cell p-8 text-center">
-        <ShieldAlert className="mx-auto h-6 w-6 text-accent" />
+      <div className="mx-auto max-w-xl p-8 text-center">
+        <ShieldAlert className="mx-auto h-[24px] w-[24px] text-accent" />
         <h2 className="mt-3 text-lg font-semibold text-foreground">无法嵌入该地址</h2>
         <p className="mt-2 text-sm leading-6 text-secondary">
           嵌入地址仅支持 http(s) 且不能是本站自身。请到「设置 → 页面管理 → 扩展页面」修改该页面的 URL。
@@ -31,7 +31,7 @@ export function ExtUrlEmbed({ label, url }: { label: string; url: string }) {
   try { host = new URL(safeUrl).hostname } catch { /* sanitizeExtUrl 已保证可解析 */ }
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden leaf-cell">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-surface">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-foreground">
           <Link2 className="h-3.5 w-3.5 shrink-0 text-accent" />

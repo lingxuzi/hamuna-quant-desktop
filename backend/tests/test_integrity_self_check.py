@@ -122,7 +122,7 @@ def test_halted_rows_allow_zero_prices_but_reject_nonfinite_values(tmp_path, clo
 
 def test_report_persists_and_repair_rechecks_with_backup(tmp_path, monkeypatch):
     from app.services import integrity_check, kline_sync
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     monkeypatch.setattr(integrity_check, "cn_today", lambda: TODAY)
     path = write_day(tmp_path, date(2026, 10, 29))
@@ -135,7 +135,7 @@ def test_report_persists_and_repair_rechecks_with_backup(tmp_path, monkeypatch):
     assert integrity_check.latest_report(tmp_path)["id"] == report["id"]
     calls = []
 
-    def fetch(symbols, capset, **kwargs):
+    def fetch(symbols, **kwargs):
         calls.append((kwargs["start_time"].date(), kwargs["asset_type"]))
         assert path.read_bytes() == b"broken original"
         yield original
@@ -152,7 +152,7 @@ def test_report_persists_and_repair_rechecks_with_backup(tmp_path, monkeypatch):
 def test_failed_repair_restores_original_and_reports_remaining(tmp_path, monkeypatch, cancel):
     from app.services import integrity_check, kline_sync
     from app.services.pipeline_jobs import JobCancelledError
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     monkeypatch.setattr(integrity_check, "cn_today", lambda: TODAY)
     path = write_day(tmp_path, date(2026, 10, 29))
@@ -204,7 +204,7 @@ def test_scan_rejects_outside_symlink(tmp_path):
 @pytest.mark.parametrize("linked_table", [False, True])
 def test_repair_refuses_linked_daily_directories(tmp_path, monkeypatch, linked_table):
     from app.services import integrity_check, kline_sync
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     monkeypatch.setattr(integrity_check, "cn_today", lambda: TODAY)
     target = tmp_path / "linked"

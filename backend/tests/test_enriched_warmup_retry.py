@@ -7,7 +7,7 @@ commit 撞车后快照被 fail-closed 丢弃; 丢弃后必须以新世代重建�
 from __future__ import annotations
 
 from app.enriched_generation import EnrichedGenerationUnavailableError
-from app.tickflow.repository import (
+from app.data_providers.repository import (
     _ENRICHED_WARMUP_MAX_ATTEMPTS,
     _ENRICHED_WARMUP_PUBLISH_WAIT_SECONDS,
     DataStore,
@@ -32,7 +32,7 @@ def test_warmup_rebuilds_after_generation_discard(tmp_path, monkeypatch):
         return False
 
     monkeypatch.setattr(repo, "_refresh_enriched", fake_refresh)
-    monkeypatch.setattr("app.tickflow.repository.enriched_publication_incomplete", lambda *a: False)
+    monkeypatch.setattr("app.data_providers.repository.enriched_publication_incomplete", lambda *a: False)
 
     repo._warmup_enriched()
 
@@ -67,8 +67,8 @@ def test_warmup_gives_up_after_max_attempts(tmp_path, monkeypatch):
         return True  # 每次都换代丢弃
 
     monkeypatch.setattr(repo, "_refresh_enriched", fake_refresh)
-    monkeypatch.setattr("app.tickflow.repository.enriched_publication_incomplete", lambda *a: True)
-    monkeypatch.setattr("app.tickflow.repository.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr("app.data_providers.repository.enriched_publication_incomplete", lambda *a: True)
+    monkeypatch.setattr("app.data_providers.repository.time.sleep", lambda s: sleeps.append(s))
 
     repo._warmup_enriched()
 

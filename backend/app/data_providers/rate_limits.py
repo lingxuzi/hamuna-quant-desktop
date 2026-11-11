@@ -1,7 +1,7 @@
-"""TickFlow capability rate-limit helpers.
+"""Capability rate-limit helpers.
 
 This module centralizes the small pieces of batch/rpm resolution used by
-TickFlow-backed services. It intentionally does not manage custom data sources.
+Shared throttling helpers for data-source backed services; does not manage custom sources.
 """
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ import time
 from dataclasses import dataclass
 from typing import TypeVar
 
-from app.tickflow.capabilities import Cap, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilitySet
 
 T = TypeVar("T")
 
-# TickFlow Pro 单进程安全预算: 套餐标称 rpm 的 80%。
+# 单进程安全预算: 上游标称 rpm 的 80%。
 # 注意: _next_slot 仅在本 Python 进程内共享, 不能跨 Gold 容器与 A 股面板进程。
 # Stage A 期间跨产品靠错峰(盘中 Gold 优先, A 股 Pro 批处理建议 16:00 后),
 # 不要把「各进程各扣 80%」误当成账户级共享限频。

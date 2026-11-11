@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, call
 
 from app.services import depth_service as depth_module
 from app.services.depth_service import DepthService
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 
 def _service(*, batch: int = 2, rpm: int = 30) -> DepthService:
@@ -52,7 +52,7 @@ def test_custom_depth_uses_shared_batching_and_rate_limit(monkeypatch):
     ]
 
 
-def test_custom_depth_failure_does_not_fall_back_to_tickflow(monkeypatch):
+def test_custom_depth_failure_does_not_fall_back_to_another_source(monkeypatch):
     provider = SimpleNamespace(
         get_depth_batch=MagicMock(side_effect=RuntimeError("custom source down"))
     )
@@ -64,11 +64,12 @@ def test_custom_depth_failure_does_not_fall_back_to_tickflow(monkeypatch):
         "app.data_providers.custom.provider_has_dataset",
         lambda name, dataset: True,
     )
-    monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: provider)
-    monkeypatch.setattr(
-        "app.tickflow.client.get_client",
-        lambda: (_ for _ in ()).throw(AssertionError("must not fall back to TickFlow")),
-    )
+
+    def _only_selected(name):
+        assert name == "custom_depth", f"must not fall back to another source: {name}"
+        return provider
+
+    monkeypatch.setattr("app.data_providers.custom.get_provider", _only_selected)
 
     assert _service()._call_depth_batch(["A"]) == {}
     provider.get_depth_batch.assert_called_once_with(["A"])
@@ -100,16 +101,20 @@ def test_custom_depth_failure_isolated_per_batch(monkeypatch):
     assert provider.get_depth_batch.call_count == 2
 
 
-def test_tickflow_depth_uses_provider_contract_and_shared_batching(monkeypatch):
+def test_depth_uses_provider_contract_and_shared_batching(monkeypatch):
     batch = MagicMock(
         side_effect=lambda symbols: {symbol: {"ask_volumes": [0]} for symbol in symbols}
     )
-    tickflow = SimpleNamespace(depth=SimpleNamespace(batch=batch))
+    provider = SimpleNamespace(get_depth_batch=batch)
     monkeypatch.setattr(
         "app.services.preferences.get_depth5_data_provider",
-        lambda: "tickflow",
+        lambda: "custom_depth",
     )
-    monkeypatch.setattr("app.data_providers.tickflow_provider.get_client", lambda: tickflow)
+    monkeypatch.setattr(
+        "app.data_providers.custom.provider_has_dataset",
+        lambda name, dataset: True,
+    )
+    monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: provider)
     monkeypatch.setattr(depth_module, "sleep_between_batches", MagicMock())
 
     result = _service()._call_depth_batch(["A", "B", "C"])

@@ -16,7 +16,7 @@ from pathlib import Path
 import polars as pl
 
 from app.parquet import scan_enriched_parquet
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def enriched_history_days(data_dir, asset_type: str = "stock", as_of: date | Non
     按 date=* 分区目录名计数 (目录列举 O(天数)), 不读 parquet 内容 —
     只做数据充足性提示, 不进入指标计算路径。
     """
-    from app.tickflow.repository import enriched_dirname
+    from app.data_providers.repository import enriched_dirname
 
     root = Path(data_dir) / enriched_dirname(asset_type)
     if not root.exists():
@@ -65,7 +65,7 @@ class ScreenerService:
     def __init__(self, repo: KlineRepository, asset_type: str = "stock") -> None:
         self.repo = repo
         self.asset_type = asset_type
-        from app.tickflow.repository import enriched_dirname
+        from app.data_providers.repository import enriched_dirname
         self._enriched_dirname = enriched_dirname(asset_type)
 
     @staticmethod
@@ -407,6 +407,13 @@ class ScreenerService:
         if pool:
             df = df.filter(pl.col("symbol").is_in(pool))
 
+        # 口径条承诺「剔除 ST 与停牌」: 停牌股当日无 K 线行 (管道层天然剔除);
+        # ST 需在此真实剔除 — 预设策略路径走 engine._basic_filter_expr 的
+        # exclude_st, 自定义条件路径原本漏掉, 这里按同一口径补齐 (名称含
+        # ST/*ST/退 即剔除, ETF 无 name 列时跳过)。
+        if self.asset_type == "stock" and "name" in df.columns:
+            df = df.filter(~pl.col("name").str.contains("(?i)ST|\\*ST|退"))
+
         # 用 DuckDB 做 SQL 过滤 (注册临时视图)
         # 用独立的 :memory: 连接 (而非复用 repo 共享连接的 cursor): conditions 是用户
         # 传入的 SQL 片段, 隔离连接下注入至多能碰 read_csv/read_parquet 文件; 若复用共享
@@ -547,8 +554,9 @@ class ScreenerService:
             return d
         # 回退 DuckDB
         try:
+            # 与 repo._latest_enriched_date_duckdb 同口径: 排除周末残留分区
             res = self.repo.execute_one(
-                "SELECT max(date) FROM kline_enriched",
+                "SELECT max(date) FROM kline_enriched WHERE dayofweek(date) NOT IN (0, 6)",
             )
             if res and res[0]:
                 d = res[0]

@@ -119,7 +119,7 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
         {...listeners}
         className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground transition-colors"
       >
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="h-[16px] w-[16px]" />
       </div>
       <div className="min-w-0 flex items-center gap-2">
         <span className={`truncate text-sm font-medium ${!hidden ? 'text-foreground' : 'text-muted line-through'}`}>
@@ -156,7 +156,7 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
           className="rounded p-1 text-muted transition-colors hover:bg-accent/10 hover:text-accent"
           title={hidden ? '显示' : '隐藏'}
         >
-          {hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {hidden ? <EyeOff className="h-[16px] w-[16px]" /> : <Eye className="h-[16px] w-[16px]" />}
         </button>
       </div>
       <div className="flex justify-center gap-1">
@@ -181,7 +181,7 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
           <button
             type="button"
             onClick={() => onRemove(entry)}
-            className="rounded p-1 text-muted hover:bg-danger/10 hover:text-danger transition-colors"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-danger/10 hover:text-danger"
             title={`删除源码扩展页 (物理删除 frontend/src/custom/${entry.extensionId}/, 自动备份)`}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -397,7 +397,7 @@ export function SettingsMenuSettingsPanel() {
         </p>
       </section>
 
-      <section className="leaf-cell overflow-hidden">
+      <section className="mt-10 first:mt-0">
         <div className="grid grid-cols-[2.5rem_1fr_4.5rem_3rem_4.5rem_3rem] items-center border-b border-border bg-elevated/40 px-4 py-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted">
           <div />
           <div>菜单 · 归属</div>

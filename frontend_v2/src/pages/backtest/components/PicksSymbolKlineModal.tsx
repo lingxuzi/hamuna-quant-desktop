@@ -163,10 +163,10 @@ export function PicksSymbolKlineModal({ symbol, result, periodStart, periodEnd, 
                   )}
                   <button
                     onClick={onClose}
-                    className="rounded-btn p-1 text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+                    className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:bg-elevated hover:text-foreground"
                     aria-label="关闭标的回放"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-[16px] w-[16px]" />
                   </button>
                 </div>
               </div>

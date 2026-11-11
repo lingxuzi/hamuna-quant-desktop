@@ -47,7 +47,7 @@ def _ensure_history(repo, capset, symbol: str, asset_type: str, start: date, end
         return local
 
     frames = list(kline_sync.iter_daily_frames(
-        [symbol], capset, asset_type=asset_type,
+        [symbol], asset_type=asset_type,
         start_time=datetime.combine(start, time.min, CN_TZ),
         end_time=datetime.combine(end, time.max, CN_TZ),
     ))
@@ -66,7 +66,7 @@ def _ensure_history(repo, capset, symbol: str, asset_type: str, start: date, end
         return current
     factors = pl.DataFrame()
     if asset_type != "index":
-        factors = kline_sync.fetch_adj_factor_single(symbol, asset_type=asset_type, capset=capset, strict=True)
+        factors = kline_sync.fetch_adj_factor_single(symbol, asset_type=asset_type, strict=True)
     instruments = repo.get_instruments() if asset_type == "stock" else None
     enriched = compute_enriched(raw, factors=factors, instruments=instruments)
     if enriched.is_empty():

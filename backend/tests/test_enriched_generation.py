@@ -20,7 +20,7 @@ from app.enriched_generation import (
     get_enriched_generation,
     recover_stale_publications,
 )
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def _frame(value: float = 10.0) -> pl.DataFrame:
@@ -241,7 +241,7 @@ def test_live_flush_write_recovers_stale_marker_from_dead_process(
 ) -> None:
     """实时 enriched 落盘(repository 路径)遇到僵死 publishing 标记应接管自愈,
     而非持续抛错直到下一次盘后管道。"""
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     (tmp_path / ".matrix_generation_stock.json").write_text(
         json.dumps({

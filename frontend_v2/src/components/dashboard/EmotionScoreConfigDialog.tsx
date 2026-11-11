@@ -114,21 +114,21 @@ export function EmotionScoreConfigDialog({ onClose }: { onClose: () => void }) {
       <div className="relative mx-4 flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-dialog border border-border bg-surface shadow-2xl">
         {/* 头部 */}
         <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
-          <Sigma className="h-4 w-4 shrink-0 text-accent" />
+          <Sigma className="h-[16px] w-[16px] shrink-0 text-accent" />
           <h3 className="text-sm font-medium text-foreground">情绪评分 · 计算方式</h3>
           {payload?.customized && (
             <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium leading-none text-accent">
               已自定义
             </span>
           )}
-          <button onClick={onClose} className="ml-auto rounded p-0.5 text-secondary transition-colors hover:bg-elevated hover:text-foreground" aria-label="关闭">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} className="ctl ctl-sm ctl-ghost ctl-icon ml-auto text-secondary hover:bg-elevated hover:text-foreground" aria-label="关闭">
+            <X className="h-[16px] w-[16px]" />
           </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> 加载计算方式…
+            <Loader2 className="h-[16px] w-[16px] animate-spin" /> 加载计算方式…
           </div>
         ) : !draft ? (
           <div className="px-5 py-16 text-center text-xs text-danger">{error || '加载失败'}</div>
@@ -169,7 +169,7 @@ export function EmotionScoreConfigDialog({ onClose }: { onClose: () => void }) {
                           type="number" min={0} max={10} step={0.1}
                           value={dim.weight}
                           onChange={e => setDimWeight(dimKey, Number(e.target.value))}
-                          className="h-6 w-16 rounded border border-border bg-base px-1.5 text-right font-mono text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
+                          className="ctl ctl-sm ctl-input w-16 px-1.5 text-right font-mono focus:ring-1 focus:ring-accent/50 bg-base"
                         />
                       </span>
                     </div>
@@ -192,7 +192,7 @@ export function EmotionScoreConfigDialog({ onClose }: { onClose: () => void }) {
                               type="number" step={field === 'weight' ? 0.05 : 'any'}
                               value={term[field]}
                               onChange={e => setTerm(dimKey, term.key, field, Number(e.target.value))}
-                              className="h-6 w-full rounded border border-border bg-base px-1.5 text-right font-mono text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
+                              className="ctl ctl-sm ctl-input w-full px-1.5 text-right font-mono focus:ring-1 focus:ring-accent/50 bg-base"
                             />
                           ))}
                         </div>
@@ -218,7 +218,7 @@ export function EmotionScoreConfigDialog({ onClose }: { onClose: () => void }) {
                       type="number" min={0} max={100} step={1}
                       value={draft.thresholds[l.key] ?? 0}
                       onChange={e => setThreshold(l.key, Number(e.target.value))}
-                      className="h-6 w-full rounded border border-border bg-base px-1.5 text-right font-mono text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
+                      className="ctl ctl-sm ctl-input w-full px-1.5 text-right font-mono focus:ring-1 focus:ring-accent/50 bg-base"
                     />
                   </div>
                 ))}
@@ -237,21 +237,21 @@ export function EmotionScoreConfigDialog({ onClose }: { onClose: () => void }) {
             <button
               onClick={reset}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+              className="ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 px-2.5 hover:bg-elevated hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <RotateCcw className="h-3.5 w-3.5" /> 恢复出厂
             </button>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={onClose}
-                className="rounded-btn px-3.5 py-1.5 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+                className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated hover:text-foreground"
               >
                 取消
               </button>
               <button
                 onClick={save}
                 disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-accent px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+                className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 保存

@@ -166,9 +166,10 @@ def test_execute_list_data_capabilities(monkeypatch):
         monkeypatch,
         "app.data_providers.capabilities",
         CAPABILITY_REGISTRY=[
-            {"id": "daily", "label": "日K", "desc": "d", "tf_tier": 0},
+            {"id": "daily", "label": "日K", "desc": "d"},
         ],
-        resolve_capability_sources=lambda tier: [
+        # 能力路由按数据集解析, 不再按档位参数解析。
+        resolve_capability_sources=lambda: [
             {"id": "daily", "source": "demo", "usable": True},
         ],
     )

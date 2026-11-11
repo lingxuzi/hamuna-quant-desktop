@@ -7,14 +7,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from types import SimpleNamespace
 
 import polars as pl
 import pytest
 
 from app.services import index_sync, kline_sync
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 
 ETF = "588200.SH"
 PRE = date(2026, 3, 2)
@@ -74,15 +73,25 @@ def test_etf_incremental_daily_reapplies_adj_to_history(tmp_path, monkeypatch):
     repo.append_etf_enriched(pl.concat([_bar(PRE, PRE_RAW), _bar(EX, EX_RAW)]))
     _write_factor(tmp_path, EX, EX_FACTOR)
 
+    class _FakeEtfDaily:
+        """只服务 ETF 的假日K源: 增量只返回新一日。"""
+
+        def get_daily(self, symbols, *, asset_type, start_time, end_time, on_chunk_done=None):
+            assert asset_type == "etf"
+            return _bar(NEW, NEW_RAW)
+
+    from app.data_providers import custom as custom_sources
+
+    # 钉死日K路由: ETF 日K只走生效日K源 → 默认源的取数链, 这里只放一个假源,
+    # 避免本机 preferences.json 里配置的自定义日K源影响 (#502 后指数/ETF 同步
+    # 路由跟随该偏好)。
+    monkeypatch.setattr(index_sync.preferences, "get_daily_data_provider", lambda: "fake-daily")
     monkeypatch.setattr(
-        index_sync.kline_sync,
-        "sync_daily_batch",
-        lambda *a, **k: _bar(NEW, NEW_RAW),
+        custom_sources,
+        "provider_has_dataset",
+        lambda name, dataset: name == "fake-daily" and dataset == "daily",
     )
-    # 钉死日K路由为 tickflow: 本测试专测 TickFlow 分支, 不得被本机 preferences.json
-    # 里配置的自定义日K源影响 (#502 后指数/ETF 同步路由跟随该偏好)。
-    monkeypatch.setattr(index_sync.preferences, "get_daily_data_provider", lambda: "tickflow")
-    monkeypatch.setattr(index_sync.preferences, "get_index_daily_batch_size", lambda: 50)
+    monkeypatch.setattr(custom_sources, "get_provider", lambda _name: _FakeEtfDaily())
 
     written = index_sync.sync_and_persist_etf_daily(
         repo,
@@ -121,8 +130,8 @@ def test_etf_adj_window_with_file_continues_from_last_event(tmp_path):
     assert got == datetime(2026, 1, 15, 0, 0)
 
 
-def test_sync_adj_factor_etf_custom_empty_falls_back_to_tickflow(tmp_path, monkeypatch):
-    """扶摇等自定义源对 ETF 空返回时, 有 TickFlow 除权能力则回退, 不能当成无事件。"""
+def test_sync_adj_factor_etf_custom_empty_falls_back_to_default_source(tmp_path, monkeypatch):
+    """扶摇等自定义源对 ETF 空返回时, 回退默认源, 不能当成无事件。"""
     repo = KlineRepository(DataStore(tmp_path))
     empty = pl.DataFrame(
         schema={
@@ -139,24 +148,30 @@ def test_sync_adj_factor_etf_custom_empty_falls_back_to_tickflow(tmp_path, monke
             assert asset_type == "etf"
             return empty
 
-    monkeypatch.setattr(kline_sync.preferences, "get_adj_factor_provider", lambda: "fuyao")
+    class _DefaultETF:
+        def get_adj_factors(
+            self, symbols, start_time, end_time, asset_type="stock", on_chunk_done=None
+        ):
+            assert asset_type == "etf"
+            return pl.DataFrame({
+                "symbol": [ETF],
+                "trade_date": [EX],
+                "ex_factor": [EX_FACTOR],
+            })
+
     from app.data_providers import custom as custom_sources
 
+    # 取数链 = 生效除权源 → 默认源(easytdx): 生效源对 ETF 空返回时走下一跳。
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda _dataset: "fuyao")
     monkeypatch.setattr(
         custom_sources,
         "provider_has_dataset",
-        lambda name, dataset: name == "fuyao" and dataset == "adj_factor",
+        lambda name, dataset: dataset == "adj_factor",
     )
-    monkeypatch.setattr(custom_sources, "get_provider", lambda name: _EmptyETF())
-
-    class _Klines:
-        def ex_factors(self, symbols, **kwargs):
-            return {ETF: [{"trade_date": EX, "ex_factor": EX_FACTOR}]}
-
     monkeypatch.setattr(
-        kline_sync,
-        "get_client",
-        lambda: SimpleNamespace(klines=_Klines()),
+        custom_sources,
+        "get_provider",
+        lambda name: _EmptyETF() if name == "fuyao" else _DefaultETF(),
     )
 
     written, affected = kline_sync.sync_adj_factor(

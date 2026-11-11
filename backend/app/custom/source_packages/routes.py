@@ -86,6 +86,6 @@ def manage(name: str, body: Action, request: Request):
         result = packages.manage(name, body.action, reset_routes=body.reset_routes)
     except (ValueError, OSError, TypeError, yaml.YAMLError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    from app.tickflow.policy import detect_capabilities
-    request.app.state.capabilities = detect_capabilities()
+    from app.data_providers import capabilities as _capabilities
+    request.app.state.capabilities = _capabilities.detect_capabilities()
     return result

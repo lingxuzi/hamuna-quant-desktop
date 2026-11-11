@@ -19,7 +19,7 @@ docker run -d --name tsp -p 3018:3018 -v ${PWD}/data:/app/data ghcr.io/shy3130/t
 - 自定义数据源等服务跑在宿主机、容器内需通过 `host.docker.internal` 访问时,Linux 的 `docker run` 要在命令里加 `--add-host=host.docker.internal:host-gateway`(Docker Desktop 的 macOS/Windows 默认已可解析;方式 B 的 compose 已在 `extra_hosts` 配好),否则报 `Name or service not known`。
 - 镜像默认不含 `legacy-cpu` / `backtest` extras —— 老 CPU(无 AVX2)或需要 vectorbt 回测时,请用方式 B 通过 `BACKEND_EXTRAS` 自构建。
 - 跑自己改过的代码:fork 后到仓库 Actions 页启用 workflow(fork 默认禁用),构建出的 `ghcr.io/<你的用户名>/tick-stock-panel` 用法相同。
-- 想要 compose 全套挂载(`.env` / `tiers.yaml` / 数据卷):参考根目录 `docker-compose.yml`,把 `build:` 段换成 `image: ghcr.io/shy3130/tick-stock-panel:latest`。
+- 想要 compose 全套挂载(`.env` / 数据卷):参考根目录 `docker-compose.yml`,把 `build:` 段换成 `image: ghcr.io/shy3130/tick-stock-panel:latest`。
 
 更新到新版本:
 
@@ -71,7 +71,8 @@ cp .env.example .env       # 按需填 TICKFLOW_API_KEY(留空 = None 模式)
 
 `dev.sh` 自动检查 / 下载依赖、释放端口、同时起前后端,Ctrl-C 一并关闭。默认:
 
-- 后端 → <http://localhost:3018> · 前端 → <http://localhost:3011>
+- 后端 → <http://localhost:3018> · 前端 → <http://localhost:3012>(v2 新前端)
+- 跑旧版前端:`FRONTEND_APP=v1 ./dev.sh` → <http://localhost:3011>
 - 自定义端口:`BACKEND_PORT=8000 FRONTEND_PORT=5173 ./dev.sh`
 
 ### 手动分别启动(不想用 dev.sh)
@@ -81,10 +82,11 @@ cp .env.example .env       # 按需填 TICKFLOW_API_KEY(留空 = None 模式)
 cd backend && uv sync --extra backtest   # 含回测依赖
 # 老 CPU: uv sync --extra legacy-cpu
 # 老 CPU + 回测: uv sync --extra legacy-cpu --extra backtest
-uv run uvicorn app.main:app --reload --port 3018
+# STATIC_DIR 让后端与下面的前端同源(源码扩展根目录 = STATIC_DIR 的上级目录)
+STATIC_DIR="$PWD/../frontend_v2/dist" uv run uvicorn app.main:app --reload --port 3018
 
 # 前端
-cd frontend && pnpm install && pnpm dev   # http://localhost:3011
+cd frontend_v2 && pnpm install && pnpm dev   # http://localhost:3012
 ```
 
 ---

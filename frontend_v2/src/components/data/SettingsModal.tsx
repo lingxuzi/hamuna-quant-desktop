@@ -28,8 +28,8 @@ export function SettingsModal({ title, onClose, children, width = 'max-w-md', co
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <h3 className="text-sm font-medium text-foreground">{title}</h3>
-          <button onClick={onClose} aria-label="关闭" className="p-1 rounded hover:bg-elevated text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} aria-label="关闭" className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+            <X className="h-[16px] w-[16px]" />
           </button>
         </div>
         <div className={contentClassName}>

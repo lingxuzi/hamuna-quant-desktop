@@ -176,7 +176,7 @@ export function StockFinancialDetail({ symbol, name }: Props) {
   const latestAnnounce = rows[0]?.announce_date ?? metrics.data?.data?.[0]?.announce_date ?? null
 
   return (
-    <div className="leaf-cell overflow-hidden">
+    <div className="border-t border-border-strong pt-4">
       {/* 头部:标的 + 报告期 */}
       <div className="px-5 py-4 border-b border-border flex items-center gap-3 flex-wrap">
         <div className="flex items-baseline gap-2 min-w-0">
@@ -187,10 +187,10 @@ export function StockFinancialDetail({ symbol, name }: Props) {
           <button
             onClick={handleAiClick}
             disabled={checking}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-btn text-[11px] font-medium border border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 hover:border-accent/40 transition-all shrink-0 disabled:opacity-50"
+            className="ctl ctl-sm ctl-btn soft inline-flex items-center gap-1 px-1.5 border-accent/30 hover:bg-accent/20 hover:border-accent/40 transition-all shrink-0 disabled:opacity-50 bg-accent/10"
             title="AI 财务分析"
           >
-            {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {checking ? <Loader2 className="h-[12px] w-[12px] animate-spin" /> : <Sparkles className="h-[12px] w-[12px]" />}
             AI 财务分析
           </button>
           {latestPeriod && (
@@ -214,7 +214,7 @@ export function StockFinancialDetail({ symbol, name }: Props) {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+              className={`ctl ctl-sm ctl-ghost inline-flex items-center gap-1.5 px-1.5 border-b-2 -mb-px ${
                 isActive
                   ? 'border-accent text-accent'
                   : 'border-transparent text-muted hover:text-secondary'
@@ -249,7 +249,7 @@ export function StockFinancialDetail({ symbol, name }: Props) {
               <div key={row.period_end ?? ri}>
                 {rows.length > 1 && (
                   <div className="text-[11px] text-muted mb-2 flex items-center gap-1.5">
-                    <CalendarDays className="h-3 w-3" />
+                    <CalendarDays className="h-[12px] w-[12px]" />
                     报告期 <span className="font-mono text-secondary">{row.period_end}</span>
                   </div>
                 )}
@@ -293,8 +293,8 @@ export function StockFinancialDetail({ symbol, name }: Props) {
               className="relative w-[90vw] max-w-[400px] rounded-card border border-border bg-base shadow-2xl p-6"
             >
               <div className="flex items-start gap-3">
-                <div className="shrink-0 h-10 w-10 rounded-full bg-accent/12 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-accent" />
+                <div className="shrink-0 h-[40px] w-[40px] rounded-full bg-accent/12 flex items-center justify-center">
+                  <AlertTriangle className="h-[20px] w-[20px] text-accent" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">该个股已有分析报告</h3>
@@ -312,19 +312,19 @@ export function StockFinancialDetail({ symbol, name }: Props) {
               <div className="flex items-center justify-end gap-2 mt-5">
                 <button
                   onClick={() => setConfirmReport(null)}
-                  className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-xs transition-colors"
+                  className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 bg-elevated"
                 >
                   取消
                 </button>
                 <button
                   onClick={() => { if (confirmReport) openHistoryReport(confirmReport.id); setConfirmReport(null) }}
-                  className="px-3 py-1.5 rounded-btn border border-border text-secondary hover:text-foreground text-xs font-medium transition-colors"
+                  className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground"
                 >
                   查看历史报告
                 </button>
                 <button
                   onClick={() => { doAnalysis(); setConfirmReport(null) }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent border border-accent text-white text-xs font-medium hover:bg-accent/90 transition-all"
+                  className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 border-accent hover:bg-accent/90 transition-all"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   重新分析

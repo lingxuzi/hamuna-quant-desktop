@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, CalendarClock, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { CalendarClock, Pencil, Search, Trash2 } from 'lucide-react'
 import { api, type Lot } from '@/lib/api'
 import { fetchDailyBatchChunked } from '@/lib/klineBatchChunked'
 import { QK } from '@/lib/queryKeys'
@@ -45,10 +44,19 @@ function CostPnL({ close, cost }: { close?: number; cost: number }) {
   return <span className={cn('font-mono', priceColorClass(pnl))}>{fmtPct(pnl)}</span>
 }
 
+/** 买入至今的天数 (无买入日期 → null) */
+function holdingDays(buyDate?: string | null): number | null {
+  if (!buyDate) return null
+  const t = new Date(`${buyDate}T00:00:00`).getTime()
+  if (Number.isNaN(t)) return null
+  return Math.floor((Date.now() - t) / 86400000)
+}
+
 export function Lots() {
   const qc = useQueryClient()
-  const navigate = useNavigate()
   const [editing, setEditing] = useState<Lot | null>(null) // null=关闭
+  const [srch, setSrch] = useState('') // 右栏搜索框
+  const [seed, setSeed] = useState('') // 右栏搜索带入弹窗的标的关键词
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [previewSymbol, setPreviewSymbol] = useState<string | null>(null)
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -99,6 +107,16 @@ export function Lots() {
     },
   })
 
+  // 右栏搜索 → 直接进入记一笔, 关键词带进弹窗的标的搜索框 (可继续补全选择)
+  const openNew = (seedSymbol = '') => {
+    setSeed(seedSymbol)
+    setEditing(emptyDraft())
+  }
+  const openEdit = (lot: Lot) => {
+    setSeed('')
+    setEditing(lot)
+  }
+
   // 删除: 第一次进确认态, 第二次真删, 3 秒后自动复位 (与监控中心一致)
   const handleClickDelete = (id: string) => {
     if (confirmId === id) {
@@ -112,94 +130,117 @@ export function Lots() {
     }
   }
 
+  // 右栏「最新批次」: 最近 5 笔 (买入日新→旧), 无买入日的排末
+  const recentLots = useMemo(
+    () => [...sortedLots].reverse().slice(0, 5),
+    [sortedLots],
+  )
+
   return (
     <div className="flex flex-col h-full">
-      <PageHeader seal="批" title="持仓提醒" subtitle="记录个股 / ETF 买入批次, 自动生成止盈止损 / 到期监控规则" />
-      <div className="flex-1 min-h-0 px-5 py-4">
-        <div className="mx-auto max-w-5xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-secondary">{lots.length} 个批次</div>
-            <button
-              onClick={() => setEditing(emptyDraft())}
-              className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-accent/30 bg-accent/10 px-3 text-xs font-medium text-accent transition-colors hover:bg-accent/15 cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />新增批次
-            </button>
-          </div>
-
-          {lotsQuery.isLoading ? (
-            <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-xs text-muted">加载中…</div>
-          ) : lotsQuery.isError ? (
-            <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-              <div className="text-xs text-danger">批次加载失败</div>
-              <button
-                onClick={() => lotsQuery.refetch()}
-                className="mt-2 rounded-btn border border-border px-3 py-1 text-[11px] text-secondary hover:bg-elevated cursor-pointer"
-              >
-                重试
-              </button>
-            </div>
-          ) : lots.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-              <div className="text-sm text-muted">还没有批次</div>
-              <div className="mt-1 text-[11px] text-muted/70">记录一笔买入后, 系统会按成本价 ± 止盈/止损% 生成价格监控; 填了到期日则自动生成到期提醒。这里只用于生成提醒, 不是持仓记账。</div>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-surface/40 shadow-sm">
+      <PageHeader seal="批" title="持仓提醒" subtitle="POSITION LOTS"
+        titleExtra={(
+          <>
+            <span className={cn('tb-chip', lots.length === 0 && 'warn')}>批次 {lots.length} 条</span>
+            <span className="tb-chip">手工记账</span>
+          </>
+        )}
+        right={(
+          <button onClick={() => openNew()} className="ctl ctl-md ctl-btn pri">记一笔</button>
+        )}
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* 左: 批次清单 | 右: 快速记一笔 (design/v2/21-lots.html 的 .lt 双栏) */}
+        <div className="grid grid-cols-1 gap-6 border-t border-rule-strong pt-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="min-w-0">
+            {lotsQuery.isLoading ? (
+              <div className="border border-dashed border-border px-6 py-12 text-center text-xs text-muted">加载中…</div>
+            ) : lotsQuery.isError ? (
+              <div className="border border-dashed border-border px-6 py-12 text-center">
+                <div className="text-xs text-danger">批次加载失败</div>
+                <button
+                  onClick={() => lotsQuery.refetch()}
+                  className="ctl ctl-sm ctl-btn mt-2 px-1.5 hover:bg-elevated"
+                >
+                  重试
+                </button>
+              </div>
+            ) : lots.length === 0 ? (
+              <div className="flex min-h-[200px] flex-col items-center justify-center border border-border bg-surface px-6 py-10 text-center">
+                <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">NO LOTS · 0</span>
+                <h2 className="mt-2 font-serif text-[16px] font-medium text-foreground">还没有记录持仓批次</h2>
+                <p className="mt-1.5 max-w-[38ch] text-[11.5px] leading-[1.75] text-secondary">
+                  把每一笔买入记成一批：买入价、股数、买入日。之后这里按批显示成本、现价、浮盈和持有天数，卖出时自动按先进先出核销。
+                </p>
+              </div>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="dt min-w-[920px]">
+                  <colgroup>
+                    <col />
+                    <col className="w-[56px]" />
+                    <col className="w-[64px]" />
+                    <col className="w-[64px]" />
+                    <col className="w-[64px]" />
+                    <col className="w-[56px]" />
+                    <col className="w-[56px]" />
+                    <col className="w-[82px]" />
+                    <col className="w-[64px]" />
+                    <col className="w-[132px]" />
+                    <col className="w-[62px]" />
+                  </colgroup>
                   <thead>
-                    <tr className="border-b border-border/60 bg-surface/60 text-[10px] uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2 font-medium">标的</th>
-                      <th className="px-2 py-2 font-medium text-right">数量(参考)</th>
-                      <th className="px-2 py-2 font-medium text-right">成本价</th>
-                      <th className="px-2 py-2 font-medium text-right">现价</th>
-                      <th className="px-2 py-2 font-medium text-right">盈亏%</th>
-                      <th className="px-2 py-2 font-medium text-right">止盈%</th>
-                      <th className="px-2 py-2 font-medium text-right">止损%</th>
-                      <th className="px-2 py-2 font-medium">买入日期</th>
-                      <th className="px-2 py-2 font-medium text-right">剩余天数</th>
-                      <th className="px-2 py-2 font-medium">到期提醒</th>
-                      <th className="px-3 py-2" />
+                    <tr>
+                      <th scope="col">标的</th>
+                      <th scope="col">数量</th>
+                      <th scope="col">成本价</th>
+                      <th scope="col">现价</th>
+                      <th scope="col">盈亏%</th>
+                      <th scope="col">止盈%</th>
+                      <th scope="col">止损%</th>
+                      <th scope="col">买入日期</th>
+                      <th scope="col">剩余天数</th>
+                      <th scope="col">到期提醒</th>
+                      <th scope="col" />
                     </tr>
                   </thead>
                   <tbody>
                     {sortedLots.map(lot => (
-                      <tr key={lot.id} className="border-b border-border/40 last:border-0 hover:bg-elevated/40">
-                        <td className="px-4 py-2.5">
+                      <tr key={lot.id}>
+                        <td>
                           <button
                             onClick={() => setPreviewSymbol(lot.symbol)}
                             title={`查看 ${lot.symbol} 日K`}
-                            className="inline-flex items-center gap-1.5 min-w-0 hover:bg-elevated/50 rounded px-0.5 py-0.5 transition-colors cursor-pointer"
+                            className="inline-flex min-w-0 items-center gap-1.5 transition-colors cursor-pointer"
                           >
                             <span className="font-mono font-medium text-foreground">{lot.symbol}</span>
                             {(() => { const b = boardTag(lot.symbol); return b && <span className={`inline-flex items-center justify-center rounded px-1 text-[9px] font-bold leading-tight border ${b.color}`}>{b.label}</span> })()}
                             {symbolNames[lot.symbol] && <span className="text-secondary truncate max-w-28">{symbolNames[lot.symbol]}</span>}
                           </button>
                         </td>
-                        <td className="px-2 py-2.5 text-right font-mono text-secondary">{lot.qty}</td>
-                        <td className="px-2 py-2.5 text-right font-mono text-foreground">{lot.cost_price}</td>
-                        <td className="px-2 py-2.5 text-right font-mono text-secondary">{lastPrices[lot.symbol] != null ? fmtPrice(lastPrices[lot.symbol]) : '—'}</td>
-                        <td className="px-2 py-2.5 text-right"><CostPnL close={lastPrices[lot.symbol]} cost={lot.cost_price} /></td>
-                        <td className="px-2 py-2.5 text-right font-mono text-bull">{lot.target_pct > 0 ? `${lot.target_pct}%` : '—'}</td>
-                        <td className="px-2 py-2.5 text-right font-mono text-bear">{lot.stop_pct > 0 ? `${lot.stop_pct}%` : '—'}</td>
-                        <td className="px-2 py-2.5 text-muted">{lot.buy_date || '—'}</td>
-                        <td className="px-2 py-2.5 text-right"><RemainingDays remind={lot.remind_date} /></td>
-                        <td className="px-2 py-2.5">
+                        <td className="text-secondary">{lot.qty}</td>
+                        <td className="text-foreground">{lot.cost_price}</td>
+                        <td className="text-secondary">{lastPrices[lot.symbol] != null ? fmtPrice(lastPrices[lot.symbol]) : '—'}</td>
+                        <td><CostPnL close={lastPrices[lot.symbol]} cost={lot.cost_price} /></td>
+                        <td className="text-bull">{lot.target_pct > 0 ? `${lot.target_pct}%` : '—'}</td>
+                        <td className="text-bear">{lot.stop_pct > 0 ? `${lot.stop_pct}%` : '—'}</td>
+                        <td className="text-muted">{lot.buy_date || '—'}</td>
+                        <td><RemainingDays remind={lot.remind_date} /></td>
+                        <td className="text-left">
                           {lot.remind_date ? (
                             <span className="inline-flex items-center gap-1 text-rose-400">
-                              <CalendarClock className="h-3 w-3" />
+                              <CalendarClock className="h-[12px] w-[12px]" />
                               {lot.remind_date}
                               {lot.lead_days > 0 && <span className="text-muted">· 提前{lot.lead_days}天</span>}
                             </span>
                           ) : <span className="text-muted/60">—</span>}
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td>
                           <div className="flex items-center justify-end gap-0.5">
                             <button
-                              onClick={() => setEditing(lot)}
+                              onClick={() => openEdit(lot)}
                               title="编辑"
-                              className="p-1.5 rounded-md text-secondary transition-all hover:bg-accent/10 hover:text-accent cursor-pointer"
+                              className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:bg-accent/10 hover:text-accent"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
@@ -207,7 +248,7 @@ export function Lots() {
                               <button
                                 onClick={() => handleClickDelete(lot.id)}
                                 title="再次点击确认删除"
-                                className="inline-flex items-center gap-1 rounded-md bg-danger/15 px-1.5 py-0.5 text-[9px] font-medium text-danger border border-danger/30 animate-pulse cursor-pointer"
+                                className="ctl ctl-sm ctl-btn soft inline-flex items-center gap-1 px-1.5 border-danger/30 animate-pulse"
                               >
                                 <Trash2 className="h-2.5 w-2.5" />确认
                               </button>
@@ -215,7 +256,7 @@ export function Lots() {
                               <button
                                 onClick={() => handleClickDelete(lot.id)}
                                 title="删除 (同步删除生成的监控规则)"
-                                className="p-1.5 rounded-md text-secondary transition-all hover:bg-danger/10 hover:text-danger cursor-pointer"
+                                className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:bg-danger/10 hover:text-danger"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -227,19 +268,71 @@ export function Lots() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
+          </section>
 
-          <div className="flex items-center justify-center gap-1 text-[11px] text-muted">
-            生成的止盈止损 / 到期提醒规则已同步至监控中心
-            <button onClick={() => navigate('/monitor')} className="inline-flex items-center gap-0.5 text-accent hover:text-accent/80 cursor-pointer">
-              去查看 <ArrowUpRight className="h-3 w-3" />
-            </button>
-          </div>
+          {/* 右栏: 快速记一笔 + 最新批次 */}
+          <aside className="min-w-0">
+            <div className="figcap">快 速 记 一 笔</div>
+            <div className="flex gap-1.5">
+              <input
+                value={srch}
+                onChange={e => setSrch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') openNew(srch.trim()) }}
+                placeholder="代码或名称"
+                aria-label="搜索标的以快速记一笔"
+                className="ctl ctl-md ctl-input min-w-0 flex-1 px-2.5 font-mono focus:border-accent/50"
+              />
+              <button onClick={() => openNew(srch.trim())} className="ctl ctl-md ctl-btn">查</button>
+            </div>
+
+            <table className="dt mt-3">
+              <colgroup>
+                <col />
+                <col className="w-[62px]" />
+                <col className="w-[52px]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col">批次</th>
+                  <th scope="col">浮盈</th>
+                  <th scope="col">持有</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLots.length === 0 ? (
+                  <tr><td className="z">尚无批次</td><td /><td /></tr>
+                ) : recentLots.map(lot => {
+                  const days = holdingDays(lot.buy_date)
+                  return (
+                    <tr key={lot.id}>
+                      <td>
+                        <button
+                          onClick={() => setPreviewSymbol(lot.symbol)}
+                          className="inline-flex min-w-0 items-center gap-1.5 transition-colors cursor-pointer"
+                          title={`查看 ${lot.symbol} 日K`}
+                        >
+                          <span className="font-mono text-foreground">{lot.symbol}</span>
+                          {symbolNames[lot.symbol] && <span className="truncate text-secondary">{symbolNames[lot.symbol]}</span>}
+                        </button>
+                      </td>
+                      <td><CostPnL close={lastPrices[lot.symbol]} cost={lot.cost_price} /></td>
+                      <td className="text-secondary">{days == null ? '—' : `${days}天`}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            <div className="figcap mt-6">为 什 么 记 批 次</div>
+            <p className="mt-2 text-[11px] leading-[1.8] text-secondary">
+              券商只告诉你「持有 500 股、成本 12.30」。同一个标的你可能在 10.8 买过一次、13.2 补过一次 —— 两个批次的止损位不该一样。按批记账，才谈得上分批止盈。
+            </p>
+          </aside>
         </div>
       </div>
 
-      {editing && <LotDialog lot={editing} onClose={() => setEditing(null)} />}
+      {editing && <LotDialog lot={editing} seed={seed} onClose={() => { setEditing(null); setSeed('') }} />}
 
       <StockPreviewDialog
         symbol={previewSymbol}
@@ -252,10 +345,10 @@ export function Lots() {
   )
 }
 
-function LotDialog({ lot, onClose }: { lot: Lot; onClose: () => void }) {
+function LotDialog({ lot, seed = '', onClose }: { lot: Lot; seed?: string; onClose: () => void }) {
   const qc = useQueryClient()
   const [draft, setDraft] = useState<Lot>(() => ({ ...lot }))
-  const [symbolQuery, setSymbolQuery] = useState('')
+  const [symbolQuery, setSymbolQuery] = useState(seed)
   const [error, setError] = useState('')
 
   // 数字字段用本地字符串承载 (可先清空再输入), 提交时才解析成数值;
@@ -315,15 +408,15 @@ function LotDialog({ lot, onClose }: { lot: Lot; onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose} ariaLabel={lot.id ? '编辑批次' : '新增批次'} panelClassName="w-[92vw] max-w-md bg-surface border border-border rounded-card shadow-xl">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-        <span className="text-sm font-medium text-foreground">{lot.id ? '编辑批次' : '新增批次'}</span>
-        <span className="text-[10px] text-muted">保存后自动同步监控规则</span>
+    <Modal onClose={onClose} ariaLabel={lot.id ? '编辑批次' : '新增批次'} panelClassName="w-[92vw] max-w-md bg-surface border border-border shadow-xl">
+      <div className="flex items-center justify-between border-b border-rule-strong px-4 py-3">
+        <span className="font-serif text-[15px] font-medium text-foreground">{lot.id ? '编辑批次' : '新增批次'}</span>
+        <span className="font-mono text-[9.5px] tracking-[0.12em] text-muted">保存后自动同步监控规则</span>
       </div>
       <div className="space-y-3 px-4 py-4">
         {/* 标的 */}
         <div className="space-y-1.5">
-          <span className="text-[11px] text-muted">标的</span>
+          <span className="text-[11px] text-secondary">标的</span>
           {draft.symbol ? (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded bg-elevated px-2 py-1 font-mono text-[11px] text-secondary">
@@ -339,7 +432,7 @@ function LotDialog({ lot, onClose }: { lot: Lot; onClose: () => void }) {
                 onChange={e => setSymbolQuery(e.target.value)}
                 placeholder="搜索代码或名称..."
                 autoFocus
-                className="h-9 w-full rounded-btn border border-border bg-base pl-8 pr-3 text-xs text-foreground focus:outline-none focus:border-accent/50"
+                className="ctl ctl-md ctl-input w-full pl-8 pr-3 font-mono focus:border-accent/50 bg-base"
               />
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
               {symbolSearch.data && symbolSearch.data.results.length > 0 && (
@@ -362,31 +455,31 @@ function LotDialog({ lot, onClose }: { lot: Lot; onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1.5">
-            <span className="text-[11px] text-muted">数量 (参考)</span>
-            <input type="number" min={0} placeholder="0" {...numField('qty')} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+            <span className="text-[11px] text-secondary">数量 (参考)</span>
+            <input type="number" min={0} placeholder="0" {...numField('qty')} className="ctl ctl-md ctl-input w-full bg-base px-2.5 font-mono" />
           </label>
           <label className="space-y-1.5">
-            <span className="text-[11px] text-muted">成本价</span>
-            <input type="number" min={0} step="any" placeholder="0" {...numField('cost_price')} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+            <span className="text-[11px] text-secondary">成本价</span>
+            <input type="number" min={0} step="any" placeholder="0" {...numField('cost_price')} className="ctl ctl-md ctl-input w-full bg-base px-2.5 font-mono" />
           </label>
           <label className="space-y-1.5">
-            <span className="text-[11px] text-muted">止盈%</span>
-            <input type="number" min={0} step="any" placeholder="0" {...numField('target_pct')} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+            <span className="text-[11px] text-secondary">止盈%</span>
+            <input type="number" min={0} step="any" placeholder="0" {...numField('target_pct')} className="ctl ctl-md ctl-input w-full bg-base px-2.5 font-mono" />
           </label>
           <label className="space-y-1.5">
-            <span className="text-[11px] text-muted">止损%</span>
-            <input type="number" min={0} step="any" placeholder="0" {...numField('stop_pct')} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+            <span className="text-[11px] text-secondary">止损%</span>
+            <input type="number" min={0} step="any" placeholder="0" {...numField('stop_pct')} className="ctl ctl-md ctl-input w-full bg-base px-2.5 font-mono" />
           </label>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <span className="text-[11px] text-muted">买入日期 (可选)</span>
+            <span className="text-[11px] text-secondary">买入日期 (可选)</span>
             <DateShortcuts value={draft.buy_date ?? ''} onChange={v => setDraft(d => ({ ...d, buy_date: v || null }))} options={[{ label: '今天', days: 0 }]} />
             <DatePicker value={draft.buy_date ?? ''} onChange={v => setDraft(d => ({ ...d, buy_date: v || null }))} placeholder="不记录" />
           </div>
           <div className="space-y-1.5">
-            <span className="text-[11px] text-muted">到期日 (可选)</span>
+            <span className="text-[11px] text-secondary">到期日 (可选)</span>
             <DateShortcuts value={draft.remind_date ?? ''} onChange={v => setDraft(d => ({ ...d, remind_date: v || null }))} options={[{ label: '5天', days: 5 }, { label: '10天', days: 10 }, { label: '15天', days: 15 }]} base={draft.buy_date || undefined} />
             <DatePicker value={draft.remind_date ?? ''} onChange={v => setDraft(d => ({ ...d, remind_date: v || null }))} placeholder="不提醒" />
           </div>
@@ -394,20 +487,20 @@ function LotDialog({ lot, onClose }: { lot: Lot; onClose: () => void }) {
 
         {draft.remind_date && (
           <label className="space-y-1.5">
-            <span className="text-[11px] text-muted">提前提醒天数</span>
-            <input type="number" min={0} placeholder="1" {...numField('lead_days')} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+            <span className="text-[11px] text-secondary">提前提醒天数</span>
+            <input type="number" min={0} placeholder="1" {...numField('lead_days')} className="ctl ctl-md ctl-input w-full bg-base px-2.5 font-mono" />
             <span className="block text-[10px] text-muted">提醒仅在交易时段评估; 到期日若逢周末或长假, 请把提前天数调大些 (建议 ≥ 2, 长假更大)</span>
           </label>
         )}
 
         {error && <div className="rounded border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] text-danger">{error}</div>}
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
-        <button onClick={onClose} className="h-9 rounded-btn border border-border px-3 text-xs text-secondary hover:bg-elevated cursor-pointer">取消</button>
+      <div className="flex items-center justify-end gap-2 border-t border-rule-strong px-4 py-3">
+        <button onClick={onClose} className="ctl-btn ctl-sm">取消</button>
         <button
           onClick={submit}
           disabled={save.isPending}
-          className={cn('h-9 rounded-btn px-4 text-xs font-medium bg-accent/90 text-white hover:bg-accent cursor-pointer disabled:opacity-50')}
+          className={cn('mini pri disabled:opacity-50')}
         >
           {save.isPending ? '保存中...' : '保存'}
         </button>

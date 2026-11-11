@@ -2310,8 +2310,10 @@ class KlineRepository:
 
     def _latest_enriched_date_duckdb(self) -> date | None:
         try:
+            # 周末分区是历史版本在非交易日落盘的残留 (见 quote_service「非交易日不落盘」),
+            # 会顶替真实交易日成为「最新日」导致涨跌幅全 0, 读侧直接排除。
             res = self.execute_one(
-                "SELECT max(date) FROM kline_enriched",
+                "SELECT max(date) FROM kline_enriched WHERE dayofweek(date) NOT IN (0, 6)",
             )
             if res and res[0]:
                 d = res[0]

@@ -3,17 +3,22 @@ import * as echarts from 'echarts'
 import type { ECharts, EChartsOption } from 'echarts'
 import type { MinuteKlineRow, MinuteKlineSession } from '@/lib/api'
 import { computeIntradayAverage, formatMinuteTime, FULL_DAY_TIMES } from '@/lib/intraday-chart'
-import { useChartTheme } from '@/lib/theme'
+import { alpha, chartTheme, getTheme, useChartTheme } from '@/lib/theme'
 import { pricePrecision } from '@/lib/format'
 
-const COLORS = {
-  up: '#C74040',
-  down: '#2D9B65',
-  flat: '#A1A1AA',
-  average: '#F59E0B',
-  volumeUp: 'rgba(240,68,56,0.58)',
-  volumeDown: 'rgba(18,183,106,0.58)',
-  volumeFlat: 'rgba(161,161,170,0.45)',
+/** 序列色随主题走: 涨跌色与表格里的涨跌数字同源 (--bull/--bear),
+ *  均价走强调色, 平盘走次要文字色 —— 不再写死十六进制色值。 */
+const colors = () => {
+  const ct = chartTheme(getTheme())
+  return {
+    up: ct.bull,
+    down: ct.bear,
+    flat: ct.text,
+    average: ct.accent,
+    volumeUp: alpha(ct.bull, 0.58),
+    volumeDown: alpha(ct.bear, 0.58),
+    volumeFlat: alpha(ct.text, 0.45),
+  }
 }
 
 interface Props {
@@ -39,8 +44,8 @@ function formatAmount(value: number | null | undefined): string {
 }
 
 function priceColor(close: number, prevClose: number | null): string {
-  if (prevClose == null || close === prevClose) return COLORS.flat
-  return close > prevClose ? COLORS.up : COLORS.down
+  if (prevClose == null || close === prevClose) return colors().flat
+  return close > prevClose ? colors().up : colors().down
 }
 
 function buildModel(sessions: MinuteKlineSession[]) {
@@ -98,12 +103,12 @@ function buildModel(sessions: MinuteKlineSession[]) {
         value: row.volume,
         itemStyle: {
           color: prevRef == null
-            ? COLORS.volumeFlat
+            ? colors().volumeFlat
             : row.close > prevRef
-              ? COLORS.volumeUp
+              ? colors().volumeUp
               : row.close < prevRef
-                ? COLORS.volumeDown
-                : COLORS.volumeFlat,
+                ? colors().volumeDown
+                : colors().volumeFlat,
         },
       })
       prevRef = row.close
@@ -224,7 +229,7 @@ export function EChartsMultiDayIntraday({
       const data = new Array(totalLength).fill(null) as (number | null)[]
       for (let index = 0; index < values.length; index++) data[start + index] = values[index]
       const last = session.rows[session.rows.length - 1]
-      const color = last ? priceColor(last.close, session.prev_close) : COLORS.flat
+      const color = last ? priceColor(last.close, session.prev_close) : colors().flat
       return {
         name: session.date,
         type: 'line',
@@ -279,7 +284,7 @@ export function EChartsMultiDayIntraday({
         data,
         symbol: 'none',
         connectNulls: true,
-        lineStyle: { width: 1, color: COLORS.average },
+        lineStyle: { width: 1, color: colors().average },
         emphasis: { disabled: true },
       }
     })
@@ -412,7 +417,7 @@ export function EChartsMultiDayIntraday({
   const changePct = info?.prevClose
     ? (info.row.close - info.prevClose) / info.prevClose * 100
     : null
-  const infoColor = info ? priceColor(info.row.close, info.prevClose) : COLORS.flat
+  const infoColor = info ? priceColor(info.row.close, info.prevClose) : colors().flat
   const rowCount = sessions.reduce((total, session) => total + session.rows.length, 0)
 
   return (
@@ -429,7 +434,7 @@ export function EChartsMultiDayIntraday({
               {changePct != null && (
                 <span style={{ color: infoColor }}>{changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%</span>
               )}
-              <span className="text-muted">均价</span><span style={{ color: COLORS.average }}>{info.average != null ? info.average.toFixed(digits) : '—'}</span>
+              <span className="text-muted">均价</span><span style={{ color: colors().average }}>{info.average != null ? info.average.toFixed(digits) : '—'}</span>
               <span className="text-muted">量</span><span className="text-secondary">{info.row.volume.toFixed(0)}</span>
               <span className="text-muted">额</span><span className="text-secondary">{formatAmount(info.row.amount)}</span>
             </>

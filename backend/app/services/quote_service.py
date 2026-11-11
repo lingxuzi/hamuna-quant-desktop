@@ -3,8 +3,8 @@
 集中管理全市场行情拉取 + enriched 缓存，供盘中策略、自选等所有模块复用。
 
 架构:
-  - 后台线程轮询 TickFlow get_by_universes(["CN_Equity_A", "CN_ETF"]) + 核心指数按码拉取
-    (自定义源走 provider.get_realtime() + 可选 get_realtime_indices() 指数补充)
+  - 后台线程轮询生效数据源的 provider.get_realtime() + 可选
+    get_realtime_indices() 指数补充
   - 拉取行情 → 写 kline_daily (不复权) + 增量计算 enriched → 写盘 + 更新缓存
   - _enriched_cache 是唯一的盘中数据源 (OHLCV + 全套技术指标)
   - _live_agg_cache 是递推状态 (只加载一次, 盘中不变)
@@ -271,15 +271,8 @@ def _monitor_name_map(repo) -> dict[str, str]:
 class QuoteService:
     """全局实时行情服务 — 单例。"""
 
-    # 档位 → 最小轮询间隔 (秒) — TickFlow 档位限速保护, 仅实时源为 tickflow 时适用
-    TIER_MIN_INTERVAL = {
-        "expert": 1.0,
-        "pro": 3.0,
-        "starter": 6.0,
-        "free": 6.0,
-    }
-    # 插件/自定义源: 不受 TickFlow 档位保护约束, 通用下限 1s (默认间隔仍为 DEFAULT_INTERVAL)
-    CUSTOM_PROVIDER_MIN_INTERVAL = 1.0
+    # 实时轮询间隔下限 (秒) — 通用下限, 不再按套餐区分
+    MIN_INTERVAL = 1.0
     DEFAULT_INTERVAL = 6.0
     MAX_INTERVAL = 60.0
 
@@ -464,7 +457,7 @@ class QuoteService:
         if not self.is_realtime_allowed():
             if preferences.get_realtime_quotes_enabled():
                 self._save_enabled(False)
-            # 带生效源: 便于判断「该切哪个源」, 而不是只看到 TickFlow 档位
+            # 带生效源: 便于判断「该切哪个源」
             from app.data_providers.capabilities import capability_gate
             _, label = capability_gate("realtime")
             logger.info("实时行情未启动: %s 不可用", label)
@@ -491,8 +484,8 @@ class QuoteService:
         return clamped
 
     def get_min_interval(self) -> float:
-        """返回当前档位允许的最小间隔。"""
-        return self._tier_min_interval()
+        """返回实时轮询允许的最小间隔。"""
+        return self.MIN_INTERVAL
 
     # ================================================================
     # SSE 订阅管理 — 每个 /stream 连接一个订阅者, 事件广播
@@ -598,48 +591,27 @@ class QuoteService:
             sub.push_review(event_json)
 
     # ================================================================
-    # 档位感知间隔限制
+    # 间隔限制与实时模式
     # ================================================================
-
-    @staticmethod
-    def _current_tier() -> str:
-        """获取当前档位名（小写）。"""
-        from app.tickflow.policy import tier_label
-        return tier_label().split()[0].split("+")[0].strip().lower()
 
     @classmethod
     def realtime_mode(cls) -> str:
         """当前实时行情模式: none / full_market。
 
-        TickFlow 免费档不再提供"自选前 5 只"降级实时(自定义源 fuyao 的全市场
-        快照已全面覆盖且免费); TickFlow 免费档 = 无实时, 接入自定义实时源
-        (如 fuyao)或升级 TickFlow 后恢复全市场模式。
+        生效源不提供 realtime 能力 → none; 否则全市场实时。
         """
-        from app.services import preferences
-        if preferences.get_realtime_data_provider() != "tickflow":
-            return "full_market"
-        tier = cls._current_tier()
-        if tier in ("none", "free"):
-            return "none"
-        return "full_market"
+        from app.data_providers.capabilities import capability_gate
+
+        usable, _label = capability_gate("realtime")
+        return "full_market" if usable else "none"
 
     @classmethod
     def is_realtime_allowed(cls) -> bool:
-        """当前档位是否允许使用实时行情。"""
+        """当前是否允许使用实时行情。"""
         return cls.realtime_mode() != "none"
 
-    @classmethod
-    def _tier_min_interval(cls) -> float:
-        # 实时源路由到插件/自定义源时, TickFlow 档位限速不适用 (中立能力原则):
-        # 下限放宽到通用 1s, 默认/已保存间隔不变
-        from app.services import preferences
-        if preferences.get_realtime_data_provider() != "tickflow":
-            return cls.CUSTOM_PROVIDER_MIN_INTERVAL
-        tier = cls._current_tier()
-        return cls.TIER_MIN_INTERVAL.get(tier, cls.DEFAULT_INTERVAL)
-
     def _clamp_interval(self, interval: float) -> float:
-        return max(self._tier_min_interval(), min(self.MAX_INTERVAL, interval))
+        return max(self.MIN_INTERVAL, min(self.MAX_INTERVAL, interval))
 
     # ================================================================
     # 行情数据访问
@@ -677,7 +649,7 @@ class QuoteService:
         return df
 
     def get_index_quotes(self, symbols: list[str] | None = None) -> pl.DataFrame:
-        """返回实时指数行情缓存。不会触发 TickFlow 请求。"""
+        """返回实时指数行情缓存。不会触发数据源请求。"""
         with self._lock:
             df = self._index_quotes_cache.clone() if self._index_quotes_cache is not None else pl.DataFrame()
         if df.is_empty():
@@ -827,136 +799,48 @@ class QuoteService:
         from app.services import preferences
 
         provider_name = preferences.get_realtime_data_provider()
-        if provider_name != "tickflow":
-            from app.data_providers import custom as custom_sources
-            if custom_sources.provider_has_dataset(provider_name, "realtime"):
-                try:
-                    t0 = time.perf_counter()
-                    now_ts = time.perf_counter()
-                    provider = custom_sources.get_provider(provider_name)
-                    records = provider.get_realtime()
-                    # 指数补充: A 股快照通常不含指数。插件可选实现
-                    # get_realtime_indices(symbols) 用独立端点补拉 (如 fuyao 指数快照);
-                    # 未实现的源指数缓存为空, 由日K兜底接管。
-                    replace_index_cache = True
-                    fetch_indices = getattr(provider, "get_realtime_indices", None)
-                    if callable(fetch_indices):
-                        # 偏离值基准指数 (科创50/创业板综指等) 一并拉取, 供盘中
-                        # attach_deviation_columns_today 实时外推; 展示层仍按核心
-                        # 四只过滤, 多拉的指数不进侧栏。
-                        from app.indicators.pipeline import BENCHMARK_INDEX_SYMBOLS
-                        wanted = sorted(
-                            set(CORE_INDEX_SYMBOLS)
-                            | BENCHMARK_INDEX_SYMBOLS
-                            | self._collect_monitor_index_symbols()
-                        )
-                        try:
-                            fetched_indices = fetch_indices(wanted)
-                            if fetched_indices is None:
-                                replace_index_cache = False
-                            else:
-                                records = records + fetched_indices
-                        except Exception as e:  # noqa: BLE001
-                            logger.warning("自定义源指数行情拉取失败: %s", e)
-                            replace_index_cache = False
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("自定义实时行情拉取失败: %s", e)
-                    return
-                return self._process_full_market_records(
-                    records,
-                    t0=t0,
-                    now_ts=now_ts,
-                    replace_index_cache=replace_index_cache,
-                    final_boundary_ms=final_boundary_ms,
-                )
-            # 自定义源未配置 realtime → 回退 TickFlow
-
-        from app.tickflow.client import get_paid_realtime_client
-
-        tf = get_paid_realtime_client()
-        if tf is None:
-            logger.warning("实时行情拉取失败:未配置付费服务器 API Key")
-            return
-        t0 = time.perf_counter()
-        now_ts = time.perf_counter()
-
+        from app.data_providers import custom as custom_sources
+        if not provider_name or not custom_sources.provider_has_dataset(provider_name, "realtime"):
+            logger.warning("实时行情拉取失败:生效数据源 %s 未提供实时行情能力", provider_name or "(未配置)")
+            return None
         try:
-            from app.services import preferences
-            all_index_symbols = set(self._repo.get_index_symbol_set()) if self._repo else set()
-            core_index_symbols = set(CORE_INDEX_SYMBOLS)
-            all_index_symbols.update(core_index_symbols)
-            # 指数监控规则标的并入显式拉取 (quotes.get 按码覆盖)
-            monitor_index_symbols = self._collect_monitor_index_symbols()
-            all_index_symbols.update(monitor_index_symbols)
-            all_etf_symbols = set()
-            if self._repo:
-                etf_inst = self._repo.get_etf_instruments()
-                if not etf_inst.is_empty() and "symbol" in etf_inst.columns:
-                    all_etf_symbols = set(etf_inst["symbol"].cast(pl.Utf8).to_list())
-
-            universes: list[str] = []
-            if preferences.get_realtime_pull_stock():
-                universes.append("CN_Equity_A")
-            if preferences.get_realtime_pull_etf() and all_etf_symbols:
-                universes.append("CN_ETF")
-
-            resp = []
-            if universes:
-                _u0 = time.perf_counter()
-                logger.info("拉取全市场行情 (universes=%s, SDK超时=30s×重试3)", universes)
-                resp.extend(tf.quotes.get_by_universes(universes=universes) or [])
-                logger.info("全市场行情拉取完成: %d 条 (%.2fs)", len(resp), time.perf_counter() - _u0)
-            # 指数: 固定核心四只 + 偏离值基准指数 + 监控规则标的, 按码显式拉取
-            from app.indicators.pipeline import BENCHMARK_INDEX_SYMBOLS
-            _core_syms = sorted(
-                core_index_symbols | BENCHMARK_INDEX_SYMBOLS | monitor_index_symbols
-            )
-            if _core_syms:
-                _i0 = time.perf_counter()
-                resp.extend(tf.quotes.get(symbols=_core_syms) or [])
-                logger.info("核心指数行情拉取完成: %d 只 (%.2fs)", len(_core_syms), time.perf_counter() - _i0)
+            t0 = time.perf_counter()
+            now_ts = time.perf_counter()
+            provider = custom_sources.get_provider(provider_name)
+            records = provider.get_realtime()
+            # 指数补充: A 股快照通常不含指数。插件可选实现
+            # get_realtime_indices(symbols) 用独立端点补拉 (如 fuyao 指数快照);
+            # 未实现的源指数缓存为空, 由日K兜底接管。
+            replace_index_cache = True
+            fetch_indices = getattr(provider, "get_realtime_indices", None)
+            if callable(fetch_indices):
+                # 偏离值基准指数 (科创50/创业板综指等) 一并拉取, 供盘中
+                # attach_deviation_columns_today 实时外推; 展示层仍按核心
+                # 四只过滤, 多拉的指数不进侧栏。
+                from app.indicators.pipeline import BENCHMARK_INDEX_SYMBOLS
+                wanted = sorted(
+                    set(CORE_INDEX_SYMBOLS)
+                    | BENCHMARK_INDEX_SYMBOLS
+                    | self._collect_monitor_index_symbols()
+                )
+                try:
+                    fetched_indices = fetch_indices(wanted)
+                    if fetched_indices is None:
+                        replace_index_cache = False
+                    else:
+                        records = records + fetched_indices
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("指数行情拉取失败 (%s): %s", provider_name, e)
+                    replace_index_cache = False
         except Exception as e:  # noqa: BLE001
-            logger.warning("行情拉取失败 (%.2fs): %s", time.perf_counter() - t0, e)
-            return
-
-        if not resp:
-            logger.warning("行情数据为空")
-            return
-
-        # ---- 解析 API 响应 (临时变量, 用完丢弃) ----
-        records = []
-        for q in resp:
-            ext = q.get("ext") or {}
-            last_price = q.get("last_price")
-            prev_close = q.get("prev_close")
-            change_amount = ext.get("change_amount")
-            change_pct = ext.get("change_pct")
-            if change_amount is None and last_price is not None and prev_close is not None:
-                change_amount = float(last_price) - float(prev_close)
-            if change_pct is None and change_amount is not None and prev_close not in (None, 0):
-                # 与 API ext.change_pct 同为小数制 (0.0366 = 3.66%),
-                # enriched 全项目约定小数 (见 pipeline.py), 此处不可乘 100
-                change_pct = float(change_amount) / float(prev_close)
-            records.append({
-                "symbol": q.get("symbol"),
-                "name": q.get("name") or ext.get("name"),
-                "last_price": last_price,
-                "prev_close": prev_close,
-                "open": q.get("open"),
-                "high": q.get("high"),
-                "low": q.get("low"),
-                "volume": q.get("volume"),
-                "amount": q.get("amount"),
-                "change_pct": change_pct,
-                "change_amount": change_amount,
-                "amplitude": ext.get("amplitude"),
-                "turnover_rate": ext.get("turnover_rate"),
-                "timestamp": q.get("timestamp"),
-                "session": q.get("session"),
-            })
-
+            logger.warning("实时行情拉取失败 (%s): %s", provider_name, e)
+            return None
         return self._process_full_market_records(
-            records, t0=t0, now_ts=now_ts, final_boundary_ms=final_boundary_ms
+            records,
+            t0=t0,
+            now_ts=now_ts,
+            replace_index_cache=replace_index_cache,
+            final_boundary_ms=final_boundary_ms,
         )
 
     def _process_full_market_records(
@@ -974,7 +858,6 @@ class QuoteService:
         只更新展示缓存, 不写 daily/enriched、不评估监控 —— 防止收盘后数据源仍
         返回竞价前旧价时把陈旧收盘价固化到当日分区。
         """
-        from app.services import preferences
         all_index_symbols = set(self._repo.get_index_symbol_set()) if self._repo else set()
         core_index_symbols = set(CORE_INDEX_SYMBOLS)
         all_index_symbols.update(core_index_symbols)
@@ -1030,6 +913,23 @@ class QuoteService:
             logger.info(
                 "final 快照未达定版边界 (max quote_ts=%s, 边界=%s), 本轮跳过落盘",
                 max_ts, final_boundary_ms,
+            )
+            self._broadcast_quote_updated()
+            return
+
+        # ---- 非交易日不落盘 ----
+        # 实时快照协议只给 HHMMSS 无日期, provider 按「今日北京日期 + 该时刻」
+        # 拼 quote_ts (见 easytdx 的 _snapshot_ms)。周末/节假日服务端
+        # 返回的仍是上一交易日收盘时刻, 日期被填成今天 → _build_daily 的当日
+        # 归属过滤放行, 把周五 K 线原样复制成周日分区 (实测 2026-11-08 周日
+        # 全市场 5572 只 + 指数 9 只, 指数页读最新两根 → 涨跌幅恒为 0)。
+        # 时间戳无法自证新旧, 只能靠交易日判定拦截。展示缓存已在上方更新,
+        # 节后开盘首轮会正常落盘。未知 (None) 不拦截, 维持原行为。
+        from app.services import trading_day
+        if trading_day.is_trading_day() is False:
+            logger.info(
+                "非交易日, 跳过日K/enriched 落盘 (%d 股票, %d 指数)",
+                len(stock_records), len(index_records),
             )
             self._broadcast_quote_updated()
             return
@@ -1197,8 +1097,8 @@ class QuoteService:
         if not keep or "symbol" not in keep:
             return pl.DataFrame()
         df = df.select(keep)
-        # 自定义源可能不提供 change_pct/change_amount, 按 last_price/prev_close 补算
-        # (TickFlow 路径在 _fetch_full_market_quotes 已算好, 此处只补缺失的)
+        # 源可能不提供 change_pct/change_amount, 按 last_price/prev_close 补算
+        # (拉取侧已算好的这里只补缺失的)
         if "change_pct" not in df.columns and "last_price" in df.columns and "prev_close" in df.columns:
             # prev_close=0 → inf (非合法 JSON), prev_close=null → null; 用 when 守护
             df = df.with_columns(
@@ -1268,7 +1168,7 @@ class QuoteService:
     def _holiday_gate(self) -> bool:
         """交易日探针门控: 确定休市 → False (停止轮询, 含 final 定版)。
 
-        探针未知 (None, 未配置 fuyao 且 tickflow 不可用/开盘缓冲窗内) → True,
+        探针未知 (None, 未配置 fuyao 且行情源不可用/开盘缓冲窗内) → True,
         维持周几近似现状行为。探针是纯读, 不落盘; 休市结论带 TTL 定期复探,
         误判自愈。首次判定变化打一条日志, 避免每拍刷屏。
         """
@@ -1942,7 +1842,7 @@ class QuoteService:
                 # 补上触发时的现价/涨跌幅 (日期提醒无行情, 自然为空)
                 body = _body_with_quote(body, ev)
 
-                title = f"TickFlow · {source_label}"
+                title = f"行情提醒 · {source_label}"
                 _SYSNOTIFY_EXECUTOR.submit(_deliver_system_notify, title, body)
         except Exception as e:  # noqa: BLE001
             logger.debug("系统通知发送异常 (不影响告警主流程): %s", e)
@@ -2051,8 +1951,8 @@ class QuoteService:
             if not use_incremental:
                 from datetime import timedelta
 
+                from app.data_providers.repository import _live_agg_window_start
                 from app.indicators.pipeline import compute_enriched
-                from app.tickflow.repository import _live_agg_window_start
 
                 logger.info("enriched 全量计算 (live_agg=%s, 上次日期=%s)",
                             "ok" if not live_agg.is_empty() else "空", prev_date)

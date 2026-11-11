@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import type { SeriesMarker, Time } from 'lightweight-charts'
 import type { ChartMarker, DailyChartProps, OHLC } from '@/lib/chart-types'
 import { SUB_CHART_META, volMaN, volumeRatioAt } from '@/lib/chart-indicators'
-import { CHART_COLORS as C, lineData, validDailyRows, type PlotSeries } from '@/lib/lightweight-model'
+import { lineData, validDailyRows, type PlotSeries } from '@/lib/lightweight-model'
 import { fmtVolume, fmtPct, pricePrecision } from '@/lib/format'
 import { CHART_LAYOUT, plotPaneHeights } from '@/lib/chart-layout'
-import { useTheme, type Theme } from '@/lib/theme'
+import { useTheme, chartTheme, alpha, type Theme } from '@/lib/theme'
 import { FinancialPlot } from './FinancialPlot'
 import type { AnnotationData } from './ChartAnnotations'
 
@@ -22,9 +22,9 @@ const LINE_COLORS = {
   orange: { dark: '#F97316', light: '#C2410C' },
   pink: { dark: '#D58BDD', light: '#8E3A5C' },
   cyan: { dark: '#22D3EE', light: '#2C6F6B' },
-  up: { dark: C.up, light: C.up },
-  down: { dark: C.down, light: '#2C5F4A' },
 } as const
+/** 指标线色板; 涨跌两色不入表 —— 它们跟皮肤走 (--bull / --bear)。 */
+type LineToken = keyof typeof LINE_COLORS | 'up' | 'down'
 const maFields = [['ma5', 'gray'], ['ma10', 'blue'], ['ma20', 'orange'], ['ma60', 'purple']] as const
 const bollFields = [['boll_upper', '上轨', 'pink'], ['ma20', '中轨', 'orange'], ['boll_lower', '下轨', 'cyan']] as const
 
@@ -57,7 +57,10 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
   const rows = useMemo(() => validDailyRows(data), [data])
   const precision = pricePrecision(assetType)
   const theme = useTheme()
-  const color = (key: keyof typeof LINE_COLORS) => LINE_COLORS[key][paletteTone(theme)]
+  const palette = chartTheme(theme)
+  const color = (token: LineToken) => token === 'up' ? palette.bull
+    : token === 'down' ? palette.bear
+    : LINE_COLORS[token][paletteTone(theme)]
   const volumeMAs = useMemo(() => ({ 5: volMaN(rows, 5), 10: volMaN(rows, 10) }), [rows])
   const scope = `${symbol}:${rows[0]?.date ?? ''}`
   const [hover, setHover] = useState<{ scope: string; time: string } | null>(null)
@@ -91,7 +94,7 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
       const pane = offset + 1
       if (key === 'vol') {
         series.push({ id: 'volume', type: 'Volume', pane, priceFormat: 'volume', data: rows.map(r => ({
-          time: r.date, value: r.volume ?? 0, color: r.close >= r.open ? 'rgba(199,64,64,0.55)' : 'rgba(45,155,101,0.55)',
+          time: r.date, value: r.volume ?? 0, color: alpha(r.close >= r.open ? palette.bull : palette.bear, 0.55),
         })) })
         for (const [n, token] of [[5, 'yellow'], [10, 'purple']] as const) {
           const ma = volumeMAs[n]
@@ -102,12 +105,12 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
         for (const [field, label, token] of lines) addLine(label, lineData(rows, field), color(token), pane,
           { range: key === 'rsi' ? { min: 0, max: 100 } : undefined, precision: key === 'macd' ? 3 : 1 })
         if (key === 'macd') series.push({ id: 'macd_hist', type: 'Histogram', pane, precision: 3, data: rows.map(r => r.macd_hist == null || !Number.isFinite(r.macd_hist) ? { time: r.date } : {
-          time: r.date, value: r.macd_hist, color: `${color(r.macd_hist >= 0 ? 'up' : 'down')}99`,
+          time: r.date, value: r.macd_hist, color: alpha(color(r.macd_hist >= 0 ? 'up' : 'down'), 0.6),
         }) })
       }
     })
     return series
-  }, [rows, showMA, selected, activeIndicators, events, markerStyle, showMarkers, theme, volumeMAs])
+  }, [rows, showMA, selected, activeIndicators, events, markerStyle, showMarkers, theme, volumeMAs, palette])
   const plotHeight = Math.max(260, height - (showInfoBar ? CHART_LAYOUT.readout : 0))
   const paneHeights = useMemo(() => plotPaneHeights(plotHeight, selected.length), [plotHeight, selected.length])
   const chartMarkers = useMemo<SeriesMarker<Time>[]>(() => showMarkers ? markers
@@ -119,16 +122,16 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
       return {
         time: m.date, position: m.above || (m.kind === 'sell' && m.event !== 'limit_down' && m.event !== 'limit_down_recovery') ? 'aboveBar' : 'belowBar',
         color: isEvent(m) && (!m.color || m.color === EVENT_COLORS[m.event].body.dark)
-          ? EVENT_COLORS[m.event].label[paletteTone(theme)] : m.color ?? (m.kind === 'buy' ? C.up : m.kind === 'sell' ? C.down : '#F59E0B'),
+          ? EVENT_COLORS[m.event].label[paletteTone(theme)] : m.color ?? (m.kind === 'buy' ? palette.bull : m.kind === 'sell' ? palette.bear : palette.warning),
         text: m.label ?? '', ...appearance,
       }
-    }) : [], [markers, showMarkers, rows, markerStyle, theme])
+    }) : [], [markers, showMarkers, rows, markerStyle, theme, palette])
   const annotations = useMemo(() => {
     const addedRow = addedDate ? rows.filter(r => r.date <= addedDate).at(-1) : null
     return { dates: rows.map(r => r.date), ranges, priceLines,
-      verticals: addedRow ? [{ time: addedRow.date, label: '自选', color: '#B7410E' }] : [],
+      verticals: addedRow ? [{ time: addedRow.date, label: '自选', color: palette.accent }] : [],
     }
-  }, [rows, ranges, priceLines, addedDate])
+  }, [rows, ranges, priceLines, addedDate, palette])
   const volumeLabels = useMemo(() => volumeCompare.enabled ? rows.flatMap((row, idx) => {
     const ratio = volumeRatioAt(rows, idx, volumeCompare.days)
     return ratio == null ? [] : [{ time: row.date, value: row.volume ?? 0, text: `${ratio.toFixed(1)}x` }]
@@ -149,7 +152,7 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
         color: current?.macd_hist == null || !Number.isFinite(current.macd_hist) ? undefined : color(current.macd_hist >= 0 ? 'up' : 'down') })
     }
     return result
-  })], [selected, current, rows, i, volumeCompare.days, volumeCompare.enabled, theme, volumeMAs])
+  })], [selected, current, rows, i, volumeCompare.days, volumeCompare.enabled, theme, volumeMAs, palette])
   const change = previous?.close ? current.close / previous.close - 1 : null
   const turnover = stockInfo?.float_shares && current?.volume != null ? current.volume * 100 / stockInfo.float_shares : null
 
@@ -164,7 +167,7 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
         </span>}
         {([['开', current?.open], ['高', current?.high], ['低', current?.low], ['收', current?.close]] as const).map(([name, value]) =>
           <span key={name} className="text-muted">{name} <span className="text-secondary">{price(value, precision)}</span></span>)}
-        {change != null && <span style={{ color: change >= 0 ? C.up : C.down }}>{fmtPct(change)}</span>}
+        {change != null && <span style={{ color: change >= 0 ? palette.bull : palette.bear }}>{fmtPct(change)}</span>}
         {turnover != null && <span className="text-muted">换手 {fmtPct(turnover)}</span>}
       </div>
       <div className="mt-1 flex min-h-4 flex-wrap gap-x-4 gap-y-1 text-[10px]">
@@ -173,7 +176,7 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
           <span className="text-muted">BOLL</span>
           {bollFields.map(([field, label, token]) => <span key={field} style={{ color: color(token) }}>{`${label} ${price(current?.[field], precision)}`}</span>)}
         </span>}
-        {index >= 0 && previous && <span className="text-secondary">至今 <span style={{ color: rows.at(-1)!.close >= previous.close ? C.up : C.down }}>{fmtPct(rows.at(-1)!.close / previous.close - 1)}</span> · 周期 {rows.length - index}</span>}
+        {index >= 0 && previous && <span className="text-secondary">至今 <span style={{ color: rows.at(-1)!.close >= previous.close ? palette.bull : palette.bear }}>{fmtPct(rows.at(-1)!.close / previous.close - 1)}</span> · 周期 {rows.length - index}</span>}
       </div>
     </div>}
     <FinancialPlot scope={scope} series={model} height={plotHeight} paneHeights={paneHeights} pricePrecision={precision}

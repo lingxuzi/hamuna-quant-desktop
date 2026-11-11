@@ -11,8 +11,8 @@ import datetime as _dt
 import polars as pl
 import pytest
 
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 
 _BJ_DATE = _dt.date(2026, 10, 23)  # 周五交易日, 钉死不随跑测试当天漂移
 _BJ_NOW = _dt.datetime(2026, 10, 23, 11, 0)  # 盘中 11:00 → expected=90 根

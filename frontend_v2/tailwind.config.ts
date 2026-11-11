@@ -24,11 +24,40 @@ const LEDGER_HUE = {
   purple: 338, violet: 338, fuchsia: 338,
 } as const
 
-/** [档位, 明度] — 明度沿用 Tailwind 内置阶梯, 只把饱和度压到纸上能落读的程度 */
-const LEDGER_STEPS: Array<[string, number]> = [
-  ['50', 96], ['100', 92], ['200', 86], ['300', 78], ['400', 68], ['500', 58],
-  ['600', 49], ['700', 41], ['800', 33], ['900', 26], ['950', 19],
-]
+/** [档位, 明度] — 明度由 CSS 变量给出, 随皮肤走。
+ *
+ *  为什么不再写死明度: 纸底 (明度 93%) 上, 明度 68% 的饱和色只有 1.9:1 ——
+ *  全仓 100 余处 text-emerald-400 / text-sky-400 读不出来。改由各皮肤自己给:
+ *  浅底给墨色 (--led-ink 30%), 暗底给亮墨 (--led-ink 62%), 两边都过 AA。
+ *
+ *  300/400/500 合流为 --led-ink: 这三档在浅底上都是「能读的墨色」, 再分档只会
+ *  互相打架 (全仓没有一处靠同族两档做层级, 已核过 71 处同文件多档用法)。
+ *
+ *  50/100/200 是浅底档 (淡彩底 + 近白字), 三套皮肤同值, 不进变量。
+ *  600–950 各留一档: 深浅层级还在 (hover / 徽章的深字都靠它)。 */
+const LEDGER_SHADE_L: Record<string, string> = {
+  '50': '96%', '100': '92%', '200': '86%',
+  '300': 'var(--led-ink)', '400': 'var(--led-ink)', '500': 'var(--led-ink)',
+  '600': 'var(--led-600)', '700': 'var(--led-700)', '800': 'var(--led-800)',
+  '900': 'var(--led-900)', '950': 'var(--led-950)',
+}
+
+/**
+ * 警示族 (amber / yellow / orange) 的档位归属。
+ *
+ * 为什么 300 起走语义 token: 明度阶梯不看皮肤 —— amber-400 (明度 68%) 落在
+ * 纸底 (明度 93%) 上只有 1.8:1, 全仓 84 处 text-amber-400 读不出来。
+ * --warning 三套皮肤各取各的值 (纸底深赭 / 暗底亮金), 任何一档都落读。
+ *
+ * 留在阶梯上的:
+ *   50/100/200 浅底档 —— 「浅底 + 深字」的老写法, 底与字必须不同色;
+ *   orange 800/900/950 —— limit-ladder 那枚浅底标签的深字, 同理。
+ */
+const WARN_TOKEN_SHADES: Record<string, string[]> = {
+  amber: ['300', '400', '500', '600', '700', '800', '900', '950'],
+  yellow: ['300', '400', '500', '600', '700', '800', '900', '950'],
+  orange: ['300', '400', '500', '600', '700'],
+}
 
 // 灰族映射到主题中性层级: 浅档当底/线, 中档当次要字, 深档当主字
 const GREY_SHADE_TOKENS: Record<string, string> = {
@@ -41,13 +70,17 @@ const ledgerColors = {
   ...Object.fromEntries(
     Object.entries(LEDGER_HUE).map(([family, h]) => [
       family,
-      Object.fromEntries(LEDGER_STEPS.map(([shade, l]) => [shade, `hsl(${h} 42% ${l}% / <alpha-value>)`])),
+      Object.fromEntries(Object.entries(LEDGER_SHADE_L).map(([shade, l]) => [shade,
+        WARN_TOKEN_SHADES[family]?.includes(shade)
+          ? 'hsl(var(--warning) / <alpha-value>)'
+          : `hsl(${h} 42% ${l} / <alpha-value>)`,
+      ])),
     ]),
   ),
   ...Object.fromEntries(
     ['slate', 'gray', 'zinc', 'neutral', 'stone'].map(family => [
       family,
-      Object.fromEntries(LEDGER_STEPS.map(([shade]) => [shade, `hsl(var(--${GREY_SHADE_TOKENS[shade]}) / <alpha-value>)`])),
+      Object.fromEntries(Object.entries(LEDGER_SHADE_L).map(([shade]) => [shade, `hsl(var(--${GREY_SHADE_TOKENS[shade]}) / <alpha-value>)`])),
     ]),
   ),
 }
@@ -69,6 +102,8 @@ export default {
         surface:   'hsl(var(--surface) / <alpha-value>)',
         elevated:  'hsl(var(--elevated) / <alpha-value>)',
         border:    'hsl(var(--border) / <alpha-value>)',
+        // 加重发丝线: 表格题头与分节题头下的分隔 (border 是常规发丝线)
+        'rule-strong': 'hsl(var(--border-strong) / <alpha-value>)',
         foreground: 'hsl(var(--fg-primary) / <alpha-value>)',
         secondary:  'hsl(var(--fg-secondary) / <alpha-value>)',
         muted:      'hsl(var(--fg-muted) / <alpha-value>)',
@@ -77,6 +112,8 @@ export default {
         bull:       'hsl(var(--bull) / <alpha-value>)',
         bear:       'hsl(var(--bear) / <alpha-value>)',
         warning:    'hsl(var(--warning) / <alpha-value>)',
+        // 实心彩色块上的字: 浅色皮肤用白字, 暗色皮肤用近黑字 (见 index.css --on-solid)
+        'on-solid': 'hsl(var(--on-solid) / <alpha-value>)',
         danger:     'hsl(var(--danger) / <alpha-value>)',
         // 影子色: 浮层若直接写 shadow-black/NN 会绕过 boxShadow 的纸色锁,
         // 纯黑落在暖白纸上发灰脏。供 shadow-scrim/NN 用, 随主题换色相。
@@ -108,16 +145,26 @@ export default {
         '4xl': '2px',
       },
       boxShadow: {
-        // 影一致性锁: 账簿用「三级线」而非阴影分层, 但浮层(菜单/弹窗/吐司)
-        // 仍需与纸面分离。全站 30 处 shadow-lg/xl/2xl 散在 24 个文件里,
-        // 逐个改是返工; 在主题层把整条刻度压成同一枚纸色微影, 一处改动全局对齐。
+        // 影一致性锁: 账簿用「三级线」而非阴影分层, 浮层(菜单/弹窗/吐司)靠
+        // border-border 与纸面分离, 影子只做一点点抬升。全站 40 处 shadow-lg/xl/2xl
+        // 散在 30 个文件里, 逐个改是返工; 在主题层把整条刻度压成同一枚纸色微影。
         // 纸色 (--scrim) 而非纯黑: 纯黑影子落在暖白纸上会发灰脏。
         sm: '0 1px 2px hsl(var(--scrim) / 0.06)',
         DEFAULT: '0 1px 2px hsl(var(--scrim) / 0.06)',
-        md: '0 2px 6px -2px hsl(var(--scrim) / 0.12)',
-        lg: '0 2px 6px -2px hsl(var(--scrim) / 0.12)',
-        xl: '0 4px 12px -4px hsl(var(--scrim) / 0.16)',
-        '2xl': '0 4px 12px -4px hsl(var(--scrim) / 0.16)',
+        md: '0 1px 2px hsl(var(--scrim) / 0.06)',
+        lg: '0 1px 2px hsl(var(--scrim) / 0.06)',
+        xl: '0 1px 2px hsl(var(--scrim) / 0.06)',
+        '2xl': '0 1px 2px hsl(var(--scrim) / 0.06)',
+      },
+      // 间距与尺寸一律用 Tailwind 默认 4px 网格 (gap-2 = 8px, p-4 = 16px,
+      // w-16 = 64px) —— 全站一套刻度, 手写常数也能对上 (例:
+      // custom/limit-ladder/Page.tsx 的 paddingLeft:72 = w-16(64) + gap-2(8))。
+      // 控件高度另起一套名字明确的刻度, 写死像素:
+      // sm 24px (表格内/密集筛选条) · md 28px (页面筛选器、表单) · lg 36px (弹窗主表单)。
+      height: {
+        'ctl-sm': '24px',
+        'ctl-md': '28px',
+        'ctl-lg': '36px',
       },
       transitionTimingFunction: {
         // §6.0.4 Linear/Vercel 同款缓动

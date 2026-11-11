@@ -1,32 +1,29 @@
 """盘中分钟K增量落盘服务 (全量分钟能力, 按能力路由)。
 
-两段式拉取 (见 feat/minute-strategy 方案):
-- 全天修复轮: 全市场日内分时批量并发脉冲一次拉当日全部分钟K — 冷启动
-  (如 10 点才开服务, 补 9:30 起缺口) / 覆盖滞后超阈值 / 连续空轮自愈时触发。
-- 稳态增量轮: 传标的池/universe 单请求返回全市场每只最新 3 根, 靠
-  _write_minute_partition 的 unique(symbol,datetime) 幂等合并滚出全天。
+两段式拉取:
+- 全天修复轮: 一次拉当日全部分钟K — 冷启动 (如 10 点才开服务, 补 9:30 起
+  缺口) / 覆盖滞后超阈值 / 连续空轮自愈时触发。
+- 稳态增量轮: 源侧单请求返回每只最新几根, 靠 _write_minute_partition 的
+  unique(symbol,datetime) 幂等合并滚出全天。
 
 单轮合并写入当日 kline_minute 分区, 供分钟策略 (minute_filter) 读到新鲜数据。
 
 数据源路由 (像其他能力一样可接入):
-- 生效源由偏好 full_minute_data_provider 决定 (设置 → 数据源 → 全量分钟):
-  TickFlow (Expert 档, intraday.batch + intraday.universe) 或声明 full_minute
-  数据集的插件/自定义源。
-- 自定义源契约 (docs/plugin-development.md): get_intraday_batch(symbols) 修复轮
+- 生效源由偏好 full_minute_data_provider 决定 (设置 → 数据源 → 全量分钟),
+  默认内置 easytdx。
+- 源契约 (docs/plugin-development.md): get_intraday_batch(symbols) 修复轮
   (未实现自动回退 get_minute 当日窗口); get_intraday_latest(count) 稳态增量
   (可选, 未实现自动降级为仅修复轮并放慢节奏至 >=60s)。
-- 能力门控 Cap.INTRADAY_UNIVERSE: TickFlow 按档位探测, 自定义源声明数据集且
-  被路由时由 policy._augment_custom_sources 补授 — 门控口径对两类源统一。
+- 能力门控 Cap.INTRADAY_UNIVERSE: 生效源声明 full_minute 数据集且被路由时
+  由本地能力计算补授 — 门控口径对所有源统一。
 
 设计约束:
-- 修复轮并发脉冲: TickFlow 路径全市场按 batch_size 分块 (5546/200 = 28 块)
-  一次打出。任何 60s 滑动窗口至多一个脉冲 (28 < 48 安全 rpm); 单块失败不拖垮
-  整轮, 失败块单独重试一次 (见 fetch_intraday_full_market_burst)。自定义源
-  由 provider 自管批量与限速 (rpm 配置/内部并发), 服务不代限。
+- 修复轮由 provider 自管批量与限速 (rpm 配置/内部并发), 服务不代限;
+  单标的失败不拖垮整轮 (修复轮会重来)。
 - 稳态轮单请求: 无脉冲并发, 间隔可低至 3s; 实际节奏 = max(间隔, 单轮完成),
   服务端响应 ~5s 时自动退化为响应节奏, 不会重叠请求。
 - 固定节奏: 默认 6s 一轮 (clamp [3, 120]), 不补跑 (missed 轮次直接跳过);
-  仅修复轮的自定义源下限抬到 60s (全天批量打不住 6s 节奏)。
+  仅修复轮的源下限抬到 60s (全天批量打不住 6s 节奏)。
 - 仅连续竞价时段运行 (9:30-11:30 / 13:00-15:00), 午休/收盘自动暂停与恢复;
   午休后恢复因覆盖滞后会多跑一次修复轮, 幂等无害。
 - 不与其他分钟能力冲突: 与 盘后分钟同步 (kline.minute.batch) / 分时监控路径
@@ -34,8 +31,7 @@
   合并, 与盘后同步写同一分区安全幂等。
 
 分层: 本模块只做调度/落盘/状态; 取数全部经 kline_sync 边界层
-(TickFlow: fetch_intraday_full_market_burst / fetch_intraday_universe_increment;
-自定义: fetch_intraday_custom_batch / fetch_intraday_custom_latest),
+(fetch_intraday_custom_batch / fetch_intraday_custom_latest),
 保持插件化边界不泄漏。
 """
 from __future__ import annotations
@@ -136,54 +132,46 @@ class MinuteRefreshService:
     def capability_ok(self) -> bool:
         """Cap.INTRADAY_UNIVERSE (全量分钟) 存在。能力探测结果缓存在 app.state。
 
-        门控挂在稳态增量的主能力上; TickFlow 路径全天修复轮用的 intraday.batch
-        与其同属 Expert 档 (tiers.yaml), 两者必然同时持有。自定义源声明
-        full_minute 数据集且被路由时, 由 policy._augment_custom_sources 补授
-        同一能力键 — 门控口径对两类源统一。
+        门控口径对所有源统一: 生效源声明 full_minute 数据集且被路由时,
+        由本地能力计算补授同一能力键。
         """
         capset = getattr(self._app_state, "capabilities", None) if self._app_state else None
         if capset is None:
             return False
         try:
-            from app.tickflow.capabilities import Cap
+            from app.data_providers.capabilities import Cap
 
             return capset.has(Cap.INTRADAY_UNIVERSE)
         except Exception:
             return False
 
     def active_provider(self) -> str:
-        """全量分钟生效源名；失效的自定义源不得静默伪装成 TickFlow。"""
+        """全量分钟生效源名；失效的源不得静默伪装成默认源。"""
         try:
-            saved = str(preferences.load().get("full_minute_data_provider", "tickflow") or "tickflow").lower()
+            saved = str(preferences.load().get("full_minute_data_provider") or "").lower()
             selected = preferences.get_full_minute_data_provider()
-            if saved != "tickflow" and selected == "tickflow":
+            if saved and saved != selected:
                 return f"unavailable:{saved}"
             return selected
         except Exception:  # noqa: BLE001
             return "unavailable:unknown"
 
     def _resolve_custom(self) -> tuple[object | None, str]:
-        """解析自定义源。返回 (provider_or_None, effective_name):
+        """解析全量分钟生效源。返回 (provider_or_None, effective_name):
 
-        - 明确偏好 tickflow → (None, "tickflow")
-        - 自定义源失效或缺少 full_minute → (None, "unavailable:<name>")
+        - 源失效或缺少 full_minute → (None, "unavailable:<name>")
         - 成功 → (provider, name)
         """
         from app.services import kline_sync
 
         name = self.active_provider()
-        if name == "tickflow":
-            return (None, "tickflow")
         if name.startswith("unavailable:"):
-            logger.warning("full_minute provider %s unavailable; not falling back to TickFlow",
+            logger.warning("full_minute provider %s unavailable",
                            name.removeprefix("unavailable:"))
             return (None, name)
-        provider, _use_tickflow, err = kline_sync._resolve_full_minute_provider(name)
+        provider, err = kline_sync._resolve_full_minute_provider(name)
         if err is not None or provider is None:
-            logger.warning(
-                "full_minute provider %s unavailable; not falling back to TickFlow: %s",
-                name, err,
-            )
+            logger.warning("full_minute provider %s unavailable: %s", name, err)
             return (None, f"unavailable:{name}")
         return (provider, name)
 
@@ -275,7 +263,7 @@ class MinuteRefreshService:
         return None
 
     def _select_mode(self) -> str:
-        """选轮次模式: 稳态增量 (universe 单请求) vs 全天修复 (burst 脉冲)。
+        """选轮次模式: 稳态增量 (源侧廉价增量端点) vs 全天修复 (批量拉取)。
 
         当日已有数据且覆盖滞后 ≤ _REPAIR_LAG_MINUTES (≈ 3 根余量) → 增量;
         冷启动 / 断档超阈值 / 连续空轮 → 全天修复。
@@ -306,11 +294,8 @@ class MinuteRefreshService:
             if mode == "increment":
                 # fetch 计时只覆盖网络取数; full 分支的 universe 维表读取不计入
                 fetch_started = time.perf_counter()
-                if custom is not None:
-                    latest = kline_sync.fetch_intraday_custom_latest(custom, provider_name)
-                    df, requests = latest if latest is not None else (pl.DataFrame(), 0)
-                else:
-                    df, requests = kline_sync.fetch_intraday_universe_increment()
+                latest = kline_sync.fetch_intraday_custom_latest(custom, provider_name)
+                df, requests = latest if latest is not None else (pl.DataFrame(), 0)
                 self._state.last_symbols = (
                     df["symbol"].n_unique() if not df.is_empty() else 0
                 )
@@ -322,13 +307,9 @@ class MinuteRefreshService:
                     logger.warning("全量分钟[%s] 本轮中止: 标的池为空 (instruments 未加载)", mode_label)
                     return
                 fetch_started = time.perf_counter()
-                if custom is not None:
-                    df, requests = kline_sync.fetch_intraday_custom_batch(
-                        custom, provider_name, symbols,
-                    )
-                else:
-                    capset = getattr(self._app_state, "capabilities", None) if self._app_state else None
-                    df, requests = kline_sync.fetch_intraday_full_market_burst(symbols, capset)
+                df, requests = kline_sync.fetch_intraday_custom_batch(
+                    custom, provider_name, symbols,
+                )
             fetch_ms = (time.perf_counter() - fetch_started) * 1000
             self._state.last_requests = requests
             if df.is_empty():

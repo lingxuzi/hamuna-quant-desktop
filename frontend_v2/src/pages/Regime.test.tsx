@@ -92,15 +92,13 @@ const trendChart = () => fixtures.charts.find(chart => chart.option?.series?.som
 
 it('当前状态与分布直接显示真实数值, 切换范围同步刷新原有查询', async () => {
   await render()
-  expect(panel().querySelector('[aria-label="综合分 6，满分 100"]')).not.toBeNull()
-  const distribution = panel().querySelector('[aria-label="历史环境状态分布"]')!
-  expect(distribution.textContent).toContain('2 天40.0%')
-  expect(distribution.textContent).toContain('3 天60.0%')
-  const ring = fixtures.charts.find(chart => chart.option?.series?.some((series: any) => series.type === 'pie'))
-  expect(ring?.option.series[0].data.map((item: { value: number }) => item.value)).toEqual([2, 3])
+  expect(panel().querySelector('[aria-label="综合分四维拆解"]')?.textContent).toContain('投 机17')
+  const distribution = panel().querySelector('[aria-label="状态分布与今日主线"]')!
+  expect(distribution.querySelector('.regime-states')?.textContent).toBe('强势2弱势3')
+  expect(api.regimeStates).toHaveBeenLastCalledWith(60)
   await click('2年')
   expect(api.regimeHistory).toHaveBeenLastCalledWith(undefined, undefined, 500)
-  expect(api.regimeStates).toHaveBeenLastCalledWith(500)
+  expect(api.regimeStates).toHaveBeenLastCalledWith(60)
 })
 
 it('键盘切换页签后保留图例选择和图表窗口', async () => {
@@ -127,10 +125,10 @@ it('阶段和主线统计跟随主图的真实交易日范围, 不混入全部�
   }))
   await render()
   expect(api.regimePhases).toHaveBeenLastCalledWith('2026-10-26', '2026-10-30')
-  expect(api.regimeMainline).toHaveBeenLastCalledWith('2026-10-26', '2026-10-30', 10, 'concept')
+  expect(api.regimeMainline).toHaveBeenCalledWith('2026-10-26', '2026-10-30', 10, 'concept')
   await click('2年')
   expect(api.regimePhases).toHaveBeenLastCalledWith('2025-10-24', '2026-10-30')
-  expect(api.regimeMainline).toHaveBeenLastCalledWith('2025-10-24', '2026-10-30', 10, 'concept')
+  expect(api.regimeMainline).toHaveBeenCalledWith('2025-10-24', '2026-10-30', 10, 'concept')
   expect(vi.mocked(api.regimePhases).mock.calls.every(([start, end]) => start != null && end != null)).toBe(true)
 })
 
@@ -144,7 +142,7 @@ it('自定义范围仍按交易日提交, 日历展开可收回', async () => {
   })
   await click('应用')
   expect(api.regimeHistory).toHaveBeenLastCalledWith(undefined, undefined, 90)
-  expect(api.regimeStates).toHaveBeenLastCalledWith(90)
+
   await click('展开全部月份')
   expect(panel().querySelector('[aria-controls="regime-calendar"]')?.getAttribute('aria-expanded')).toBe('true')
   await click('收起月份')
@@ -173,7 +171,7 @@ it('容器尺寸变化触发图表重排, 空数据后重新挂载不引用已�
   await act(async () => client.setQueryData(QK.regimeHistory({ limit: 250 }), { rows, total: rows.length }))
   await settle()
   expect(trendChart()).not.toBe(chart)
-  expect(panel().querySelector('[aria-label="综合分 6，满分 100"]')).not.toBeNull()
+  expect(panel().querySelector('[aria-label="综合分四维拆解"]')?.textContent).toContain('投 机17')
 })
 
 it('旧数据缺少最新阶段时给出缺失说明, 不默认显示修复阶段', async () => {
@@ -195,6 +193,6 @@ it.each(['loading', 'empty', 'error'] as const)('加载状态 %s 有明确反馈
     expect(panel().querySelector('[role="alert"]')?.textContent).toContain('环境数据加载失败')
     vi.mocked(api.regimeHistory).mockResolvedValue({ rows, total: 5 })
     await click('重新加载')
-    expect(panel().querySelector('[aria-label="综合分 6，满分 100"]')).not.toBeNull()
+    expect(panel().querySelector('[aria-label="综合分四维拆解"]')?.textContent).toContain('投 机17')
   }
 })

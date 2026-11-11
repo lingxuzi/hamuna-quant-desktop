@@ -21,7 +21,7 @@ import polars as pl
 import pytest
 
 from app.enriched_generation import EnrichedPublication
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def _frame(day: str, close: float) -> pl.DataFrame:

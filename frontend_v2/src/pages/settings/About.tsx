@@ -37,55 +37,59 @@ export function SettingsAboutPanel() {
   }, [currentVersion, searchParams, checkUpdate, setSearchParams])
 
   return (
-    <div className="pb-8 flex flex-col gap-6">
+    <div className="pb-8 flex flex-col gap-10">
       {/* ===== 版权 ===== */}
-      <section className="leaf-cell">
+      <section>
         <SectionHead
           icon={Scale}
           title="版权"
           className="mb-4"
           right={
-            <span className="shrink-0 rounded border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+            <span className="shrink-0 border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
               {PROJECT_LICENSE_NAME}
             </span>
           }
         />
 
-        {/* 版权署名 — 界面常驻, 避免仅存在于 LICENSE 文件时被整包删除 */}
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">© 2026 tick-stock-panel contributors</div>
-            <div className="text-[11px] text-muted truncate">基于 MIT 协议开源 · 遵照协议分发时须保留版权与许可声明</div>
+        <div className="rowset">
+          {/* 版权署名 — 界面常驻, 避免仅存在于 LICENSE 文件时被整包删除 */}
+          <div className="r">
+            <div className="lab">
+              <b>© 2026 tick-stock-panel contributors</b>
+              <small>基于 MIT 协议开源 · 遵照协议分发时须保留版权与许可声明</small>
+            </div>
+            <div className="ctl">
+              <a
+                href={PROJECT_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="ctl-btn ctl-sm"
+              >
+                <ExternalLink className="h-[12px] w-[12px]" />
+                仓库
+              </a>
+            </div>
           </div>
-          <a
-            href={PROJECT_REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                       bg-elevated text-secondary hover:text-foreground transition-colors"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            仓库
-          </a>
+
+          {/* 开源许可 — 点击弹窗查看完整内容 */}
+          <div className="r">
+            <div className="lab">
+              <b>开源许可</b>
+              <small>本项目协议全文与第三方组件许可清单</small>
+            </div>
+            <div className="ctl">
+              <button
+                onClick={() => setLicenseOpen(true)}
+                className="ctl-btn ctl-sm"
+              >
+                <ScrollText className="h-[12px] w-[12px]" />
+                查看许可
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* 开源许可 — 点击弹窗查看完整内容 */}
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">开源许可</div>
-            <div className="text-[11px] text-muted truncate">本项目协议全文与第三方组件许可清单</div>
-          </div>
-          <button
-            onClick={() => setLicenseOpen(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                       bg-elevated text-secondary hover:text-foreground transition-colors"
-          >
-            <ScrollText className="h-3.5 w-3.5" />
-            查看许可
-          </button>
-        </div>
-
-        <div className="mt-3 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-secondary">
+        <div className="mt-3 border-t border-border pt-3 text-[11px] leading-relaxed text-secondary">
           <p>
             图表组件：
             <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
@@ -104,134 +108,132 @@ export function SettingsAboutPanel() {
       </section>
 
       {/* ===== 更新 ===== */}
-      <section className="leaf-cell">
+      <section>
         <SectionHead icon={Rocket} title="更新" className="mb-4" />
 
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">当前版本</div>
-            <div className="text-[11px] text-muted truncate">已安装的应用版本</div>
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>当前版本</b>
+              <small>已安装的应用版本</small>
+            </div>
+            <div className="ctl">
+              <span className="font-mono text-xs text-secondary">
+                {versionData?.version ?? '—'}
+              </span>
+            </div>
           </div>
-          <span className="font-mono text-xs text-secondary shrink-0">
-            {versionData?.version ?? '—'}
-          </span>
-        </div>
 
-        <div ref={updateRowRef} className="flex scroll-mt-24 items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-sm text-foreground">检查更新</div>
-            {updateState === 'found' && updateInfo ? (
-              <div className="mt-0.5 inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] text-accent">
-                <Sparkles className="h-3 w-3" />
-                发现新版本
-                <span className="font-semibold">v{updateInfo.latest.replace(/^v/, '')}</span>
-                <span className="text-accent/60">· 当前 v{versionData?.version?.replace(/^v/, '') ?? '—'}</span>
-              </div>
-            ) : (
-              <div className="text-[11px] text-muted truncate">
-                {updateState === 'latest'
-                  ? `已是最新版本 (v${versionData?.version?.replace(/^v/, '') ?? '—'})`
-                  : updateState === 'error'
-                    ? '检查失败 (网络受限?), 可直接前往 Releases'
-                    : '对比 GitHub Releases 最新 Release, 提示新版本'}
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <a
-              href="https://tsp.shy313.com/"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                         bg-elevated text-secondary hover:text-foreground transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              官网
-            </a>
-            {updateState === 'found' && updateInfo && (
+          <div ref={updateRowRef} className="r scroll-mt-24">
+            <div className="lab">
+              <b>检查更新</b>
+              {updateState === 'found' && updateInfo ? (
+                <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-accent">
+                  <Sparkles className="h-[12px] w-[12px]" />
+                  发现新版本 v{updateInfo.latest.replace(/^v/, '')}
+                  <span className="text-muted">· 当前 v{versionData?.version?.replace(/^v/, '') ?? '—'}</span>
+                </div>
+              ) : (
+                <small>
+                  {updateState === 'latest'
+                    ? `已是最新版本 (v${versionData?.version?.replace(/^v/, '') ?? '—'})`
+                    : updateState === 'error'
+                      ? '检查失败 (网络受限?), 可直接前往 Releases'
+                      : '对比 GitHub Releases 最新 Release, 提示新版本'}
+                </small>
+              )}
+            </div>
+            <div className="ctl">
               <a
-                href={updateInfo.url}
+                href="https://tsp.shy313.com/"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                           bg-accent text-white hover:bg-accent/90 transition-colors"
+                className="ctl-btn ctl-sm"
               >
-                <Download className="h-3.5 w-3.5" />
-                前往下载 v{updateInfo.latest.replace(/^v/, '')}
+                <ExternalLink className="h-[12px] w-[12px]" />
+                官网
               </a>
-            )}
-            <button
-              onClick={checkUpdate}
-              disabled={updateState === 'checking'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                         bg-elevated text-secondary hover:text-foreground transition-colors
-                         disabled:opacity-50"
-            >
-              {updateState === 'checking' ? (
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-              ) : updateState === 'latest' ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
+              {updateState === 'found' && updateInfo && (
+                <a
+                  href={updateInfo.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ctl-btn ctl-sm pri"
+                >
+                  <Download className="h-[12px] w-[12px]" />
+                  前往下载 v{updateInfo.latest.replace(/^v/, '')}
+                </a>
               )}
-              {updateState === 'checking' ? '检查中…' : updateState === 'latest' ? '已检查' : '检查更新'}
-            </button>
+              <button
+                onClick={checkUpdate}
+                disabled={updateState === 'checking'}
+                className="ctl-btn ctl-sm"
+              >
+                {updateState === 'checking' ? (
+                  <RefreshCw className="h-[12px] w-[12px] animate-spin" />
+                ) : updateState === 'latest' ? (
+                  <CheckCircle2 className="h-[12px] w-[12px] text-bear" />
+                ) : (
+                  <RefreshCw className="h-[12px] w-[12px]" />
+                )}
+                {updateState === 'checking' ? '检查中…' : updateState === 'latest' ? '已检查' : '检查更新'}
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ===== 打赏 ===== */}
-      <section className="rounded-card border border-accent/25 bg-gradient-to-b from-accent/[0.10] to-transparent p-5">
+      <section>
         <SectionHead
           icon={Heart}
           title="打赏"
           className="mb-4"
           right={
-            <span className="shrink-0 rounded border border-border bg-elevated px-2 py-0.5 text-[10px] text-muted">
+            <span className="shrink-0 border border-border bg-elevated px-2 py-0.5 font-mono text-[10px] text-muted">
               完全自愿 · 不影响任何功能
             </span>
           }
         />
 
-        <div className="flex items-center justify-between gap-6">
-          {/* 左: 文案与入口 */}
-          <div className="min-w-0 flex-1">
-            <div className="text-sm text-foreground">支持这个项目</div>
-            <div className="mt-0.5 text-[11px] leading-relaxed text-muted">
-              如果 TSP 对你的交易与研究有帮助, 欢迎请作者喝杯咖啡,
-              扫描右侧微信赞赏码即可支持项目持续维护。
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>支持这个项目</b>
+              <small>
+                如果 TSP 对你的交易与研究有帮助, 欢迎请作者喝杯咖啡,
+                扫描右侧微信赞赏码即可支持项目持续维护。
+              </small>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setQrZoom({ src: '/donate-wechat.jpg', alt: '微信赞赏码', caption: '微信扫一扫 · 赞赏支持' })}
+                  className="ctl-btn ctl-sm pri"
+                >
+                  <Heart className="h-[12px] w-[12px]" />
+                  赞赏支持
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                项目基于 MIT 协议永久免费, 打赏不会解锁任何功能; 数据源等第三方服务费用与本站无关。
+              </p>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setQrZoom({ src: '/donate-wechat.jpg', alt: '微信赞赏码', caption: '微信扫一扫 · 赞赏支持' })}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs
-                           bg-accent text-white hover:bg-accent/90 transition-colors"
-              >
-                <Heart className="h-3.5 w-3.5" />
-                赞赏支持
-              </button>
-            </div>
-            <p className="mt-3 text-[10px] leading-relaxed text-muted">
-              项目基于 MIT 协议永久免费, 打赏不会解锁任何功能; 数据源等第三方服务费用与本站无关。
-            </p>
+            {/* 右: 微信赞赏码 (白底保证二维码可扫) */}
+            <button
+              onClick={() => setQrZoom({ src: '/donate-wechat.jpg', alt: '微信赞赏码', caption: '微信扫一扫 · 赞赏支持' })}
+              title="点击放大"
+              className="group shrink-0 border border-border bg-white p-2
+                         hover:border-accent/40 transition-colors"
+            >
+              <img
+                src="/donate-wechat.jpg"
+                alt="微信赞赏码"
+                className="h-[112px] w-[112px] object-contain"
+              />
+              <div className="mt-1 text-center text-[10px] text-neutral-500 group-hover:text-neutral-700">
+                微信赞赏
+              </div>
+            </button>
           </div>
-
-          {/* 右: 微信赞赏码 (白底保证二维码可扫) */}
-          <button
-            onClick={() => setQrZoom({ src: '/donate-wechat.jpg', alt: '微信赞赏码', caption: '微信扫一扫 · 赞赏支持' })}
-            title="点击放大"
-            className="group shrink-0 rounded-lg border border-border bg-white p-2
-                       hover:border-accent/40 transition-colors"
-          >
-            <img
-              src="/donate-wechat.jpg"
-              alt="微信赞赏码"
-              className="h-28 w-28 object-contain"
-            />
-            <div className="mt-1 text-center text-[10px] text-neutral-500 group-hover:text-neutral-700">
-              微信赞赏
-            </div>
-          </button>
         </div>
       </section>
 
@@ -254,10 +256,10 @@ export function SettingsAboutPanel() {
               <span className="text-xs text-neutral-600">{qrZoom.caption}</span>
               <button
                 onClick={() => setQrZoom(null)}
-                className="p-1 rounded hover:bg-neutral-100 transition-colors text-neutral-500"
+                className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-neutral-100 text-neutral-500"
                 aria-label="关闭"
               >
-                <X className="h-4 w-4" />
+                <X className="h-[16px] w-[16px]" />
               </button>
             </div>
           </div>

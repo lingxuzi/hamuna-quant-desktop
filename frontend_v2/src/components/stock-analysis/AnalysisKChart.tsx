@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
-import { chartTheme, getTheme, useTheme } from '@/lib/theme'
+import { alpha, chartTheme, getTheme, useTheme } from '@/lib/theme'
 import * as echarts from 'echarts'
 import type { ECharts, EChartsOption } from 'echarts'
 import type { KlineRow, LevelSeries } from '@/lib/api'
@@ -19,12 +19,15 @@ import type { KlineRow, LevelSeries } from '@/lib/api'
  *   - 指标副图: 后续如需 MACD/KDJ,按 SUB_CHARTS 模式扩展
  */
 
-// ===== 配色(红涨绿跌, 双主题通用); 画布轴/网格主题相关色走 CT() =====
-const THEME = {
-  bull: '#C74040',
-  bear: '#2D9B65',
-  volUp: 'rgba(240,68,56,0.5)',
-  volDown: 'rgba(18,183,106,0.5)',
+// ===== 配色(红涨绿跌, 随主题); 画布轴/网格主题相关色走 CT() =====
+const THEME = () => {
+  const ct = chartTheme(getTheme())
+  return {
+    bull: ct.bull,
+    bear: ct.bear,
+    volUp: alpha(ct.bull, 0.5),
+    volDown: alpha(ct.bear, 0.5),
+  }
 }
 
 /** 当前主题的图表调色板 (buildOption 渲染时调用; 切换由组件 effect 触发重建)。 */
@@ -141,7 +144,7 @@ export function AnalysisKChart({
     const candle = rows.map(r => [r.open, r.close, r.low, r.high])
     const vols = rows.map(r => ({
       value: r.volume ?? 0,
-      itemStyle: { color: r.close >= r.open ? THEME.volUp : THEME.volDown },
+      itemStyle: { color: r.close >= r.open ? THEME().volUp : THEME().volDown },
     }))
     const dateIndex = new Map(dates.map((d, i) => [d, i]))
     // 默认显示最近 6 个月 ≈ 120 个交易日;数据不足则全部显示
@@ -228,8 +231,8 @@ export function AnalysisKChart({
         // z=2 让蜡烛始终在价位线(z=1)之上, hover 高亮价位线时不会被遮挡/变淡
         z: 2,
         itemStyle: {
-          color: THEME.bull, color0: THEME.bear,
-          borderColor: THEME.bull, borderColor0: THEME.bear,
+          color: THEME().bull, color0: THEME().bear,
+          borderColor: THEME().bull, borderColor0: THEME().bear,
         },
         markPoint: markPointData.length ? { data: markPointData, animation: false } : undefined,
         markArea: markAreaData.length ? { silent: true, data: markAreaData } : undefined,
@@ -430,7 +433,7 @@ export function AnalysisKChart({
                 onClick={() => toggleType(g.key)}
                 disabled={raw.length === 0}
                 title={`${g.label} (${count} 个)`}
-                className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium border transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 whitespace-nowrap transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                   active
                     ? 'text-foreground'
                     : 'text-muted bg-base/40 border-border/30 hover:border-border/60'
@@ -453,7 +456,7 @@ export function AnalysisKChart({
                   key={r}
                   onClick={() => setPivotRank(r)}
                   title={r === 1 ? 'P + R1/S1(3 个)' : r === 2 ? '到 R2/S2(5 个)' : '全档 R3/S3(7 个)'}
-                  className={`h-6 px-2 rounded-md text-[10px] font-mono border transition-all ${
+                  className={`ctl ctl-sm ctl-btn px-1.5 font-mono transition-all ${
                     pivotRank === r
                       ? 'bg-accent/15 border-accent/40 text-accent'
                       : 'text-muted bg-base/40 border-border/30 hover:border-border/60'

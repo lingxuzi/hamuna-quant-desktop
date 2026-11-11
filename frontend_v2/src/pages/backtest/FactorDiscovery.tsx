@@ -14,6 +14,7 @@ import { MiningWorkbench } from './MiningWorkbench'
 import { AutoMiningDialog } from './AutoMiningDialog'
 import { AddFactorSignalDialog } from './AddFactorSignalDialog'
 import { factorBatchCandidate } from './researchCandidates'
+import { FIELD_SM, INPUT_MD, SELECT_MD } from '@/components/controls'
 
 const formatDate = (value: Date) => value.toISOString().slice(0, 10)
 const monthsAgo = (months: number) => {
@@ -22,9 +23,16 @@ const monthsAgo = (months: number) => {
   return formatDate(value)
 }
 const TODAY = formatDate(new Date())
-const INPUT_CLS = 'w-full rounded-input border border-border bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none'
+const INPUT_CLS = cn(INPUT_MD, 'w-full')
+
+const SELECT_CLS = cn(SELECT_MD, 'w-full')
 
 type View = 'batch' | 'single' | 'mining'
+
+const VIEW_TABS: { value: View; label: string; icon: typeof ListFilter }[] = [
+  { value: 'batch', label: '批量筛选', icon: ListFilter },
+  { value: 'mining', label: '挖掘工作台', icon: Pickaxe },
+]
 type SortKey = 'ic' | 'ir' | 'return' | 't_nw' | 'win_rate' | 'drawdown'
 type Verdict = 'valid' | 'edge' | 'invalid' | 'error'
 
@@ -158,7 +166,7 @@ function SortableTh({ label, sortKeyName, sortKey, sortAsc, onSort, className, t
         title={title ? `${title}${active ? '' : '（点击排序）'}` : '点击排序'}
       >
         {label}
-        <Icon className={`h-3 w-3 ${active ? 'text-accent' : 'text-muted/50'}`} />
+        <Icon className={`h-[12px] w-[12px] ${active ? 'text-accent' : 'text-muted/50'}`} />
       </button>
     </th>
   )
@@ -388,8 +396,8 @@ function BatchDiscovery({
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden leaf-cell bg-surface/80 xl:grid-cols-[19rem_minmax(0,1fr)]">
-      <section className="flex min-h-0 flex-col border-b border-border bg-base/25 xl:border-b-0 xl:border-r">
+    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden border border-border xl:grid-cols-[19rem_minmax(0,1fr)]">
+      <section className="flex min-h-0 flex-col border-b border-border xl:border-b-0 xl:border-r">
         {/* 顶部固定区: 计数 + 预设 + 搜索 */}
         <div className="shrink-0 space-y-2 border-b border-border/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
@@ -399,7 +407,7 @@ function BatchDiscovery({
               <button
                 type="button"
                 onClick={() => { setActivePreset(null); setSelected(allSelected ? [] : allColumns.map(item => item.id)) }}
-                className="rounded-btn px-1.5 py-0.5 text-[10px] text-accent transition-colors hover:bg-accent/10"
+                className="ctl ctl-sm ctl-ghost px-1.5 hover:bg-accent/10"
               >
                 {allSelected ? '清空' : '全选'}
               </button>
@@ -416,7 +424,7 @@ function BatchDiscovery({
                   onClick={() => applyPreset(preset)}
                   disabled={ids.length === 0}
                   title={preset.hint}
-                  className={`inline-flex items-center gap-1 rounded-btn border px-2 py-1 text-[10px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 ${active
+                  className={`ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 disabled:pointer-events-none disabled:opacity-40 ${active
                     ? 'border-accent/60 bg-accent/10 text-accent'
                     : 'border-border bg-surface text-secondary hover:border-accent/40 hover:text-accent'
                   }`}
@@ -429,7 +437,7 @@ function BatchDiscovery({
             })}
           </div>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-[12px] w-[12px] -translate-y-1/2 text-muted" />
             <input
               type="text"
               value={factorQuery}
@@ -500,7 +508,7 @@ function BatchDiscovery({
                     key={value}
                     type="button"
                     onClick={() => { setAssetType(value); setSymbols('') }}
-                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${assetType === value
+                    className={`ctl ctl-sm ctl-ghost px-1.5 ${assetType === value
                       ? 'bg-accent/10 text-accent'
                       : 'text-muted hover:text-foreground'
                     }`}
@@ -527,11 +535,11 @@ function BatchDiscovery({
                 disableEmpty
                 menuLabel="选择自选分组"
                 align="right"
-                triggerClassName="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-input border border-border bg-surface px-2 text-[11px] text-secondary transition-colors hover:border-accent/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                triggerClassName={`${FIELD_SM} shrink-0 whitespace-nowrap`}
                 title="从自选分组加入筛选范围"
                 ariaLabel="从自选加入筛选范围"
               >
-                <ListPlus className="h-3 w-3" />
+                <ListPlus className="h-[12px] w-[12px]" />
                 {watchlist.isLoading ? '加载中' : watchlistEntries.length === 0 ? '自选为空' : '自选'}
               </WatchlistGroupMenu>
             </div>
@@ -572,7 +580,7 @@ function BatchDiscovery({
             <div className="grid grid-cols-3 gap-1.5 border-t border-border/60 px-2.5 py-2">
               <label className="block">
                 <span className="mb-1 block text-[10px] text-muted">调仓</span>
-                <select value={rebalance} onChange={event => setRebalance(event.target.value as typeof rebalance)} className={INPUT_CLS}>
+                <select value={rebalance} onChange={event => setRebalance(event.target.value as typeof rebalance)} className={SELECT_CLS}>
                   <option value="daily">日度</option>
                   <option value="weekly">周度</option>
                   <option value="monthly">月度</option>
@@ -580,7 +588,7 @@ function BatchDiscovery({
               </label>
               <label className="block">
                 <span className="mb-1 block text-[10px] text-muted">分组</span>
-                <select value={nGroups} onChange={event => setNGroups(Number(event.target.value))} className={INPUT_CLS}>
+                <select value={nGroups} onChange={event => setNGroups(Number(event.target.value))} className={SELECT_CLS}>
                   <option value={3}>3组</option>
                   <option value={5}>5组</option>
                   <option value={10}>10组</option>
@@ -601,7 +609,7 @@ function BatchDiscovery({
             onClick={() => startRun()}
             disabled={run.isPending || selected.length === 0}
             title={selected.length >= 16 ? '因子较多, 全市场运行可能需要较长时间; 可先用「快速体检」' : undefined}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-btn bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ctl ctl-md ctl-btn pri inline-flex w-full items-center justify-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Play className="h-3.5 w-3.5" />
             {run.isPending ? '筛选中…' : `筛选 ${selected.length} 个因子`}
@@ -610,7 +618,7 @@ function BatchDiscovery({
             <button
               type="button"
               onClick={cancelRun}
-              className="w-full rounded-btn border border-border px-3 py-1.5 text-[11px] text-secondary transition-colors hover:border-danger/40 hover:text-danger"
+              className="ctl ctl-md ctl-btn w-full px-2.5 hover:border-danger/40 hover:text-danger"
             >
               取消本次筛选
             </button>
@@ -621,12 +629,12 @@ function BatchDiscovery({
       <section className="min-w-0 bg-base/15 xl:overflow-y-auto">
         {run.isPending && (
           <div className="m-3 flex items-center gap-3 rounded-btn border border-accent/30 bg-accent/5 px-3 py-2.5 text-xs text-secondary">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent/25 border-t-accent" />
+            <span className="h-[16px] w-[16px] animate-spin rounded-full border-2 border-accent/25 border-t-accent" />
             正在加载共享数据面板并评估 {selected.length} 个因子
             <button
               type="button"
               onClick={cancelRun}
-              className="ml-auto shrink-0 rounded-btn border border-border px-2 py-1 text-[10px] text-secondary transition-colors hover:border-danger/40 hover:text-danger"
+              className="ctl ctl-sm ctl-btn ml-auto shrink-0 px-1.5 hover:border-danger/40 hover:text-danger"
             >
               取消
             </button>
@@ -646,15 +654,10 @@ function BatchDiscovery({
           <div className="m-3 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{run.data.error}</div>
         )}
         {!results && !run.isPending && (
-          <div className="m-3 leaf-cell bg-surface/60 p-6 text-center">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
-              <Search className="h-5 w-5" />
-            </div>
-            <div className="mt-3 text-sm font-medium text-foreground">三步找到有效因子</div>
-            <div className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">
-              左侧选因子（或用预设）→ 点「筛选」批量检验 → 点击结果行看单因子详情。
-              IC 衡量历史上因子值与后续涨跌的关联强度（绝对值越大关联越强），IR 是稳定度。
-            </div>
+          <div className="bt-empty m-3">
+            <span className="em">DISCOVERY · 未检验</span>
+            <h2>三步找到有效因子</h2>
+            <p>左侧选因子（或用预设）→ 点「筛选」批量检验 → 点击结果行看单因子详情。IC 衡量历史上因子值与后续涨跌的关联强度（绝对值越大关联越强），IR 是稳定度。</p>
             <button
               type="button"
               onClick={() => {
@@ -664,9 +667,8 @@ function BatchDiscovery({
                 startRun(ids)
               }}
               disabled={allColumns.length === 0}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ctl-btn ctl-sm pri mt-3"
             >
-              <Play className="h-3.5 w-3.5" />
               立即跑「快速体检」
             </button>
             <div className="mt-1.5 text-[10px] text-muted">每组取 1 个代表因子, 通常十几秒出结果</div>
@@ -679,14 +681,14 @@ function BatchDiscovery({
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span className="text-sm font-medium text-foreground">筛选结果</span>
                   <span className="text-[10px] text-muted">
-                    {results.results.length} 因子 · {results.n_symbols} 标的 · {results.n_dates} 交易日 · <Clock className="inline h-3 w-3" />{results.elapsed_ms.toFixed(0)}ms
+                    {results.results.length} 因子 · {results.n_symbols} 标的 · {results.n_dates} 交易日 · <Clock className="inline h-[12px] w-[12px]" />{results.elapsed_ms.toFixed(0)}ms
                   </span>
                   {!run.data && restored && (
                     <span
                       className="inline-flex items-center gap-1 rounded-btn border border-border bg-elevated/40 px-1.5 py-0.5 text-[10px] text-muted"
                       title="会话内记忆的上次运行结果; 修改左侧配置后点「筛选」重新计算"
                     >
-                      <Clock className="h-3 w-3" />
+                      <Clock className="h-[12px] w-[12px]" />
                       上次运行 {new Date(restored.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
@@ -805,7 +807,7 @@ function BatchDiscovery({
                             type="button"
                             onClick={() => save.mutate(item)}
                             disabled={!!item.error || save.isPending}
-                            className="flex h-7 w-7 items-center justify-center rounded-btn text-muted transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40"
+                            className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-accent/10 hover:text-accent disabled:opacity-40"
                             title="保存候选"
                             aria-label={`保存 ${item.label} 为候选`}
                           >
@@ -815,7 +817,7 @@ function BatchDiscovery({
                             type="button"
                             onClick={() => setSignalFrom(item)}
                             disabled={!!item.error}
-                            className="flex h-7 w-7 items-center justify-center rounded-btn text-muted transition-colors hover:bg-amber-400/10 hover:text-amber-400 disabled:opacity-40"
+                            className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-amber-400/10 hover:text-amber-400 disabled:opacity-40"
                             title="加入信号条件（方向按 IC 预填，阈值给建议值）"
                             aria-label={`把 ${item.label} 加入信号条件`}
                           >
@@ -825,7 +827,7 @@ function BatchDiscovery({
                             type="button"
                             onClick={event => { event.stopPropagation(); onFullscreen(item.factor_name, item.label) }}
                             disabled={!!item.error}
-                            className="flex h-7 w-7 items-center justify-center rounded-btn text-muted transition-colors hover:bg-elevated hover:text-foreground disabled:opacity-40"
+                            className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-elevated hover:text-foreground disabled:opacity-40"
                             title="全屏单因子检验（完整配置与图表）"
                             aria-label={`全屏检验 ${item.label}`}
                           >
@@ -881,13 +883,13 @@ function FactorDetailPanel({ name, label, onClose, onFullscreen }: {
       transition={{ duration: 0.22, ease: EASE_SMOOTH }}
       aria-label={`单因子详情: ${resolvedLabel}`}
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden leaf-cell',
+        'flex min-h-0 flex-col overflow-hidden border border-border bg-surface',
         'lg:w-[42rem] lg:shrink-0',
         'max-lg:fixed max-lg:inset-y-2 max-lg:right-2 max-lg:z-40 max-lg:w-[min(60rem,calc(100vw-1rem))] max-lg:shadow-2xl',
       )}
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <Layers3 className="h-4 w-4 shrink-0 text-accent" />
+        <Layers3 className="h-[16px] w-[16px] shrink-0 text-accent" />
         <span className="min-w-0 shrink-0 truncate text-sm font-medium text-foreground">{resolvedLabel}</span>
         <span className="min-w-0 truncate font-mono text-[10px] text-muted">{name}</span>
         {name !== runName && (
@@ -902,7 +904,7 @@ function FactorDetailPanel({ name, label, onClose, onFullscreen }: {
             onClick={onFullscreen}
             title="全屏单因子检验（完整配置与图表）"
             aria-label="全屏单因子检验"
-            className="flex h-7 w-7 items-center justify-center rounded-btn text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+            className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-elevated hover:text-foreground"
           >
             <Expand className="h-3.5 w-3.5" />
           </button>
@@ -911,7 +913,7 @@ function FactorDetailPanel({ name, label, onClose, onFullscreen }: {
             onClick={onClose}
             title="关闭详情 (Esc)"
             aria-label="关闭详情"
-            className="flex h-7 w-7 items-center justify-center rounded-btn text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+            className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-elevated hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -932,8 +934,14 @@ function FactorDetailPanel({ name, label, onClose, onFullscreen }: {
   )
 }
 
-export function FactorDiscovery({ focusFactor, initialView = 'batch' }: { focusFactor?: string; initialView?: View } = {}) {
+export function FactorDiscovery({ focusFactor, initialView = 'batch', views }: {
+  focusFactor?: string
+  initialView?: View
+  /** 视图由外部管理时 (回测 · 挖掘与候选页) 传入, 隐藏页内分段 */
+  views?: View[]
+} = {}) {
   const [view, setView] = useState<View>(initialView)
+  const viewsList: View[] | undefined = views
   const [detailFactor, setDetailFactor] = useState('momentum_20d')
   const [detail, setDetail] = useState<{ name: string; label: string } | null>(null)
   /** 当前排序下的结果序列 (BatchDiscovery 上报), ↑↓ 键盘流式浏览的消费源 */
@@ -992,7 +1000,7 @@ export function FactorDiscovery({ focusFactor, initialView = 'batch' }: { focusF
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {!introCollapsed && (
-        <div className="flex shrink-0 items-start gap-2 leaf-cell bg-surface/60 px-3 py-2 text-[11px] leading-relaxed text-secondary">
+        <div className="flex shrink-0 items-start gap-2 border-l-2 border-accent bg-accent/[0.04] px-3 py-2 text-[11px] leading-relaxed text-secondary">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0 flex-1">
             <span className="font-medium text-foreground">三步看懂本页：</span>
@@ -1001,33 +1009,34 @@ export function FactorDiscovery({ focusFactor, initialView = 'batch' }: { focusF
           <button
             type="button"
             onClick={collapseIntro}
-            className="shrink-0 rounded-btn px-2 py-0.5 text-[10px] text-muted transition-colors hover:bg-elevated hover:text-foreground"
+            className="ctl ctl-sm ctl-ghost shrink-0 px-1.5 hover:bg-elevated hover:text-foreground"
           >
             知道了
           </button>
         </div>
       )}
       <div className="flex shrink-0 items-center border-b border-border/70 px-1 pb-2">
+        {views ? <span /> : (
+        <>
         {view === 'single' && (
           <button
             type="button"
             onClick={() => setView('batch')}
-            className="mr-2 inline-flex items-center gap-1 rounded-btn px-2 py-1 text-[11px] text-muted transition-colors hover:bg-elevated hover:text-foreground"
+            className="ctl ctl-sm ctl-ghost mr-2 inline-flex items-center gap-1 px-1.5 hover:bg-elevated hover:text-foreground"
             title="返回批量结果（筛选配置与结果保留）"
           >
             ← 返回批量
           </button>
         )}
         <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
-          {([
-            ['batch', '批量筛选', ListFilter],
-            ['mining', '挖掘工作台', Pickaxe],
-          ] as const).map(([value, label, Icon]) => (
+          {VIEW_TABS
+            .filter(({ value }) => !viewsList || viewsList.includes(value))
+            .map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"
               onClick={() => setView(value)}
-              className={`inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-xs font-medium transition-colors ${view === value || (value === 'batch' && view === 'single')
+              className={`ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 rounded-[5px] px-2.5 ${view === value || (value === 'batch' && view === 'single')
                 ? 'bg-accent text-white shadow-sm'
                 : 'text-secondary hover:bg-elevated hover:text-foreground'
               }`}
@@ -1041,12 +1050,14 @@ export function FactorDiscovery({ focusFactor, initialView = 'batch' }: { focusF
           <button
             type="button"
             onClick={() => setAutoOpen(true)}
-            className="ml-auto mr-1 inline-flex items-center gap-1.5 rounded-btn border border-accent/40 bg-accent/5 px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+            className="ctl ctl-md ctl-btn soft ml-auto mr-1 inline-flex items-center gap-1.5 border-accent/40 px-2.5 hover:bg-accent/10 bg-accent/5"
             title="不知道选什么因子？让系统全量筛选达标因子并自动搜索组合（嵌套样本外验证）"
           >
             <Sparkles className="h-3.5 w-3.5" />
             自动挖掘
           </button>
+        )}
+        </>
         )}
       </div>
       <div className="min-h-0 flex-1">

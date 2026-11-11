@@ -8,7 +8,8 @@ import type { ReactNode } from 'react'
 import type { OverviewMarket } from '@/lib/api'
 import { fmtBigNum } from '@/lib/format'
 import { cn } from '@/lib/cn'
-import { fmtPrice, fmtStockPct, fmtIndexPct, pctClass } from './shared'
+import { DistFig } from '@/components/charts/DistFig'
+import { fmtStockPct, fmtIndexPct, fmtParts, pctClass } from './shared'
 
 export interface ChronicleCtx {
   data: OverviewMarket
@@ -28,6 +29,8 @@ interface Entry {
   title: string
   en: string
   tag?: string
+  /** 强调条目: 设计稿首条(CLOSING)与 ALERTS 条都带 key 强调 */
+  emphasis?: boolean
   body: ReactNode
   figure?: { head: string; node: ReactNode }
 }
@@ -67,21 +70,74 @@ function Roster({ rows, onPick }: {
   )
 }
 
-function DistFig({ rows }: { rows: OverviewMarket['distribution'] }) {
-  const max = Math.max(...rows.map(r => r.count), 1)
+/** 卷首下四格读数 — 与设计稿 design/v2/01 的 .headline.four 同构: 一行大字结论, 下面一行旁注 */
+export function Headline({ data }: { data: OverviewMarket }) {
+  const b = data.breadth
+  const lim = data.limit
+  const tiers = (lim?.tiers ?? []).filter(t => t.count > 0).sort((x, y) => y.boards - x.boards)
+  const int = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString())
   return (
-    <div>
-      <div className="dist">
-        {rows.map((r, i) => (
-          <div key={r.label} className={cn('bar', i >= 4 && 'u')}>
-            <u style={{ height: `${Math.max(2, r.count / max * 100)}%` }} title={`${r.label}: ${r.count} 只`} />
-          </div>
-        ))}
+    <div className="headline four">
+      <div className="hl">
+        <span className="hl-k">上涨 / 下跌</span>
+        <div className="hl-v">{int(b?.up)}<span className="text-muted"> / </span><span className="text-bear">{int(b?.down)}</span></div>
+        <div className="hl-n"><span>平盘 <em className="num">{int(b?.flat)}</em></span></div>
       </div>
-      <div className="lbl">
-        {rows.map(r => <span key={r.label}>{r.label}</span>)}
+      <div className="hl">
+        <span className="hl-k">两市成交</span>
+        <div className="hl-v">{fmtParts(data.amount?.total).v}<small>{fmtParts(data.amount?.total).u}</small></div>
+        <div className="hl-n"><span>均额 <em className="num">{fmtBigNum(data.amount?.avg)}</em></span></div>
+      </div>
+      <div className="hl">
+        <span className="hl-k">涨停 / 跌停</span>
+        <div className="hl-v">{int(lim?.limit_up)}<span className="text-muted"> / </span><span className="text-bear">{int(lim?.limit_down)}</span></div>
+        <div className="hl-n">
+          <span>炸板 <em className="num">{int(lim?.broken)}</em></span>
+          {lim?.seal_rate != null && <span>封板率 <em className="num">{lim.seal_rate.toFixed(0)}%</em></span>}
+        </div>
+      </div>
+      <div className="hl">
+        <span className="hl-k">最高连板</span>
+        <div className="hl-v">{lim?.max_boards ?? '—'}<small>板</small></div>
+        <div className="hl-n"><span>梯队 <em className="num">{tiers.length ? tiers.map(t => t.count).join(' / ') : '—'}</em></span></div>
       </div>
     </div>
+  )
+}
+
+/** 涨跌分布 8 档横条; 刻度只标相邻档的分界(7 条), 纪事与右栏共用 */
+
+/** 指数字条: 只有开高低收时, 用「开高收低」的日形折线示意当日走势形状 */
+function Spark({ open, high, low, close, up }: { open: number; high?: number | null; low?: number | null; close?: number | null; up: boolean }) {
+  const hi = high ?? Math.max(open, close ?? open)
+  const lo = low ?? Math.min(open, close ?? open)
+  const span = hi - lo || 1
+  const y = (v: number | null | undefined) => 15 - ((v ?? open) - lo) / span * 12
+  const pts = [[0, y(open)], [33, y(hi)], [66, y(lo)], [100, y(close ?? open)]]
+  return (
+    <div className="ix-spark">
+      <svg viewBox="0 0 100 16" preserveAspectRatio="none">
+        <polyline fill="none" strokeWidth={1} points={pts.map(p => p.join(',')).join(' ')}
+          className={up ? 'spark-u' : 'spark-d'} style={{ stroke: up ? 'hsl(var(--bull))' : 'hsl(var(--bear))' }} />
+      </svg>
+    </div>
+  )
+}
+
+/** 六轴情绪雷达 — 只画正六边形的环与值多边形, 轴标签在右侧图例里 */
+function RadarFig({ radar }: { radar: OverviewMarket['radar'] }) {
+  if (!radar.length) return null
+  const pt = (i: number, r: number) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / radar.length
+    return [50 + r * Math.cos(a), 50 + r * Math.sin(a)]
+  }
+  const ring = (r: number) => radar.map((_, i) => pt(i, r).map(v => v.toFixed(1)).join(',')).join(' ')
+  const val = radar.map((d, i) => pt(i, 6 + Math.max(0, Math.min(100, d.value)) / 100 * 36).map(v => v.toFixed(1)).join(',')).join(' ')
+  return (
+    <svg viewBox="0 0 100 100" role="img" aria-label="情绪雷达">
+      {[36, 24, 12].map(r => <polygon key={r} points={ring(r)} fill="none" stroke="hsl(var(--border))" />)}
+      <polygon points={val} fill="hsl(var(--accent))" fillOpacity=".14" stroke="hsl(var(--accent))" strokeWidth="1.2" />
+    </svg>
   )
 }
 
@@ -93,13 +149,37 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
   const ix = data.indices ?? []
   if (ix.length) {
     const worst = ix.reduce((a, b) => ((b.change_pct ?? 0) < (a.change_pct ?? 0) ? b : a))
+    const best = ix.reduce((a, b) => ((b.change_pct ?? 0) > (a.change_pct ?? 0) ? b : a))
     const vals = ix.map(i => i.change_pct ?? 0)
     const head = vals.every(v => v < 0) ? '全线收低'
       : vals.every(v => v > 0) ? '全线收高'
       : '涨跌互现'
+    const br = data.breadth
     entries.push({
       key: 'indices', title: `${head}，${worst.name || worst.symbol} ${fmtIndexPct(worst.change_pct)}`,
-      en: 'INDICES', body: '四大核心指数的当日涨跌，点开进入指数页查看分时与历史。',
+      en: 'CLOSING', tag: '收盘',
+      body: (
+        <>
+          四大核心指数{head}，{ix.map((i, n) => {
+            // 设计稿把当日最强/最弱的两个指数加粗
+            const strong = i.symbol === best.symbol || i.symbol === worst.symbol
+            const txt = <>{i.name || i.symbol} {fmtIndexPct(i.change_pct)}</>
+            return (
+              <span key={i.symbol}>
+                {n > 0 && '、'}
+                {strong ? <b>{txt}</b> : txt}
+              </span>
+            )
+          })}。
+          {br?.total ? (
+            <>
+              全市场 <b>{br.total}</b> 只里 <b>下跌 {br.down}</b> 只，
+              下跌家数占比 <b>{(br.down / br.total * 100).toFixed(1)}%</b>，
+              仅 <b>{br.up}</b> 只上涨；跌幅超 5% 的有 <b>{br.strong_down ?? 0}</b> 只。
+            </>
+          ) : null}
+        </>
+      ),
       figure: {
         head: '指 数 涨 跌',
         node: (
@@ -144,7 +224,6 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
       key: 'limit',
       title: `涨停 ${lim.limit_up} 家，最高 ${lim.max_boards || 0} 板`,
       en: 'LIMIT LADDER',
-      tag: lim.sealed_ready ? undefined : '未定版',
       body: (
         <>
           涨停 <b>{lim.limit_up}</b> 只、跌停 <b>{lim.limit_down}</b> 只，
@@ -159,15 +238,25 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
           <div className="ladder">
             {tiers.slice().sort((x, y) => y.boards - x.boards).map(t => {
               const top = t.stocks?.[0]
+              // 设计稿每行只有「板数 + 条 + 数量」; 该层首只股票名收进 title/aria-label
               const row = (
                 <>
                   <span className="k">{t.boards}</span>
                   <u style={{ width: `${Math.max(2, t.count / Math.max(...tiers.map(z => z.count)) * 100)}%` }} />
-                  <span className="num flex items-baseline gap-2"><span className="m">{top?.name ?? ''}</span><b>{t.count}</b></span>
+                  <b>{t.count}</b>
                 </>
               )
               return top ? (
-                <button key={t.boards} type="button" className="r btn" onClick={() => ctx.openStock('alert', top.symbol, top.name)}>{row}</button>
+                <button
+                  key={t.boards}
+                  type="button"
+                  className="r btn"
+                  title={`${t.boards} 板 · 打开该层首只股票 ${top.name ?? top.symbol}`}
+                  aria-label={`${t.boards} 板 ${t.count} 只，打开 ${top.name ?? top.symbol}`}
+                  onClick={() => ctx.openStock('alert', top.symbol, top.name)}
+                >
+                  {row}
+                </button>
               ) : <div key={t.boards} className="r">{row}</div>
             })}
           </div>
@@ -194,19 +283,6 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
           。
         </>
       ),
-      figure: lead || lag ? {
-        head: '行 业 涨 跌 前 列',
-        node: (
-          <Roster
-            rows={[...(ind?.leading ?? []).slice(0, 4), ...(ind?.lagging ?? []).slice(0, 4)]
-              .map(x => ({ symbol: x.name, name: x.name, pct: x.avg_pct }))}
-            onPick={r => {
-              const it = [...(ind?.leading ?? []), ...(ind?.lagging ?? [])].find(x => x.name === r.name)
-              if (it) ctx.openDimension(it)
-            }}
-          />
-        ),
-      } : undefined,
     })
   }
 
@@ -217,28 +293,12 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
       title: `监控触发 ${ctx.alerts.total} 条异动`,
       en: 'ALERTS',
       tag: '需处理',
+      emphasis: true,
       body: <>点开行可查看个股当日分时与五档。</>,
       figure: ctx.alerts.rows.length ? {
         head: '最 近 触 发',
         node: <Roster rows={ctx.alerts.rows} onPick={r => ctx.openStock('alert', r.symbol, r.name ?? undefined)} />,
       } : undefined,
-    })
-  }
-
-  // 6. 趋势
-  const t = data.trend
-  if (t) {
-    entries.push({
-      key: 'trend',
-      title: `站上 20 日均线 ${t.above_ma20_pct.toFixed(0)}%，60 日新高 ${t.new_high} / 新低 ${t.new_low}`,
-      en: 'TREND',
-      body: (
-        <>
-          站上 MA5 <b>{t.above_ma5_pct.toFixed(0)}%</b>、MA20 <b>{t.above_ma20_pct.toFixed(0)}%</b>、
-          MA60 <b>{t.above_ma60_pct.toFixed(0)}%</b>；60 日新高 <b className="text-bull">{t.new_high}</b> 只、
-          新低 <b className="text-bear">{t.new_low}</b> 只。成交额 <b>{fmtBigNum(data.amount?.total)}</b>。
-        </>
-      ),
     })
   }
 
@@ -251,7 +311,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     <div className="chronicle">
       <div className="stamp"><b>{stamp.date}</b><span>{stamp.sub}</span></div>
       {entries.map((e, i) => (
-        <article key={e.key} className={cn('entry', i === 0 && 'key')}>
+        <article key={e.key} className={cn('entry', (i === 0 || e.emphasis) && 'key')}>
           <h2>
             <span className="e-t">{e.title}</span>
             <span className="e-en">{e.en}</span>
@@ -274,7 +334,8 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
 export function MetricRail({ data }: { data: OverviewMarket }) {
   const b = data.breadth
   const lim = data.limit
-  const tiers = (lim?.tiers ?? []).filter(t => t.boards >= 2).slice(0, 6)
+  // 设计稿右栏梯队含首板行 (k=1), 不止 2 板以上
+  const tiers = (lim?.tiers ?? []).filter(t => t.count > 0).sort((a, b) => b.boards - a.boards).slice(0, 6)
   const maxTier = Math.max(...tiers.map(t => t.count), 1)
   return (
     <aside className="rail" aria-label="市场指标">
@@ -283,17 +344,20 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
         {(data.indices ?? []).map(i => (
           <div key={i.symbol} className="ix">
             <span className="ix-n">{i.name || i.symbol}</span>
-            <span className={cn('ix-v', pctClass(i.change_pct))}>{fmtPrice(i.last_price)} · {fmtIndexPct(i.change_pct)}</span>
+            <span className={cn('ix-v', pctClass(i.change_pct))}>{fmtIndexPct(i.change_pct)}</span>
+            {i.open != null && <Spark open={i.open} high={i.high} low={i.low} close={i.last_price ?? i.close} up={(i.change_pct ?? 0) >= 0} />}
           </div>
         ))}
       </div>
       <div className="rail-b">
         <div className="rail-h"><b>成交与广度</b><span>BREADTH</span></div>
         <div className="rail-kv">
-          <div><span className="k">成交额</span><span className="v">{fmtBigNum(data.amount?.total)}</span></div>
-          <div><span className="k">平均成交额</span><span className="v">{fmtBigNum(data.amount?.avg)}</span></div>
-          <div><span className="k">上涨 / 下跌</span><span className="v"><span className="text-bull">{b?.up ?? '—'}</span> / <span className="text-bear">{b?.down ?? '—'}</span></span></div>
-          <div><span className="k">上涨率</span><span className="v">{b ? `${b.up_pct.toFixed(1)}%` : '—'}</span></div>
+          <div><span className="k">两市成交</span><span className="v">{fmtBigNum(data.amount?.total)}</span></div>
+          <div><span className="k">平均涨幅</span><span className={cn('v', pctClass(b?.avg_pct))}>{fmtStockPct(b?.avg_pct)}</span></div>
+          <div><span className="k">上涨</span><span className="v text-bull">{b?.up ?? '—'}</span></div>
+          <div><span className="k">下跌</span><span className="v text-bear">{b?.down ?? '—'}</span></div>
+          <div><span className="k">涨超 5%</span><span className="v text-bull">{b?.strong_up ?? '—'}</span></div>
+          <div><span className="k">跌超 5%</span><span className="v text-bear">{b?.strong_down ?? '—'}</span></div>
         </div>
       </div>
       <div className="rail-b">
@@ -302,16 +366,19 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
       </div>
       <div className="rail-b">
         <div className="rail-h"><b>情绪雷达</b><span>{data.emotion?.label ?? '—'} · {data.emotion?.score ?? '—'}</span></div>
-        <div className="radar-leg">
-          {(data.radar ?? []).map(r => (
-            <span key={r.key}>{r.label}<b>{r.value.toFixed(0)}</b></span>
-          ))}
+        <div className="radar-wrap">
+          <RadarFig radar={data.radar ?? []} />
+          <div className="radar-leg">
+            {(data.radar ?? []).map(r => (
+              <span key={r.key}>{r.label}<b>{r.value.toFixed(0)}</b></span>
+            ))}
+          </div>
         </div>
       </div>
       <div className="rail-b">
         <div className="rail-h"><b>涨停梯队</b><span>{lim?.limit_up ?? '—'} 家</span></div>
         <div className="ladder">
-          {tiers.length === 0 && <div className="py-2 text-[11px] text-muted">暂无 2 板以上</div>}
+          {tiers.length === 0 && <div className="py-2 text-[11px] text-muted">暂无涨停梯队</div>}
           {tiers.map(t => (
             <div key={t.boards} className="r">
               <span className="k">{t.boards}</span>

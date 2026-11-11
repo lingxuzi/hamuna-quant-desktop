@@ -20,7 +20,7 @@ export function NavPager({ nav, prevLabel, nextLabel }: NavPagerProps) {
         onClick={() => nav.go(-1)}
         title={`${prevLabel} (←)`}
         aria-label={prevLabel}
-        className="p-1 rounded-btn text-secondary hover:text-foreground hover:bg-elevated transition-colors cursor-pointer"
+        className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-foreground hover:bg-elevated"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
@@ -31,7 +31,7 @@ export function NavPager({ nav, prevLabel, nextLabel }: NavPagerProps) {
         onClick={() => nav.go(1)}
         title={`${nextLabel} (→)`}
         aria-label={nextLabel}
-        className="p-1 rounded-btn text-secondary hover:text-foreground hover:bg-elevated transition-colors cursor-pointer"
+        className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-foreground hover:bg-elevated"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>

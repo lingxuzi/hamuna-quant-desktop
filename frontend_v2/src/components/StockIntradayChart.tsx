@@ -62,7 +62,7 @@ export function StockIntradayChart({
   })
 
   const minuteRows: MinuteKlineRow[] = useMemo(() => minute.data?.rows ?? [], [minute.data?.rows])
-  // source=none 表示本地无数据且 TickFlow 也拉不到 (停牌/复牌延迟/非交易日)
+  // source=none 表示本地无数据且数据源也拉不到 (停牌/复牌延迟/非交易日)
   // 此时不弹"是否获取"询问窗, 只做静态提示, 避免误导用户去拉明知拉不到的数据
   const sourceIsNone = minute.data?.source === 'none'
   // 指数分钟K无本地存储且不支持落库获取 (后端 sync_minute_single 显式拒绝), 不显示获取按钮
@@ -96,7 +96,7 @@ export function StockIntradayChart({
               <div className="text-xs text-muted">该日暂无分钟数据（数据源未提供）</div>
               <button
                 onClick={() => fetchMinute.mutate()}
-                className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs font-medium hover:bg-elevated/80 transition-colors duration-150"
+                className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 duration-150 bg-elevated"
               >
                 重新获取
               </button>
@@ -106,7 +106,7 @@ export function StockIntradayChart({
               <div className="text-xs text-muted">暂无分钟数据</div>
               <button
                 onClick={() => setMinuteDismissed(false)}
-                className="px-4 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent transition-colors duration-150"
+                className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-accent duration-150 bg-accent/90"
               >
                 获取分钟K
               </button>
@@ -117,13 +117,13 @@ export function StockIntradayChart({
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => fetchMinute.mutate()}
-                  className="px-4 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent transition-colors duration-150"
+                  className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-accent duration-150 bg-accent/90"
                 >
                   确定
                 </button>
                 <button
                   onClick={() => setMinuteDismissed(true)}
-                  className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs hover:bg-elevated/80 transition-colors duration-150"
+                  className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 duration-150 bg-elevated"
                 >
                   取消
                 </button>
@@ -143,7 +143,7 @@ export function StockIntradayChart({
                 type="button"
                 onClick={() => fetchMinute.mutate()}
                 disabled={fetchMinute.isPending}
-                className="ml-auto shrink-0 rounded border border-warning/40 px-1.5 py-0.5 hover:bg-warning/10 disabled:opacity-50"
+                className="ctl ctl-sm ctl-btn ml-auto shrink-0 border-warning/40 px-1.5 hover:bg-warning/10 disabled:opacity-50"
               >
                 {fetchMinute.isPending ? '补齐中…' : '尝试补齐'}
               </button>

@@ -39,15 +39,15 @@ export function BacktestEvidencePanel({ evidence }: { evidence?: BacktestEvidenc
   const color = failed ? 'text-danger' : lookahead.status === 'passed' ? 'text-foreground' : 'text-warning'
 
   return (
-    <section aria-label="回测检查与版本记录" className="min-w-0 leaf-cell">
+    <section aria-label="回测检查与版本记录" className="min-w-0 border-t border-rule-strong pt-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs">
-          <ScanSearch className="h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
+          <ScanSearch className="h-[16px] w-[16px] shrink-0 text-secondary" aria-hidden="true" />
           <span className="font-medium text-foreground">未来数据检查</span>
           <span className={color}>{STATUS_LABELS[lookahead.status]}</span>
         </div>
-        <button type="button" onClick={() => exportEvidence(evidence)} className="inline-flex items-center gap-1 rounded-btn border border-border px-2 py-1 text-xs text-secondary hover:text-accent">
-          <Download className="h-3 w-3" aria-hidden="true" />导出核查报告
+        <button type="button" onClick={() => exportEvidence(evidence)} className="ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 hover:text-accent">
+          <Download className="h-[12px] w-[12px]" aria-hidden="true" />导出核查报告
         </button>
       </div>
       {failed && <p className="mt-2 text-xs leading-5 text-danger">改变未来数据后，部分历史输出发生变化。请结合下方差异排查策略或指标。</p>}

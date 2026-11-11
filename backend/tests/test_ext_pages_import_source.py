@@ -1,6 +1,6 @@
 """源码导入(.tsx → 页面插件): esbuild 编译、契约 shim、端点校验与 409 降级。
 
-CI 无 frontend/node_modules → find_esbuild 为 None → 整组跳过 (源码部署本机全跑)。
+CI 无 frontend_v2/node_modules → find_esbuild 为 None → 整组跳过 (源码部署本机全跑)。
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.services import ext_source_import
 
 pytestmark = pytest.mark.skipif(
     ext_source_import.find_esbuild() is None,
-    reason="当前环境无 esbuild (需要 frontend/node_modules), 源码导入仅源码/桌面部署可测",
+    reason="当前环境无 esbuild (需要 frontend_v2/node_modules), 源码导入仅源码/桌面部署可测",
 )
 
 # 故意经由 @/ 别名引用宿主模块, 验证 alias 注入; 独立组件避免依赖 JSX 运行时差异

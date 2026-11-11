@@ -86,7 +86,7 @@ const GroupCard = React.memo(function GroupCard({
         className={`group flex w-full items-center gap-1.5 border-b border-border/60 px-3 py-2 text-left transition-colors hover:bg-elevated/60 ${showColorBar && color ? color.background : ''}`}
         title={`查看「${data.name}」分组列表`}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${color ? color.dot : 'bg-muted/60'}`} />
+        <span className={`h-[8px] w-[8px] shrink-0 rounded-full ${color ? color.dot : 'bg-muted/60'}`} />
         <span className={`truncate text-xs font-medium ${color ? color.text : 'text-foreground'}`}>
           {data.name}
         </span>
@@ -158,10 +158,10 @@ const GroupCard = React.memo(function GroupCard({
         <button
           type="button"
           onClick={() => onToggle(data.key)}
-          className="flex items-center justify-center gap-1 border-t border-border/60 px-3 py-1.5 text-[10px] text-muted transition-colors hover:bg-elevated/60 hover:text-foreground"
+          className="ctl ctl-sm ctl-ghost flex items-center justify-center gap-1 border-t border-border/60 px-1.5 hover:bg-elevated/60 hover:text-foreground"
         >
           {expanded ? '收起' : `显示全部 ${data.rows.length} 只`}
-          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? '' : 'rotate-180'}`} />
+          <ChevronDown className={`h-[12px] w-[12px] transition-transform ${expanded ? '' : 'rotate-180'}`} />
         </button>
       )}
     </div>

@@ -6,17 +6,17 @@ import { MissingCapChip } from '@/lib/capability-labels'
 import { Skeleton } from './Skeleton'
 
 // 卡片能力定义：capKey → 查 capability limits；missingCapName → 无权限时提示的能力名
-// capKey 为空串表示该数据在免费服务器(None/Free)或本地即可获取,无需能力门控。
+// capKey 为空串表示该数据在本地即可获取,无需能力门控。
 export const CARD_META: Record<string, {
-  capKey: string          // 对应的 capability key，空串表示本地计算 / 免费服务器可用
+  capKey: string          // 对应的 capability key，空串表示本地计算 / 本地即可获取
   missingCapName: string  // 缺能力时提示的能力名(空串表示缺能力也不显示徽章)
 }> = {
-  // 标的维表走 exchanges 端点,免费服务器即可获取,无需付费能力
+  // 标的维表走 exchanges 端点,本地即可获取,无需能力门控
   instruments: { capKey: '',                        missingCapName: '' },
   daily:       { capKey: 'kline.daily.batch',       missingCapName: '日 K(批量)' },
   adj_factor:  { capKey: 'adj_factor',              missingCapName: '复权因子' },
   enriched:    { capKey: '',                        missingCapName: '' },
-  // ETF 复用日K批量能力(免费档即可),缺能力时随日K卡提示,不单独显示徽章
+  // ETF 复用日K批量能力,缺能力时随日K卡提示,不单独显示徽章
   etf:         { capKey: 'kline.daily.batch',       missingCapName: '' },
   minute:      { capKey: 'kline.minute.batch',      missingCapName: '分钟 K(批量)' },
   financials:  { capKey: 'financial',               missingCapName: '财务数据' },
@@ -32,8 +32,8 @@ export function Pill({ label, value }: { label: string; value: number | string }
   )
 }
 
-// 卡片能力徽章的输入: TickFlow 套餐限额对象, 或路由门控合并后的布尔可用性
-// (矩阵 usable 合并进 caps 时, 非对象真值表示「经其他数据源可用, 无套餐限额可显」)。
+// 卡片能力徽章的输入: 能力限额对象, 或路由门控合并后的布尔可用性
+// (矩阵 usable 合并进 caps 时, 非对象真值表示「经其他数据源可用, 无限额可显」)。
 export type CapLimitValue = { rpm: number | null; batch: number | null; subscribe: number | null } | boolean
 
 function CapBadge({ hasCap, isLocal, missingCapName, capInfo, localSuffix, customProvider }: {
@@ -72,7 +72,7 @@ function CapBadge({ hasCap, isLocal, missingCapName, capInfo, localSuffix, custo
   }
 
   if (!hasCap && missingCapName) {
-    // 能力标准对所有数据源一致: 缺能力提示能力名而非档位, 点击跳数据源设置
+    // 能力标准对所有数据源一致: 缺能力提示能力名, 点击跳数据源设置
     return <MissingCapChip label={missingCapName} />
   }
 
@@ -122,16 +122,11 @@ export function StatCard({
   pullTitle?: string
 }) {
   const empty = loading || !stats || (stats.rows === 0 && !stats.trading_days && !stats.fields)
-  const borderCls = active
-    ? 'border-accent/50'
-    : done
-      ? 'border-bear/30'
-      : 'border-border'
   const bgCls = active ? 'bg-accent/[0.03]' : 'bg-surface'
 
   const meta = tierKey ? CARD_META[tierKey] : undefined
   const isLocal = meta?.capKey === ''
-  // 布尔值 (路由门控合并) 只表达可用性; 限额信息仅当值为套餐对象时展示
+  // 布尔值 (路由门控合并) 只表达可用性; 限额信息仅当值为限额对象时展示
   const rawCap = meta?.capKey ? capLimits?.[meta.capKey] : undefined
   const capInfo = rawCap && typeof rawCap === 'object' ? rawCap : undefined
   const hasCap = isLocal || !!rawCap
@@ -145,10 +140,10 @@ export function StatCard({
       return (
         <button
           onClick={(e) => { e.stopPropagation(); onShowFields() }}
-          className="inline-flex align-middle ml-1 p-0.5 rounded hover:bg-elevated transition-colors text-secondary hover:text-accent"
+          className="ctl ctl-sm ctl-ghost inline-flex align-middle ml-1 w-[24px] px-0 items-center justify-center hover:bg-elevated hover:text-accent"
           title="查看字段说明"
         >
-          <Table2 className="h-3 w-3" />
+          <Table2 className="h-[12px] w-[12px]" />
         </button>
       )
     }
@@ -160,10 +155,10 @@ export function StatCard({
     <button
       key={tab.table}
       onClick={(e) => { e.stopPropagation(); onShowFields?.(tab.table) }}
-      className="inline-flex align-middle -mt-px p-0.5 rounded hover:bg-elevated transition-colors text-secondary hover:text-accent"
+      className="ctl ctl-sm ctl-ghost inline-flex align-middle -mt-px w-[24px] px-0 items-center justify-center hover:bg-elevated hover:text-accent"
       title={`查看${tab.label}字段说明`}
     >
-      <Table2 className="h-3 w-3" />
+      <Table2 className="h-[12px] w-[12px]" />
     </button>
   )
 
@@ -212,9 +207,9 @@ export function StatCard({
   }
 
   return (
-    <div className={`rounded-card border ${borderCls} ${bgCls} flex flex-col transition-all duration-300 ${active ? 'shadow-[0_0_16px_rgba(61,214,140,0.08)]' : ''}`}>
+    <div className={`${bgCls} flex flex-col transition-all duration-300 ${active ? 'shadow-[0_0_16px_rgba(61,214,140,0.08)]' : ''}`}>
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">{title}</h3>
         <div className="flex items-center gap-1.5">
           {auto !== undefined && !loading && (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium">
@@ -232,7 +227,7 @@ export function StatCard({
           {onPull && (
             <button
               onClick={(e) => { e.stopPropagation(); onPull() }}
-              className="rounded p-0.5 text-secondary transition-colors hover:bg-elevated hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center hover:bg-elevated hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/60"
               title={pullTitle ?? '手动拉取'}
               aria-label={pullTitle ?? '手动拉取'}
             >
@@ -242,7 +237,7 @@ export function StatCard({
           {onSettings && (
             <button
               onClick={(e) => { e.stopPropagation(); onSettings() }}
-              className={`p-0.5 rounded hover:bg-elevated transition-colors ${
+              className={`ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center hover:bg-elevated ${
                 settingsOpen ? 'text-accent' : 'text-secondary'
               }`}
               title="设置"
@@ -253,7 +248,7 @@ export function StatCard({
         </div>
       </div>
 
-      <div className="px-4 pb-1 text-[10px] text-muted">{hint}</div>
+      <div className="px-4 pb-1 text-[10.5px] leading-relaxed text-muted">{hint}</div>
 
       <div className="px-4 pb-2">
         {loading ? (
@@ -278,21 +273,21 @@ export function StatCard({
           </>
         ) : empty ? (
           <>
-            <div className="font-mono text-2xl font-bold tracking-tight tabular-nums text-foreground">—</div>
-            <div className="text-[11px] text-muted mt-0.5">
+            <div className="font-mono text-[20px] font-medium tabular-nums text-foreground">—</div>
+            <div className="font-mono text-[10px] text-muted mt-1">
               暂无数据{renderFieldButtons()}
             </div>
           </>
         ) : (
           <>
-            <div className="font-mono text-2xl font-bold tracking-tight tabular-nums text-foreground">
+            <div className="font-mono text-[20px] font-medium tabular-nums text-foreground">
               {stats.fields
                 ? stats.fields
                 : stats.trading_days && !stats.rows
                   ? stats.trading_days.toLocaleString()
                   : formatNumber(stats.rows)}
             </div>
-            <div className="text-[11px] text-muted mt-0.5">
+            <div className="font-mono text-[10px] text-muted mt-1">
               {renderSubLabelInline()}
             </div>
           </>
@@ -307,22 +302,22 @@ export function StatCard({
           </>
         ) : empty ? (
           <>
-            <div className="flex justify-between text-[11px]">
+            <div className="flex justify-between text-[10.5px]">
               <span className="text-muted">{isInstrument ? '快照日' : '起'}</span>
               <span className="font-mono text-secondary">—</span>
             </div>
-            <div className="flex justify-between text-[11px]">
+            <div className="flex justify-between text-[10.5px]">
               <span className="text-muted">{isInstrument ? '标的数' : '止'}</span>
               <span className="font-mono text-secondary">—</span>
             </div>
           </>
         ) : (
           <>
-            <div className="flex justify-between text-[11px]">
+            <div className="flex justify-between text-[10.5px]">
               <span className="text-muted">{isInstrument ? '快照日' : '起'}</span>
               <span className="font-mono text-secondary">{fmtDate(isInstrument ? stats.latest_as_of : stats.earliest_date)}</span>
             </div>
-            <div className="flex justify-between text-[11px]">
+            <div className="flex justify-between text-[10.5px]">
               <span className="text-muted">{isInstrument ? '标的数' : '止'}</span>
               <span className="font-mono text-secondary">{isInstrument ? String(stats.rows) : fmtDate(stats.latest_date)}</span>
             </div>

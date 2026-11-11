@@ -521,11 +521,11 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
           <div className="grid grid-cols-[1fr_auto_1fr] items-center px-5 py-2.5 border-b border-border/50">
             {/* 左侧：Tab 切换 */}
             <div className="flex rounded-lg bg-elevated p-0.5 w-fit">
-              <button onClick={() => { setTab('ai'); if (mode === 'create') setSource('ai') }} className={cn('px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer', tab === 'ai' ? 'bg-amber-400/15 text-amber-400' : 'text-muted hover:text-foreground')}>
-                <Sparkles className="h-3 w-3 inline mr-1" />AI 生成
+              <button onClick={() => { setTab('ai'); if (mode === 'create') setSource('ai') }} className={cn('ctl ctl-sm ctl-ghost px-1.5 transition-all', tab === 'ai' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
+                <Sparkles className="h-[12px] w-[12px] inline mr-1" />AI 生成
               </button>
-              <button onClick={() => { setTab('custom'); if (mode === 'create') { setSource('custom'); if (!code) setCode(templates[executionBackend]) } }} className={cn('px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer', tab === 'custom' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
-                <FileText className="h-3 w-3 inline mr-1" />自定义编写
+              <button onClick={() => { setTab('custom'); if (mode === 'create') { setSource('custom'); if (!code) setCode(templates[executionBackend]) } }} className={cn('ctl ctl-sm ctl-ghost px-1.5 transition-all', tab === 'custom' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
+                <FileText className="h-[12px] w-[12px] inline mr-1" />自定义编写
               </button>
             </div>
             {/* 中间：标题 */}
@@ -536,12 +536,12 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
             <div className="flex items-center justify-end gap-2">
               {tab === 'ai' && (
                 <div className="flex items-center gap-1">
-                  <span className={'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ' + (step === 1 ? 'bg-amber-400/20 text-amber-400' : 'bg-emerald-400/20 text-emerald-400')}>1</span>
+                  <span className={'w-[20px] h-[20px] rounded-full flex items-center justify-center text-[10px] font-bold ' + (step === 1 ? 'bg-amber-400/20 text-amber-400' : 'bg-emerald-400/20 text-emerald-400')}>1</span>
                   <span className="text-muted/20 text-[10px]">—</span>
-                  <span className={'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ' + (step === 2 ? 'bg-amber-400/20 text-amber-400' : 'bg-border/50 text-muted')}>2</span>
+                  <span className={'w-[20px] h-[20px] rounded-full flex items-center justify-center text-[10px] font-bold ' + (step === 2 ? 'bg-amber-400/20 text-amber-400' : 'bg-border/50 text-muted')}>2</span>
                 </div>
               )}
-              <button aria-label="关闭" onClick={handleClose} className="p-1.5 rounded-lg hover:bg-elevated"><X className="h-4 w-4 text-muted" /></button>
+              <button aria-label="关闭" onClick={handleClose} className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated"><X className="h-[16px] w-[16px] text-muted" /></button>
             </div>
           </div>
 
@@ -551,20 +551,20 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <div className="flex items-center gap-2 text-[11px]">
                 <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                 <span className="text-amber-400/80">步骤 1 描述策略规则 → 步骤 2 预览代码 → 保存</span>
-                <a href="https://github.com/shy3130/tickflow-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
+                <a href="https://github.com/shy3130/tick-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
                    target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1 text-accent/70 hover:text-accent transition-colors">
-                  <FileText className="h-3 w-3" />策略开发指南
+                  <FileText className="h-[12px] w-[12px]" />策略开发指南
                 </a>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-[11px]">
                 <Terminal className="h-3.5 w-3.5 text-accent shrink-0" />
                 <span className="text-muted">适合有 Python 基础的开发者，手动编写策略文件进行深度定制和二次开发</span>
-                <a href="https://github.com/shy3130/tickflow-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
+                <a href="https://github.com/shy3130/tick-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
                    target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1 text-accent/70 hover:text-accent transition-colors">
-                  <FileText className="h-3 w-3" />策略开发指南
+                  <FileText className="h-[12px] w-[12px]" />策略开发指南
                 </a>
               </div>
             )}
@@ -575,11 +575,11 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
             {tab === 'ai' ? (<>
             {aiStatus && !aiStatus.configured && (
               <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
-                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                <AlertTriangle className="h-[16px] w-[16px] text-amber-400 shrink-0" />
                 <div className="flex-1 text-xs text-amber-400/80">AI API Key 未配置，无法生成策略。填写的内容会自动保存。</div>
                 <button onClick={() => { persist(); window.location.href = `${import.meta.env.BASE_URL}settings?tab=ai` }}
-                  className="h-7 px-3 rounded-lg bg-amber-400/15 border border-amber-400/30 text-amber-400 text-xs font-medium flex items-center gap-1.5 hover:bg-amber-400/20 shrink-0">
-                  <Settings2 className="h-3 w-3" />去配置
+                  className="ctl ctl-md ctl-btn px-2.5 bg-amber-400/15 border-amber-400/30 text-amber-400 flex items-center gap-1.5 hover:bg-amber-400/20 shrink-0">
+                  <Settings2 className="h-[12px] w-[12px]" />去配置
                 </button>
               </div>
             )}
@@ -588,24 +588,24 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <>
                 <div className="space-y-2">
                   <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="策略名称，如：xx策略"
-                    className="w-full h-9 px-3 rounded-lg bg-base border-0 ring-1 ring-border/30 text-sm font-medium text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    className="ctl ctl-lg ctl-input w-full px-3.5 ring-1 ring-border/30 placeholder:text-muted/30 focus:ring-2 focus:ring-accent/30 bg-base" />
                   <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="一句话描述，如：筛选满足 xx 条件的 yy 个股"
-                    className="w-full h-8 px-3 rounded-lg bg-base border-0 ring-1 ring-border/30 text-sm text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    className="ctl ctl-md ctl-input w-full px-2.5 ring-1 ring-border/30 placeholder:text-muted/30 focus:ring-2 focus:ring-accent/30 bg-base" />
                 </div>
                 <div>
                   <span className="text-[10px] text-muted/50 uppercase tracking-wider mb-1.5 block">策略方向</span>
                   <div className="flex gap-1">
                     {DIRECTIONS.map(d => (
-                      <button key={d.value} onClick={() => setDirection(d.value)} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ' + (direction === d.value ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>{d.label}</button>
+                      <button key={d.value} onClick={() => setDirection(d.value)} className={'ctl ctl-sm ctl-btn px-1.5' + (direction === d.value ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>{d.label}</button>
                     ))}
                   </div>
                 </div>
                 <div>
                   <span className="text-[10px] text-muted/50 uppercase tracking-wider mb-1.5 block">执行后端</span>
                   <div className="flex flex-wrap gap-1">
-                    <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ' + (executionBackend === 'polars_expr' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>Polars 表达式</button>
-                    <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ' + (executionBackend === 'matrix_native' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>矩阵原生</button>
-                    <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent ' + (executionBackend === 'minute_filter' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>一分钟策略</button>
+                    <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'polars_expr' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>Polars 表达式</button>
+                    <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'matrix_native' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>矩阵原生</button>
+                    <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'ctl ctl-sm ctl-btn px-1.5 focus-visible:ring-2 focus-visible:ring-accent' + (executionBackend === 'minute_filter' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>一分钟策略</button>
                   </div>
                 </div>
                 <div>
@@ -632,8 +632,8 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                 )}
                 {error && <div className="text-[11px] text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</div>}
                 <button onClick={handleGenerate} disabled={loading || !name.trim() || !rules.trim()}
-                  className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-500/10 border border-amber-400/30 text-amber-400 text-sm font-medium flex items-center justify-center gap-2 hover:from-amber-500/30 hover:to-amber-500/20 disabled:opacity-40 transition-all">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  className="ctl ctl-lg ctl-btn w-full bg-gradient-to-r from-amber-500/20 to-amber-500/10 border-amber-400/30 text-amber-400 flex items-center justify-center gap-2 hover:from-amber-500/30 hover:to-amber-500/20 disabled:opacity-40 transition-all">
+                  {loading ? <Loader2 className="h-[16px] w-[16px] animate-spin" /> : <Sparkles className="h-[16px] w-[16px]" />}
                   {loading ? (iterateEnabled ? 'AI 迭代中...' : 'AI 生成中...') : code ? '重新生成' : (iterateEnabled ? 'AI 迭代生成' : 'AI 生成策略')}
                 </button>
               </>
@@ -642,8 +642,8 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                 {/* Tab 切换 */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-0.5">
-                    <button onClick={() => setPreviewTab('params')} className={'px-3 py-1 rounded text-xs font-medium transition-colors ' + (previewTab === 'params' ? 'bg-amber-400/15 text-amber-400' : 'text-muted hover:text-secondary')}>参数</button>
-                    <button onClick={() => setPreviewTab('code')} className={'px-3 py-1 rounded text-xs font-medium transition-colors ' + (previewTab === 'code' ? 'bg-amber-400/15 text-amber-400' : 'text-muted hover:text-secondary')}>代码</button>
+                    <button onClick={() => setPreviewTab('params')} className={'ctl ctl-sm ctl-ghost px-1.5' + (previewTab === 'params' ? 'bg-amber-400/15 text-amber-400' : 'text-muted hover:text-secondary')}>参数</button>
+                    <button onClick={() => setPreviewTab('code')} className={'ctl ctl-sm ctl-ghost px-1.5' + (previewTab === 'code' ? 'bg-amber-400/15 text-amber-400' : 'text-muted hover:text-secondary')}>代码</button>
                   </div>
                 </div>
 
@@ -761,9 +761,9 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                   <input type="text" value={instruction} onChange={e => setInstruction(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleModify()}
                     placeholder="调整策略逻辑，如：增加 xx 条件、要求今日 yy、修改均线为 zz 日..."
-                    className="flex-1 h-9 px-3 rounded-lg bg-base border-0 ring-1 ring-border/30 text-sm text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    className="ctl ctl-lg ctl-input flex-1 px-3.5 ring-1 ring-border/30 placeholder:text-muted/30 focus:ring-2 focus:ring-accent/30 bg-base" />
                   <button onClick={handleModify} disabled={loading || !instruction.trim()}
-                    className="h-9 px-4 rounded-lg bg-amber-400/15 border border-amber-400/30 text-amber-400 text-xs font-medium flex items-center gap-1.5 hover:bg-amber-400/20 disabled:opacity-40 transition-all">
+                    className="ctl ctl-lg ctl-btn px-3.5 bg-amber-400/15 border-amber-400/30 text-amber-400 flex items-center gap-1.5 hover:bg-amber-400/20 disabled:opacity-40 transition-all">
                     {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                     AI 修改
                   </button>
@@ -777,26 +777,26 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-2">
                   <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="策略名称，如：我的xx策略"
-                    className="h-9 px-3 rounded-lg bg-base border-0 ring-1 ring-border/30 text-sm font-medium text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    className="ctl ctl-lg ctl-input px-3.5 ring-1 ring-border/30 placeholder:text-muted/30 focus:ring-2 focus:ring-accent/30 bg-base" />
                   <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="一句话描述策略逻辑"
-                    className="h-9 px-3 rounded-lg bg-base border-0 ring-1 ring-border/30 text-sm text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    className="ctl ctl-lg ctl-input px-3.5 ring-1 ring-border/30 placeholder:text-muted/30 focus:ring-2 focus:ring-accent/30 bg-base" />
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="mr-2 text-[10px] text-muted/50 uppercase tracking-wider">执行后端</span>
-                  <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ' + (executionBackend === 'polars_expr' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>Polars 表达式</button>
-                  <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ' + (executionBackend === 'matrix_native' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>矩阵原生</button>
-                  <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors focus-visible:ring-2 focus-visible:ring-accent ' + (executionBackend === 'minute_filter' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>一分钟策略</button>
+                  <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'polars_expr' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>Polars 表达式</button>
+                  <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'matrix_native' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>矩阵原生</button>
+                  <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'ctl ctl-sm ctl-btn px-1.5 focus-visible:ring-2 focus-visible:ring-accent' + (executionBackend === 'minute_filter' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>一分钟策略</button>
                 </div>
                 <div className="rounded-xl border border-border/40 bg-elevated/50 p-4 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <Terminal className="h-4 w-4 text-accent" />
+                      <Terminal className="h-[16px] w-[16px] text-accent" />
                       <span className="text-sm font-medium text-foreground">自定义策略代码</span>
                       {validated && <span className="text-[10px] text-emerald-400">已校验</span>}
                     </div>
                     <button onClick={() => { navigator.clipboard.writeText(code || templates[executionBackend]); setCustomCopied(true); setTimeout(() => setCustomCopied(false), 2000) }}
-                      className={cn('inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all cursor-pointer', customCopied ? 'bg-emerald-400/10 text-emerald-400' : 'bg-elevated text-muted hover:text-foreground hover:bg-accent/10')}>
-                      {customCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      className={cn('ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 transition-all', customCopied ? 'bg-emerald-400/10 text-emerald-400' : 'bg-elevated text-muted hover:text-foreground hover:bg-accent/10')}>
+                      {customCopied ? <Check className="h-[12px] w-[12px]" /> : <Copy className="h-[12px] w-[12px]" />}
                       {customCopied ? '已复制' : '复制代码'}
                     </button>
                   </div>
@@ -812,16 +812,16 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                   {error && <div className="text-[11px] text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</div>}
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => { setCode(templates[executionBackend]); setStrategyId(''); setSource('custom'); setValidated(false) }}
-                      className="h-8 px-3 rounded-lg border border-border text-xs text-secondary hover:text-foreground">
+                      className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground">
                       使用模板
                     </button>
                     <button onClick={handleValidateCode} disabled={loading || !code.trim()}
-                      className="h-8 px-3 rounded-lg border border-accent/30 bg-accent/10 text-accent text-xs font-medium hover:bg-accent/15 disabled:opacity-40 flex items-center gap-1.5">
+                      className="ctl ctl-md ctl-btn soft px-2.5 border-accent/30 hover:bg-accent/15 disabled:opacity-40 flex items-center gap-1.5 bg-accent/10">
                       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                       校验代码
                     </button>
                     <button onClick={handleSave} disabled={saving || loading || !code.trim()}
-                      className="h-8 px-3 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1.5">
+                      className="ctl ctl-md ctl-btn pri px-2.5 hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1.5">
                       <Save className="h-3.5 w-3.5" />
                       {saving ? '保存中...' : mode === 'modify' ? '保存修改' : '保存自定义策略'}
                     </button>
@@ -837,18 +837,18 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
             <button onClick={clearDraft} className="text-[10px] text-muted/40 hover:text-danger transition-colors">重新创建</button>
             <div className="flex items-center gap-2">
               {step === 1 && code && name.trim() && (
-                <button onClick={() => setStep(2)} className="h-7 px-3 rounded-lg border border-border text-xs text-secondary hover:text-foreground flex items-center gap-1">
-                  前往下一步 <ChevronRight className="h-3 w-3" />
+                <button onClick={() => setStep(2)} className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground flex items-center gap-1">
+                  前往下一步 <ChevronRight className="h-[12px] w-[12px]" />
                 </button>
               )}
               {step === 2 && (
                 <>
-                  <button onClick={() => setStep(1)} className="h-7 px-3 rounded-lg border border-border text-xs text-secondary hover:text-foreground flex items-center gap-1">
-                    <ChevronLeft className="h-3 w-3" />上一步
+                  <button onClick={() => setStep(1)} className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground flex items-center gap-1">
+                    <ChevronLeft className="h-[12px] w-[12px]" />上一步
                   </button>
                   <button onClick={handleSave} disabled={saving || loading}
-                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 transition-all">
-                    <Save className="h-3 w-3" />
+                    className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:opacity-50 transition-all">
+                    <Save className="h-[12px] w-[12px]" />
                     {saving ? '保存中...' : '保存策略'}
                   </button>
                 </>

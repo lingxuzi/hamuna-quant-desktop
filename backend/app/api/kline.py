@@ -164,14 +164,13 @@ def _batch_frames_json(parts, dt_col: str, dt_fmt: str, extra=None) -> bytes:
 
 def _minute_allowed(capset) -> bool:
     """仅当前分钟数据源确实可用时开放分钟 K 接口。"""
-    from app.tickflow.capabilities import Cap
     provider = kline_sync._selected_minute_provider_name()
-    if provider == "tickflow":
-        return capset.has(Cap.KLINE_MINUTE_BATCH)
-    _, fallback, error = kline_sync._resolve_minute_provider(provider)
+    if provider.startswith("unavailable:"):
+        return False
+    _, error = kline_sync._resolve_minute_provider(provider)
     if error is not None:
         logger.warning("minute provider resolution failed while checking access: %s", error)
-    return error is None and not fallback
+    return error is None
 
 
 @lru_cache(maxsize=8192)
@@ -505,8 +504,8 @@ def get_daily(
     df = repo.get_daily_asset(asset_type, symbol, start, end)
 
     if df.is_empty():
+        from app.data_providers.capabilities import CapabilitySet
         from app.services import daily_bootstrap
-        from app.tickflow.capabilities import CapabilitySet
 
         capset = getattr(request.app.state, "capabilities", None) or CapabilitySet()
         try:
@@ -824,7 +823,7 @@ def get_minute_batch(request: Request, body: dict):
 
     import polars as pl
 
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
 
     symbols: list[str] = body.get("symbols", [])
     trade_date_str: str | None = body.get("date")
@@ -875,7 +874,11 @@ def get_minute_batch(request: Request, body: dict):
         if not need_fallback:
             now_cn = cn_now()
             after_close = now_cn.hour > 15 or (now_cn.hour == 15 and now_cn.minute >= 30)
-            if after_close:
+            # 开盘前 (00:00-09:30): 今日分区必空, 直接回退到最近有数据的交易日;
+            # 否则凌晨访问分时图恒为空白。与收盘后判据同理, 用本地分区有无兜底,
+            # 万一盘前已有数据 (如集合竞价抓取) 仍走今日。
+            before_open = now_cn.hour < 9 or (now_cn.hour == 9 and now_cn.minute < 30)
+            if after_close or before_open:
                 latest_daily = repo.latest_daily_date()
                 if latest_daily is None or latest_daily < today:
                     need_fallback = True
@@ -972,10 +975,10 @@ def get_minute_batch(request: Request, body: dict):
     # Step 2: 补拉并落盘 (取到即写, upsert 语义; 下一轮命中本地, 请求量骤降)。
     # 落盘失败只降级 (log 后继续返回本轮数据), 不影响响应 —— 持久化是优化而非正确性前提。
     # 契约: 本端点只接受 stock/ETF (指数分钟K走 /api/index/minute 独立路径),
-    # 按 asset_type 拆分调用 (自定义源 / TickFlow 路由均依赖 asset_type 正确传递)。
+    # 按 asset_type 拆分调用 (各源按 asset_type 分流, 传递必须正确)。
     day_start = datetime(trade_date.year, trade_date.month, trade_date.day, 9, 25, 0)
     session_end = datetime(trade_date.year, trade_date.month, trade_date.day, 15, 5, 0)
-    from app.tickflow.rate_limits import resolve_limit
+    from app.data_providers.rate_limits import resolve_limit
 
     # 与盘后同步 (kline_sync.sync_and_persist_minute) 同用 resolve_limit (×0.8 安全
     # 系数): 此前裸 limits().rpm=60 与盘后解析出的 48 分属两个互不感知的 rpm 桶,
@@ -1147,8 +1150,7 @@ def get_minute(
 
     - 本地有完整数据(240条) → 直接返回
     - 本地无数据或不完整 → 从有效分钟数据源实时拉取返回(不写入)
-    - 自定义源失败时, 仅具备 TickFlow 单股分钟能力才回退 TickFlow
-    - live=true 且当日连续竞价时段 → 跳过本地优先直接实时拉取:
+        - live=true 且当日连续竞价时段 → 跳过本地优先直接实时拉取:
       盘中分钟增量落盘的本地分区按 ≥60s 轮次更新, 90% 完整度启发式会让
       详情分时图停在上一增量轮, 与行情列表的节奏脱节
     """
@@ -1407,6 +1409,7 @@ async def trigger_minute_sync(
     import asyncio
 
     from app.api.data import invalidate_storage_cache
+    from app.services import watchlist
     from app.services.pipeline_jobs import (
         JobCancelledError,
         job_store,
@@ -1415,7 +1418,6 @@ async def trigger_minute_sync(
         try_acquire_run_slot,
     )
     from app.services.preferences import get_minute_sync_days
-    from app.tickflow.pools import get_pool
 
     if not _minute_allowed(capset):
         if repair_symbols is not None:
@@ -1443,7 +1445,7 @@ async def trigger_minute_sync(
                 universe = repair_symbols
             else:
                 # 标的池 = instruments 维表 + 自选 (单一来源, 不拉 CN_Equity_A/SW1 池)
-                all_symbols = set(get_pool("watchlist"))
+                all_symbols = set(watchlist.symbols())
                 inst_path = repo.store.data_dir / "instruments" / "instruments.parquet"
                 if inst_path.exists():
                     try:
@@ -1672,7 +1674,7 @@ async def extend_history(request: Request):
         repo = request.app.state.repo
         capset = request.app.state.capabilities
 
-        from app.tickflow.capabilities import Cap
+        from app.data_providers.capabilities import Cap
         if not capset.has(Cap.KLINE_DAILY_BATCH):
             raise HTTPException(status_code=403, detail="需要 Pro+ 权限 (batch K-line)")
 
@@ -1759,7 +1761,7 @@ async def repair_daily(request: Request):
         repo = request.app.state.repo
         capset = request.app.state.capabilities
 
-        from app.tickflow.capabilities import Cap
+        from app.data_providers.capabilities import Cap
         if not capset.has(Cap.KLINE_DAILY_BATCH):
             raise HTTPException(status_code=403, detail="需要 Pro+ 权限 (batch K-line)")
 

@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 
 from app.strategy import paper, paper_auto
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 SYM = "002893.SZ"
 DAY = date(2026, 10, 8)

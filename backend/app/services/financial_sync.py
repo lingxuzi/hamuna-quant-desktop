@@ -1,7 +1,7 @@
 """财务数据独立同步服务。
 
 解耦于 K-line 管道, 自有调度 + 自有存储。
-能力门控: Cap.FINANCIAL (Expert 套餐)
+数据源: 生效财务源 (默认 fuyao); 源未声明 financial 数据集时本轮跳过。
 """
 from __future__ import annotations
 
@@ -10,17 +10,13 @@ import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import polars as pl
 
 from app.services.fs_utils import atomic_write_parquet
-from app.tickflow.capabilities import Cap, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilitySet
 
 logger = logging.getLogger(__name__)
-
-# 每个 API 请求最多 100 个标的
-_BATCH_SIZE = 100
 
 # 财务报表 + 历史股本表
 FINANCIAL_TABLES = ("metrics", "income", "balance_sheet", "cash_flow", "shares")
@@ -43,21 +39,22 @@ def _get_symbols(data_dir: Path) -> list[str]:
         return []
 
 
-def _financial_is_custom() -> bool:
-    """当前财务数据源是否走 custom (用于绕过 TickFlow Expert 套餐门槛)。"""
-    from app.services import preferences
-    provider = preferences.get_financial_provider()
-    if provider == "tickflow":
-        return False
+def _financial_provider() -> object | None:
+    """生效财务数据源 → provider 实例; 无可用源返回 None。"""
     from app.data_providers import custom as custom_sources
-    return custom_sources.provider_has_dataset(provider, "financial")
+    from app.services import preferences
+    name = preferences.get_financial_provider()
+    if not name or not custom_sources.provider_has_dataset(name, "financial"):
+        return None
+    try:
+        return custom_sources.get_provider(name)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("财务数据源 %s 解析失败: %s", name, e)
+        return None
 
-
-def _financial_capability_label() -> str:
-    """门禁日志标签: "财务数据 ← fuyao" / "…(档位不足)", 便于判断该切哪个源。"""
-    from app.data_providers.capabilities import capability_gate
-    _, label = capability_gate("financial")
-    return label
+def _financial_available() -> bool:
+    """当前是否有可用的财务数据源 (生效源声明 financial 数据集)。"""
+    return _financial_provider() is not None
 
 
 def _fetch_table(
@@ -67,67 +64,18 @@ def _fetch_table(
     latest_only: bool = True,
 ) -> pl.DataFrame:
     """通过当前财务数据源拉取一张标准化财务表。"""
-    is_custom = _financial_is_custom()
-    if not is_custom and not capset.has(Cap.FINANCIAL):
-        logger.info("sync_%s skipped: %s 不可用", table, _financial_capability_label())
+    provider = _financial_provider()
+    if provider is None:
+        logger.info("sync_%s skipped: 财务数据源不可用", table)
         return pl.DataFrame()
     if not symbols:
         logger.warning("sync_%s skipped: no symbols", table)
         return pl.DataFrame()
-
-    # 自定义数据源分流
-    if is_custom:
-        from app.services import preferences
-        from app.data_providers import custom as custom_sources
-        try:
-            provider = custom_sources.get_provider(preferences.get_financial_provider())
-            df = provider.get_financials(table, symbols, latest_only=latest_only)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("sync_%s custom provider failed: %s", table, e)
-            return pl.DataFrame()
-        if df.is_empty() or "symbol" not in df.columns:
-            return pl.DataFrame()
-        return df
-
-    from app.tickflow.client import get_client
-    tf = get_client()
-
-    # 分批拉取
-    api_method = {
-        "metrics": tf.financials.metrics,
-        "income": tf.financials.income,
-        "balance_sheet": tf.financials.balance_sheet,
-        "cash_flow": tf.financials.cash_flow,
-        "shares": getattr(tf.financials, "shares", None),
-    }[table]
-    if api_method is None:
-        logger.warning("sync_shares skipped: current TickFlow SDK does not support shares")
+    try:
+        df = provider.get_financials(table, symbols, latest_only=latest_only)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("sync_%s provider failed: %s", table, e)
         return pl.DataFrame()
-
-    all_records: list[dict] = []
-    total_batches = (len(symbols) + _BATCH_SIZE - 1) // _BATCH_SIZE
-
-    for i in range(0, len(symbols), _BATCH_SIZE):
-        chunk = symbols[i : i + _BATCH_SIZE]
-        batch_num = i // _BATCH_SIZE + 1
-        try:
-            data = api_method(chunk, latest=latest_only)
-            # data 格式: { "600519.SH": [record, ...], ... }
-            if isinstance(data, dict):
-                for sym, records in data.items():
-                    if isinstance(records, list):
-                        for rec in records:
-                            if isinstance(rec, dict):
-                                rec["symbol"] = sym
-                                all_records.append(rec)
-            logger.debug("sync_%s batch %d/%d: %d records", table, batch_num, total_batches, len(data) if isinstance(data, dict) else 0)
-        except Exception as e:
-            logger.warning("sync_%s batch %d/%d failed: %s", table, batch_num, total_batches, e)
-
-    if not all_records:
-        return pl.DataFrame()
-
-    df = pl.DataFrame(all_records)
     if df.is_empty() or "symbol" not in df.columns:
         return pl.DataFrame()
     return df
@@ -257,8 +205,8 @@ def sync_shares(data_dir: Path, capset: CapabilitySet) -> int:
 
 def sync_all(data_dir: Path, capset: CapabilitySet) -> dict[str, int]:
     """同步所有财务表。返回 {table: rows}。"""
-    if not capset.has(Cap.FINANCIAL) and not _financial_is_custom():
-        logger.info("sync_all financials skipped: %s 不可用", _financial_capability_label())
+    if not _financial_available():
+        logger.info("sync_all financials skipped: 财务数据源不可用")
         return {}
 
     symbols = _get_symbols(data_dir)
@@ -338,8 +286,8 @@ class FinancialScheduler:
         # 即便 app.state.capabilities 已更新, 调度器仍报 "no FINANCIAL capability"。
         self._data_dir = data_dir
         self._capset = capset
-        if not capset.has(Cap.FINANCIAL) and not _financial_is_custom():
-            logger.info("FinancialScheduler skipped: %s 不可用", _financial_capability_label())
+        if not _financial_available():
+            logger.info("FinancialScheduler skipped: 财务数据源不可用")
             return
         # 从持久化恢复上次同步时间: 重启后前端仍能显示真实最后同步时间,而非"尚未同步"
         try:
@@ -475,7 +423,7 @@ class FinancialScheduler:
         用 _is_syncing 标志防并发:若已有同步在进行,本次直接跳过,
         避免重复请求拖慢服务端 / 触发上游限流。
         """
-        if not self._capset or (not self._capset.has(Cap.FINANCIAL) and not _financial_is_custom()):
+        if not self._capset or not _financial_available():
             return {}
         with self._lock:
             if self._is_syncing:
@@ -500,8 +448,8 @@ class FinancialScheduler:
         /status 已能看到 syncing=True,无竞态窗口;同时防止快速重复点击
         启动多个后台线程。后台线程复用 _run_body 执行真正的同步逻辑。
         """
-        if not self._capset or (not self._capset.has(Cap.FINANCIAL) and not _financial_is_custom()):
-            return {"started": False, "reason": "no FINANCIAL capability"}
+        if not self._capset or not _financial_available():
+            return {"started": False, "reason": "财务数据源不可用"}
         with self._lock:
             if self._is_syncing:
                 logger.info("financial sync trigger skipped: already running")

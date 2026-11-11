@@ -457,7 +457,7 @@ def test_close_resets_client():
 def test_test_dataset_reports_error_for_undeclared_dataset(provider):
     p, _ = provider
     out = p.test_dataset("financial")
-    assert out["rows"] == 0 and "回退 TickFlow" in out["error"]
+    assert out["rows"] == 0 and "回退默认源" in out["error"]
 
 
 def test_test_dataset_returns_serializable_preview(provider):

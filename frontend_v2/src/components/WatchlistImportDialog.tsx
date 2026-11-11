@@ -127,9 +127,9 @@ function Dropzone({
         className="w-full flex flex-col items-center justify-center gap-2 rounded-btn border border-dashed border-border bg-elevated/40 hover:bg-elevated/70 px-4 py-6 text-secondary transition-colors disabled:opacity-50"
       >
         {busy ? (
-          <Loader2 className="h-6 w-6 animate-spin text-accent" />
+          <Loader2 className="h-[24px] w-[24px] animate-spin text-accent" />
         ) : (
-          <ImagePlus className="h-6 w-6 text-accent" />
+          <ImagePlus className="h-[24px] w-[24px] text-accent" />
         )}
         <span className="text-xs">{busy ? label : '点击选择或拖拽券商自选截图 / CSV / TXT'}</span>
       </button>
@@ -520,10 +520,10 @@ export function WatchlistImportDialog({
         <button
           type="button"
           onClick={onClose}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-btn text-secondary hover:bg-elevated"
+          className="ctl ctl-md ctl-ghost w-[28px] px-0 inline-flex items-center justify-center hover:bg-elevated"
           aria-label="关闭"
         >
-          <X className="h-4 w-4" />
+          <X className="h-[16px] w-[16px]" />
         </button>
       </div>
 
@@ -538,7 +538,7 @@ export function WatchlistImportDialog({
             <button
               type="button"
               onClick={() => setPasteOpen(true)}
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded-btn border border-dashed border-border bg-elevated/40 px-3 py-2 text-xs text-secondary hover:bg-elevated/70"
+              className="ctl ctl-sm ctl-btn w-full inline-flex items-center justify-center gap-1.5 border-dashed bg-elevated/40 px-1.5 hover:bg-elevated/70"
             >
               <Keyboard className="h-3.5 w-3.5 text-accent" />
               或粘贴证券代码
@@ -562,7 +562,7 @@ export function WatchlistImportDialog({
                   <button
                     type="button"
                     onClick={() => { setPasteOpen(false); setCodesText('') }}
-                    className="h-7 px-2 rounded-btn text-[11px] text-secondary hover:bg-elevated"
+                    className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated"
                   >
                     收起
                   </button>
@@ -570,7 +570,7 @@ export function WatchlistImportDialog({
                     type="button"
                     disabled={busy || !codesText.trim()}
                     onClick={() => void runCodes()}
-                    className="h-7 px-3 rounded-btn text-xs inline-flex items-center gap-1.5 bg-accent text-white hover:bg-accent/90 disabled:opacity-40"
+                    className="ctl ctl-md ctl-btn pri px-2.5 inline-flex items-center gap-1.5 hover:bg-accent/90 disabled:opacity-40"
                   >
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Keyboard className="h-3.5 w-3.5" />}
                     解析
@@ -586,7 +586,7 @@ export function WatchlistImportDialog({
             {previewUrls.map((url, i) => (
               <div
                 key={url}
-                className="shrink-0 w-16 h-16 rounded-btn overflow-hidden border border-border bg-black/40"
+                className="shrink-0 w-[64px] h-[64px] rounded-btn overflow-hidden border border-border bg-black/40"
               >
                 <img src={url} alt={`预览 ${i + 1}`} className="w-full h-full object-contain" />
               </div>
@@ -648,7 +648,7 @@ export function WatchlistImportDialog({
                 type="button"
                 onClick={() => changeTargetGroups([])}
                 aria-pressed={targetGroupIds.length === 0}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                className={`ctl ctl-sm ctl-btn inline-flex items-center gap-1 rounded-full px-1.5 ${
                   targetGroupIds.length === 0
                     ? 'border-accent/40 bg-accent/10 text-accent'
                     : 'border-border bg-elevated text-secondary hover:text-foreground'
@@ -671,7 +671,7 @@ export function WatchlistImportDialog({
                         : [...targetGroupIds, g.id],
                     )}
                     aria-pressed={active}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                    className={`ctl ctl-sm ctl-btn inline-flex items-center gap-1 rounded-full px-1.5 ${
                       active
                         ? `${c.border} ${c.background} ${c.text}`
                         : 'border-border bg-elevated text-secondary hover:bg-elevated/80 hover:text-foreground'
@@ -687,10 +687,10 @@ export function WatchlistImportDialog({
                 <button
                   type="button"
                   onClick={() => setNewGroupOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-elevated/40 px-2 py-1 text-[11px] text-accent hover:bg-elevated/70"
+                  className="ctl ctl-sm ctl-btn inline-flex items-center gap-1 rounded-full border-dashed bg-elevated/40 px-1.5 hover:bg-elevated/70"
                   title="新建分组接收这批导入"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-[12px] w-[12px]" />
                   新建
                 </button>
               )}
@@ -709,7 +709,7 @@ export function WatchlistImportDialog({
                     if (e.key === 'Escape') { setNewGroupOpen(false); setNewGroupName(''); setNewGroupColor(DEFAULT_WATCHLIST_GROUP_COLOR) }
                   }}
                   placeholder="新分组名称，Enter 创建"
-                  className="h-8 min-w-0 flex-1 rounded-btn border border-border bg-surface px-2 text-xs text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none"
+                  className="ctl ctl-md ctl-input min-w-0 flex-1 px-2.5 placeholder:text-muted focus:border-accent/50 bg-surface"
                   aria-label="新分组名称"
                 />
                 <button
@@ -717,7 +717,7 @@ export function WatchlistImportDialog({
                   onClick={() => void createGroup()}
                   disabled={creatingGroup || !newGroupName.trim()}
                   title="创建分组，并作为本次导入的目标分组"
-                  className="h-8 shrink-0 px-3 rounded-btn text-xs inline-flex items-center gap-1.5 bg-accent text-white hover:bg-accent/90 disabled:opacity-40"
+                  className="ctl ctl-md ctl-btn pri shrink-0 px-2.5 inline-flex items-center gap-1.5 hover:bg-accent/90 disabled:opacity-40"
                 >
                   {creatingGroup ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                   创建
@@ -736,7 +736,7 @@ export function WatchlistImportDialog({
                         aria-pressed={active}
                         aria-label={`颜色 ${option.label}`}
                         title={option.label}
-                        className={`h-4 w-4 rounded-full transition-transform ${option.dot} ${active ? `ring-2 ${option.ring} scale-110` : 'hover:scale-110'}`}
+                        className={`h-[16px] w-[16px] rounded-full transition-transform ${option.dot} ${active ? `ring-2 ${option.ring} scale-110` : 'hover:scale-110'}`}
                       />
                     )
                   })}
@@ -750,7 +750,7 @@ export function WatchlistImportDialog({
           <button
             type="button"
             onClick={onClose}
-            className="h-8 px-3 rounded-btn text-xs text-secondary hover:bg-elevated"
+            className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated"
           >
             取消
           </button>
@@ -758,7 +758,7 @@ export function WatchlistImportDialog({
             type="button"
             disabled={selected.size === 0 || batchAdd.isPending || busy}
             onClick={() => void confirmAdd()}
-            className="h-8 px-3 rounded-btn text-xs inline-flex items-center gap-1.5 bg-accent text-white hover:bg-accent/90 disabled:opacity-40"
+            className="ctl ctl-md ctl-btn pri px-2.5 inline-flex items-center gap-1.5 hover:bg-accent/90 disabled:opacity-40"
           >
             {batchAdd.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

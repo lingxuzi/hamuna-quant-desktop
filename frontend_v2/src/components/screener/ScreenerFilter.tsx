@@ -156,17 +156,16 @@ export function FilterPanel({ value, onChange, onClose, onReset }: {
             <button
               onClick={onReset}
               title="清空全部筛选"
-              className="inline-flex items-center gap-1 px-1.5 h-6 rounded text-[11px]
-                text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+              className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 hover:text-danger hover:bg-danger/10"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-[12px] w-[12px]" />
               清空
             </button>
           )}
           <button
             onClick={onClose}
             title="收起筛选"
-            className="p-1 rounded text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-foreground hover:bg-elevated"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -182,7 +181,7 @@ export function FilterPanel({ value, onChange, onClose, onReset }: {
             <button
               key={board}
               onClick={() => toggleBoard(board)}
-              className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+              className={`ctl ctl-sm ctl-ghost px-1.5 ${
                 active
                   ? 'bg-accent/15 text-accent'
                   : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -195,7 +194,7 @@ export function FilterPanel({ value, onChange, onClose, onReset }: {
         <span className="w-px h-4 bg-border mx-1" />
         <button
           onClick={() => onChange({ ...value, excludeST: !value.excludeST })}
-          className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+          className={`ctl ctl-sm ctl-ghost px-1.5 ${
             value.excludeST
               ? 'bg-accent/15 text-accent'
               : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -217,7 +216,7 @@ export function FilterPanel({ value, onChange, onClose, onReset }: {
                 value={value[f.min]}
                 onChange={(e) => set(f.min, e.target.value)}
                 step={f.step}
-                className="w-16 px-1.5 py-1 rounded-btn bg-base border border-border text-[11px] font-mono text-foreground text-center focus:outline-none focus:border-accent/50"
+                className="ctl ctl-sm ctl-input w-16 px-1.5 font-mono text-center focus:border-accent/50 bg-base"
               />
               {isRange && (
                 <>
@@ -228,7 +227,7 @@ export function FilterPanel({ value, onChange, onClose, onReset }: {
                     value={value[f.max]}
                     onChange={(e) => set(f.max, e.target.value)}
                     step={f.step}
-                    className="w-16 px-1.5 py-1 rounded-btn bg-base border border-border text-[11px] font-mono text-foreground text-center focus:outline-none focus:border-accent/50"
+                    className="ctl ctl-sm ctl-input w-16 px-1.5 font-mono text-center focus:border-accent/50 bg-base"
                   />
                 </>
               )}

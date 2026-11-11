@@ -3,10 +3,11 @@ import { motion } from 'framer-motion'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, Search, Check, Clock, Zap, Settings2, AlertCircle, CheckCircle2, Calendar, History, Layers, X, Database } from 'lucide-react'
 import { api, type ExtDataBackfillResult, type ExtDataConfig, type ExtPullAuth } from '@/lib/api'
+import { cn } from '@/lib/cn'
 import { toast } from '@/components/Toast'
 import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
 import { QK } from '@/lib/queryKeys'
-import { SectionHead, INPUT_CLS } from './dialogShared'
+import { SectionHead, INPUT_CLS, FIELD_MD_CLS, SELECT_MD_CLS } from './dialogShared'
 import { Switch } from '@/components/Switch'
 
 const AUTH_TYPE_LABELS: Record<ExtPullAuth['type'], string> = {
@@ -135,7 +136,7 @@ export function ExtDataPullPanel({ config, onSaved }: {
       <div className="rounded-lg border border-border/60 bg-elevated/30 px-3 py-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-secondary">
-            <Clock className="h-3 w-3 text-muted" />
+            <Clock className="h-[12px] w-[12px] text-muted" />
             <span>定时拉取</span>
           </div>
           <Switch
@@ -168,9 +169,9 @@ export function ExtDataPullPanel({ config, onSaved }: {
         {pull?.last_run && (
           <div className="flex items-start gap-1.5 pt-1.5 border-t border-border/40">
             {pull.last_status === 'success' ? (
-              <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-px" />
+              <CheckCircle2 className="h-[12px] w-[12px] text-emerald-500 shrink-0 mt-px" />
             ) : (
-              <AlertCircle className="h-3 w-3 text-danger shrink-0 mt-px" />
+              <AlertCircle className="h-[12px] w-[12px] text-danger shrink-0 mt-px" />
             )}
             <div className="min-w-0 flex-1">
               <div className={`text-[10px] font-medium truncate ${pull.last_status === 'success' ? 'text-emerald-500' : 'text-danger'}`}>
@@ -189,7 +190,7 @@ export function ExtDataPullPanel({ config, onSaved }: {
         <button
           onClick={handleRun}
           disabled={running || !pull?.url}
-          className="inline-flex items-center justify-center gap-1 h-9 rounded-lg bg-accent/15 border border-accent/25 text-accent text-xs font-medium hover:bg-accent/20 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+          className="ctl ctl-lg ctl-btn soft inline-flex items-center justify-center gap-1 border-accent/25 hover:bg-accent/20 disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40 bg-accent/15"
         >
           {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
           立即执行
@@ -198,7 +199,7 @@ export function ExtDataPullPanel({ config, onSaved }: {
           onClick={() => setShowConfig(true)}
           disabled={!pull?.url}
           title={pull?.url ? undefined : '请先通过「新建扩展数据 → URL」创建拉取配置'}
-          className="inline-flex items-center justify-center gap-1 h-9 rounded-lg border border-border bg-elevated text-xs text-foreground hover:bg-border/30 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+          className="ctl ctl-lg ctl-btn inline-flex items-center justify-center gap-1 hover:bg-border/30 disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40 bg-elevated"
         >
           <Settings2 className="h-3.5 w-3.5" />
           拉取设置…
@@ -208,7 +209,7 @@ export function ExtDataPullPanel({ config, onSaved }: {
       {runResult && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] p-2.5 flex items-center justify-between text-[10px]">
           <span className="text-emerald-500 font-medium flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />拉取成功
+            <CheckCircle2 className="h-[12px] w-[12px]" />拉取成功
           </span>
           <span className="text-secondary">{runResult.rows} 行 · {runResult.date}</span>
         </div>
@@ -467,7 +468,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
         <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
             <div className="mt-0.5 p-2 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
-              <Database className="h-4 w-4" />
+              <Database className="h-[16px] w-[16px]" />
             </div>
             <div className="min-w-0">
               <h3 className="text-[15px] leading-6 font-semibold text-foreground">拉取设置</h3>
@@ -486,9 +487,9 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           <button
             onClick={onClose}
             aria-label="关闭"
-            className="p-1.5 rounded-lg text-secondary hover:text-foreground hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors shrink-0"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-secondary hover:text-foreground hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 shrink-0"
           >
-            <X className="h-4 w-4" />
+            <X className="h-[16px] w-[16px]" />
           </button>
         </div>
 
@@ -497,7 +498,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           {fanout && (
             <div className="rounded-xl border border-accent/25 bg-accent/[0.05] px-4 py-3">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-secondary">
-                <Layers className="h-3 w-3 text-accent/80" />
+                <Layers className="h-[12px] w-[12px] text-accent/80" />
                 <span>两级拉取 (目录 → 逐条目)</span>
               </div>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
@@ -534,7 +535,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
             <div className="flex gap-2">
               <select
                 value={method} onChange={e => setMethod(e.target.value)}
-                className="h-9 shrink-0 rounded-lg border border-border bg-base px-2.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                className={cn(INPUT_CLS, 'shrink-0 font-mono')}
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -542,7 +543,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
               <input
                 value={url} onChange={e => setUrl(e.target.value)}
                 placeholder="https://api.example.com/data"
-                className="h-9 flex-1 min-w-0 rounded-lg border border-border bg-base px-3 text-xs font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                className={cn(INPUT_CLS, 'flex-1 min-w-0 font-mono')}
               />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -599,7 +600,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
               <div className="grid grid-cols-2 gap-1 rounded-lg bg-elevated/50 p-1 border border-border/40">
                 <button
                   onClick={() => { setScheduleMode('interval'); setScheduleTime('') }}
-                  className={`h-8 rounded-md text-[11px] font-medium transition-all ${
+                  className={`ctl ctl-md ctl-ghost transition-all ${
                     scheduleMode === 'interval' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary hover:bg-elevated/40'
                   }`}
                 >
@@ -607,7 +608,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                 </button>
                 <button
                   onClick={() => setScheduleMode('fixed')}
-                  className={`h-8 rounded-md text-[11px] font-medium transition-all ${
+                  className={`ctl ctl-md ctl-ghost transition-all ${
                     scheduleMode === 'fixed' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary hover:bg-elevated/40'
                   }`}
                 >
@@ -623,7 +624,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       <input
                         type="number" min={1} value={schedule} onChange={e => setSchedule(Number(e.target.value))}
                         title="每隔 N 分钟拉取一次 (从启用时刻起算)"
-                        className="w-full h-8 px-2.5 rounded-lg border border-border bg-base text-[11px] font-mono tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                        className={cn(FIELD_MD_CLS, 'w-full font-mono tabular-nums')}
                       />
                     </div>
                     <div>
@@ -631,7 +632,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       <input
                         type="time" value={timeWindowStart} onChange={e => setTimeWindowStart(e.target.value)}
                         title="每日允许拉取的时间窗口"
-                        className="w-full h-8 px-2 rounded-lg border border-border bg-base text-[11px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                        className={cn(FIELD_MD_CLS, 'w-full font-mono')}
                       />
                     </div>
                     <div>
@@ -639,7 +640,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       <input
                         type="time" value={timeWindowEnd} onChange={e => setTimeWindowEnd(e.target.value)}
                         title="每日允许拉取的时间窗口"
-                        className="w-full h-8 px-2 rounded-lg border border-border bg-base text-[11px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                        className={cn(FIELD_MD_CLS, 'w-full font-mono')}
                       />
                     </div>
                   </div>
@@ -653,7 +654,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                     <select
                       value={schedulePeriod}
                       onChange={e => setSchedulePeriod(e.target.value as 'daily' | 'weekly' | 'monthly')}
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[11px] text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/25"
+                      className={SELECT_MD_CLS}
                     >
                       <option value="daily">每日</option>
                       <option value="weekly">每周</option>
@@ -664,7 +665,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       onChange={e => setScheduleDay(Number(e.target.value))}
                       disabled={schedulePeriod === 'daily'}
                       title={schedulePeriod === 'weekly' ? '每周几拉取' : '每月几号拉取 (短月无该日则该月跳过)'}
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[11px] text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/25 disabled:opacity-40"
+                      className={cn(SELECT_MD_CLS, 'disabled:opacity-40')}
                     >
                       {(schedulePeriod === 'weekly'
                         ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((t, i) => [i + 1, t] as [number, string])
@@ -677,12 +678,12 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       <input
                         type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)}
                         title="如 09:30 — 周期日该时刻拉取一次; 启用时若当天已过该时刻且未拉过会立即补拉一次"
-                        className="h-8 flex-1 min-w-0 rounded-lg border border-border bg-base px-2 text-[11px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                        className={cn(FIELD_MD_CLS, 'flex-1 min-w-0 font-mono')}
                       />
                       {scheduleTime && (
                         <button
                           type="button" onClick={() => setScheduleTime('')}
-                          className="h-8 shrink-0 px-2 rounded-lg border border-border bg-base text-[10px] text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+                          className="ctl ctl-md ctl-btn shrink-0 px-2.5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent/40 bg-base"
                         >
                           清除
                         </button>
@@ -694,7 +695,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       type="checkbox" checked={scheduleTradingOnly}
                       onChange={e => setScheduleTradingOnly(e.target.checked)}
                       title="跳过周六日; 法定节假日无法离线判定, 仍会按期尝试 (拉取幂等, 失败仅记状态)"
-                      className="h-3 w-3 shrink-0 accent-amber-500"
+                      className="h-[12px] w-[12px] shrink-0 accent-accent"
                     />
                     <span className="text-[10px] text-secondary">
                       仅交易日 — 跳过周六日
@@ -813,7 +814,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   aria-label="默认显示周期"
                   value={granularity} onChange={e => setGranularity(e.target.value as 'auto' | 'intraday' | 'daily')}
                   title="列表迷你图列与序列接口按此口径取数; 自动判断依据时间列数据形态"
-                  className="h-9 w-full rounded-lg border border-border bg-base px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50"
+                  className={INPUT_CLS}
                 >
                   <option value="auto">
                     {`自动判断${config.granularity_effective
@@ -850,14 +851,14 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   <input
                     value={dateParam} onChange={e => setDateParam(e.target.value)}
                     placeholder="date · 留空=接口只有当日快照"
-                    className="h-9 flex-1 min-w-0 rounded-lg border border-border bg-base px-3 text-xs font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                    className={cn(INPUT_CLS, 'flex-1 min-w-0 font-mono')}
                   />
                   <select
                     aria-label="日期参数值格式"
                     value={dateFormat} onChange={e => setDateFormat(e.target.value)}
                     disabled={!dateParam.trim()}
                     title="日期参数值的序列化格式; 时间戳 = 该交易日北京时间 00:00:00"
-                    className="h-9 shrink-0 rounded-lg border border-border bg-base px-2 text-[11px] text-secondary focus:outline-none focus:ring-1 focus:ring-accent/25 disabled:opacity-40"
+                    className={cn(INPUT_CLS, 'shrink-0 text-secondary disabled:opacity-40')}
                   >
                     <option value="iso">YYYY-MM-DD</option>
                     <option value="compact">YYYYMMDD</option>
@@ -876,7 +877,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   placeholder="since · 留空=每次全量"
                   disabled={!timeField.trim()}
                   title="每次拉取自动带上本地已有最大时间值 (?参数=值), 源只返回其后数据; 缺多少补多少, 本地无数据时自动整日全量。需先配置时间字段; 两级拉取不适用"
-                  className="h-9 w-full rounded-lg border border-border bg-base px-3 text-xs font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow disabled:opacity-40"
+                  className={cn(INPUT_CLS, 'font-mono disabled:opacity-40')}
                 />
                 {!timeField.trim() && (
                   <div className="mt-1 text-[10px] text-muted/70">需先填「时间字段」才能增量续传</div>
@@ -892,13 +893,13 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       value={pageParam} onChange={e => setPageParam(e.target.value)}
                       placeholder="页码参数 · page"
                       title="配置后按页循环拉取, 直到空页/最后一页/达上限"
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[10px] font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                      className={cn(FIELD_MD_CLS, 'font-mono')}
                     />
                     <input
                       value={pageSizeParam} onChange={e => setPageSizeParam(e.target.value)}
                       placeholder="条数参数 · pageSize"
                       title="配合每页条数一起发送; 也用于短页判停"
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[10px] font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                      className={cn(FIELD_MD_CLS, 'font-mono')}
                     />
                     <input
                       type="number" min={1}
@@ -906,7 +907,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       onChange={e => setPageSize(Number(e.target.value))}
                       placeholder="每页条数"
                       title="每页条数值 (>0 且已填参数名才发送)"
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[10px] font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                      className={cn(FIELD_MD_CLS, 'font-mono')}
                     />
                     <input
                       type="number" min={1} max={200}
@@ -914,7 +915,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                       onChange={e => setMaxPages(Number(e.target.value))}
                       placeholder="最多页 · 20"
                       title="安全上限, 防止接口永远返回数据拖死拉取循环"
-                      className="h-8 rounded-lg border border-border bg-base px-2 text-[10px] font-mono text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                      className={cn(FIELD_MD_CLS, 'font-mono')}
                     />
                   </div>
               </div>
@@ -931,18 +932,18 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                 <div className="flex items-center gap-2">
                   <input
                     type="date" value={bfStart} onChange={e => setBfStart(e.target.value)}
-                    className="h-9 flex-1 min-w-0 rounded-lg border border-border bg-base px-2.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                    className={cn(INPUT_CLS, 'flex-1 min-w-0 font-mono')}
                   />
                   <span className="text-xs text-muted shrink-0">至</span>
                   <input
                     type="date" value={bfEnd} onChange={e => setBfEnd(e.target.value)}
-                    className="h-9 flex-1 min-w-0 rounded-lg border border-border bg-base px-2.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25"
+                    className={cn(INPUT_CLS, 'flex-1 min-w-0 font-mono')}
                   />
                   <button
                     onClick={handleBackfill}
                     disabled={bfRunning || !dateParam.trim() || !bfStart || !bfEnd}
                     title="按本地交易日逐日拉取写入历史分区; 已有分区自动跳过, 可重复执行"
-                    className="h-9 shrink-0 inline-flex items-center gap-1.5 px-4 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+                    className="ctl ctl-lg ctl-btn pri shrink-0 inline-flex items-center gap-1.5 px-3.5 hover:bg-accent/90 disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40"
                   >
                     {bfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <History className="h-3.5 w-3.5" />}
                     回补
@@ -1013,7 +1014,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           <button
             onClick={handleTest}
             disabled={testing || !url}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg border border-border bg-elevated text-xs text-foreground hover:bg-border/30 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+            className="ctl ctl-lg ctl-btn inline-flex items-center gap-1.5 px-3.5 hover:bg-border/30 disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40 bg-elevated"
           >
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
             测试
@@ -1021,7 +1022,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           <button
             onClick={handleRun}
             disabled={running || !url}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent/15 border border-accent/25 text-accent text-xs font-medium hover:bg-accent/20 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-colors"
+            className="ctl ctl-lg ctl-btn soft inline-flex items-center gap-1.5 px-3.5 border-accent/25 hover:bg-accent/20 disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40 bg-accent/15"
           >
             {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
             立即执行
@@ -1030,7 +1031,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           <button
             onClick={() => handleSave(false)}
             disabled={saving || !url}
-            className="inline-flex items-center gap-1.5 h-9 px-5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 active:translate-y-px disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 transition-all shadow-sm shadow-accent/20"
+            className="ctl ctl-lg ctl-btn pri inline-flex items-center gap-1.5 px-3.5 hover:bg-accent/90 active:translate-y-px disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-accent/40 transition-all shadow-sm shadow-accent/20"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             保存配置

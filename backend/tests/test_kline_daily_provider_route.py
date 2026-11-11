@@ -8,12 +8,25 @@ import pytest
 
 from app.api import kline as api
 from app.data_providers import custom
+from app.data_providers.capabilities import CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 from app.services import kline_sync
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
 
 ETF = "159558.SZ"
 DAY = date(2026, 11, 4)
+
+
+class _Tripwire:
+    """非生效源: 一旦被问到数据就炸 —— 不允许绕过生效源。"""
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    def __getattr__(self, name):
+        def boom(*args, **kwargs):
+            self.asked.append(name)
+            raise AssertionError("must not bypass the selected provider")
+        return boom
 
 
 @pytest.mark.parametrize("asset_type", ["stock", "etf", "index"])
@@ -53,19 +66,19 @@ def route(monkeypatch, tmp_path):
             calls.append((symbols, kwargs))
             return frame
 
-    monkeypatch.setattr(kline_sync.preferences, "get_daily_data_provider", lambda: "test")
+    # 生效源固定为 "test"; 默认源 (内置 easytdx) 挂探针, 被问到数据就炸
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda dataset: "test")
     monkeypatch.setattr(custom, "provider_has_dataset", lambda name, dataset: dataset == "daily")
-    monkeypatch.setattr(custom, "get_provider", lambda _: Provider())
-    tickflow = Mock(side_effect=AssertionError("must not bypass the selected provider"))
-    monkeypatch.setattr(kline_sync, "get_client", tickflow)
+    tripwire = _Tripwire()
+    monkeypatch.setattr(custom, "get_provider", lambda name: Provider() if name == "test" else tripwire)
     monkeypatch.setattr(api, "_get_asset_info", lambda *a: {"name": "test ETF"})
     monkeypatch.setattr(api, "_maybe_inject_live_candle", lambda request, symbol, rows, asset: rows)
     monkeypatch.setattr(api, "_compress_on", lambda _: False)
-    return request, calls, tickflow
+    return request, calls, tripwire
 
 
 def test_detail_daily_uses_selected_provider_and_asset(route):
-    request, calls, tickflow = route
+    request, calls, tripwire = route
     result = api.get_daily(request, ETF, 120, str(DAY), str(DAY), None)
     assert result["asset_type"] == "etf"
     assert result["rows"][0]["date"] == DAY
@@ -73,39 +86,44 @@ def test_detail_daily_uses_selected_provider_and_asset(route):
     assert calls[0][1]["asset_type"] == "etf"
     assert calls[0][1]["start_time"].date() <= DAY
     assert calls[0][1]["end_time"].date() == DAY
-    tickflow.assert_not_called()
+    assert tripwire.asked == []  # 默认源没被问到数据
 
 
 def test_detail_does_not_silently_switch_when_selected_provider_fails(route, monkeypatch):
-    request, _, tickflow = route
+    request, _, tripwire = route
 
-    def broken(*args, **kwargs):
-        raise RuntimeError("test source failed")
+    def get_provider(name):
+        if name == "test":
+            raise RuntimeError("test source failed")
+        return tripwire
 
-    monkeypatch.setattr(custom, "get_provider", broken)
+    monkeypatch.setattr(custom, "get_provider", get_provider)
     with pytest.raises(api.HTTPException) as error:
         api.get_daily(request, ETF, 120, str(DAY), str(DAY), None)
     assert error.value.status_code == 502
-    tickflow.assert_not_called()
+    assert tripwire.asked == []  # 不允许静默换源
 
 
-def test_detail_adjustment_uses_selected_source_without_tickflow_permission(monkeypatch):
+def test_detail_adjustment_uses_selected_source(monkeypatch):
     factors = pl.DataFrame({"symbol": [ETF], "trade_date": [DAY], "ex_factor": [1.25]})
     get_factors = Mock(return_value=factors)
-    monkeypatch.setattr(kline_sync.preferences, "get_adj_factor_provider", lambda: "test")
+    tripwire = _Tripwire()
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda dataset: "test")
     monkeypatch.setattr(custom, "provider_has_dataset", lambda *a: True)
-    monkeypatch.setattr(custom, "get_provider", lambda _: SimpleNamespace(get_adj_factors=get_factors))
-    monkeypatch.setattr(kline_sync, "get_client", Mock(side_effect=AssertionError("wrong source")))
-    assert kline_sync.fetch_adj_factor_single(ETF, asset_type="etf", capset=CapabilitySet()).equals(factors)
+    monkeypatch.setattr(
+        custom, "get_provider",
+        lambda name: SimpleNamespace(get_adj_factors=get_factors) if name == "test" else tripwire,
+    )
+    assert kline_sync.fetch_adj_factor_single(ETF, asset_type="etf").equals(factors)
     assert get_factors.call_args.kwargs["asset_type"] == "etf"
+    assert tripwire.asked == []
 
 
 def test_adjustment_failure_cannot_be_published_as_unadjusted_history(monkeypatch):
-    capset = CapabilitySet()
-    capset.grant(Cap.ADJ_FACTOR)
-    monkeypatch.setattr(kline_sync.preferences, "get_adj_factor_provider", lambda: "tickflow")
-    monkeypatch.setattr(kline_sync, "get_client", lambda: SimpleNamespace(
-        klines=SimpleNamespace(ex_factors=Mock(side_effect=RuntimeError("source failed"))),
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda dataset: "test")
+    monkeypatch.setattr(custom, "provider_has_dataset", lambda *a: True)
+    monkeypatch.setattr(custom, "get_provider", lambda name: SimpleNamespace(
+        get_adj_factors=Mock(side_effect=RuntimeError("source failed")),
     ))
     with pytest.raises(kline_sync.ProviderRequestError, match="复权因子"):
-        kline_sync.fetch_adj_factor_single(ETF, capset=capset, strict=True)
+        kline_sync.fetch_adj_factor_single(ETF, strict=True)

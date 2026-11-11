@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronUp, FolderCog, FolderInput, Pencil, Plus, Trash2, X, Eraser } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, FolderInput, Pencil, Plus, Trash2, X, Eraser } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { Switch } from '@/components/Switch'
 import { api } from '@/lib/api'
@@ -36,6 +36,9 @@ interface GroupBarProps {
   onClearGroup?: (groupId: string) => Promise<void>
   /** 手动调整分组前后顺序 (持久化到后端) */
   onReorder?: (orderedIds: string[]) => Promise<void>
+  /** 代码/名称过滤 (`.wl-tools` 搜索框); 缺省不渲染搜索框 */
+  searchQuery?: string
+  onSearchChange?: (value: string) => void
 }
 
 export function WatchlistGroupBar({
@@ -50,6 +53,8 @@ export function WatchlistGroupBar({
   onDelete,
   onClearGroup,
   onReorder,
+  searchQuery = '',
+  onSearchChange,
 }: GroupBarProps) {
   const [managerOpen, setManagerOpen] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
@@ -91,13 +96,24 @@ export function WatchlistGroupBar({
 
   return (
     <>
-      <div className="flex h-10 items-stretch border-b border-border bg-surface/40 px-5">
+      {/* design/v2/02-watchlist.html 的 .wl-tools: 搜索在左, 分组在右 */}
+      <div className="wl-tools">
+        {onSearchChange && (
+          <input
+            type="search"
+            className="ctl ctl-md ctl-input wl-search"
+            placeholder="搜索代码或名称"
+            value={searchQuery}
+            onChange={e => onSearchChange(e.target.value)}
+            aria-label="搜索自选代码或名称"
+          />
+        )}
         <div
           ref={tablistRef}
           role="tablist"
           aria-label="自选分组"
           onDragOver={dragIndex != null ? e => autoScroll(e.clientX) : undefined}
-          className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto"
+          className="wl-groups"
         >
           {tabs.map((tab, tabIndex) => {
             const active = selected === tab.id
@@ -129,18 +145,8 @@ export function WatchlistGroupBar({
                 onDragEnd={draggable ? clearDrag : undefined}
                 onClick={() => onSelect(tab.id)}
                 title={draggable ? `${tab.name} — 可拖拽调整分组顺序` : undefined}
-                className={`relative my-1.5 inline-flex shrink-0 items-center gap-1.5 rounded-btn border px-3 text-xs transition-colors ${
-                  draggable ? 'cursor-grab active:cursor-grabbing' : ''
-                } ${
+                className={`relative inline-flex shrink-0 items-center gap-1.5 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${
                   dragging ? 'opacity-40' : ''
-                } ${
-                  active
-                    ? color
-                      ? `${color.text} ${color.border} ${color.background}`
-                      : 'border-accent/40 bg-accent/10 text-accent'
-                    : color
-                      ? `border-transparent ${color.text} hover:bg-elevated`
-                      : 'border-transparent text-secondary hover:bg-elevated hover:text-foreground'
                 }`}
               >
                 {draggable && dragIndex != null && dropIndex === groupIndex && (
@@ -169,26 +175,19 @@ export function WatchlistGroupBar({
               </button>
             )
           })}
+            {/* 设计稿 `.wl-groups` 尾部的「+ 分组」— 打开分组管理 (留在 .wl-groups 内, 与分组标签同档) */}
+            <button type="button" onClick={() => setManagerOpen(true)} className="add-group">+ 分组</button>
         </div>
-        <button
-          type="button"
-          onClick={() => setManagerOpen(true)}
-          className="ml-2 inline-flex w-8 shrink-0 items-center justify-center text-muted hover:text-accent"
-          title="管理自选分组"
-          aria-label="管理自选分组"
-        >
-          <FolderCog className="h-4 w-4" />
-        </button>
         {/* 清空当前分组 — 仅选中具体分组时显示 */}
         {onClearGroup && selected !== 'all' && selected !== 'ungrouped' && (
           <button
             type="button"
             onClick={() => setConfirmClear(true)}
-            className="inline-flex w-8 shrink-0 items-center justify-center text-muted hover:text-warning"
+            className="ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 shrink-0 items-center justify-center hover:text-warning"
             title="清空当前分组"
             aria-label="清空当前分组"
           >
-            <Eraser className="h-4 w-4" />
+            <Eraser className="h-[16px] w-[16px]" />
           </button>
         )}
       </div>
@@ -208,13 +207,13 @@ export function WatchlistGroupBar({
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirmClear(false)}
-                className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors"
+                className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 bg-elevated"
               >
                 取消
               </button>
               <button
                 onClick={() => { setConfirmClear(false); void onClearGroup?.(selected) }}
-                className="px-3 py-1.5 rounded-btn bg-warning/15 text-warning hover:bg-warning/25 text-sm font-medium transition-colors"
+                className="ctl ctl-md ctl-ghost px-2.5 bg-warning/15 text-warning hover:bg-warning/25"
               >
                 确认清空
               </button>
@@ -258,13 +257,13 @@ function GroupColorPicker({
             aria-label={option.label}
             title={option.label}
             onClick={() => onChange(option.id)}
-            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition-transform hover:scale-110 ${
+            className={`ctl ctl-sm ctl-btn inline-flex w-[24px] items-center justify-center rounded-full transition-transform hover:scale-110 ${
               selected
                 ? `${option.border} ${option.background} ring-2 ${option.ring}`
                 : 'border-transparent hover:bg-elevated'
             }`}
           >
-            <span className={`h-3 w-3 rounded-full ${option.dot}`} />
+            <span className={`h-[12px] w-[12px] rounded-full ${option.dot}`} />
           </button>
         )
       })}
@@ -374,8 +373,8 @@ function GroupManagerDialog({
           <h2 id="watchlist-groups-title" className="text-sm font-semibold text-foreground">管理自选分组</h2>
           <p className="mt-0.5 text-[11px] text-muted">删除分组不会删除其中的股票</p>
         </div>
-        <button type="button" onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-muted hover:text-foreground" aria-label="关闭">
-          <X className="h-4 w-4" />
+        <button type="button" onClick={onClose} className="ctl ctl-md ctl-ghost w-[28px] px-0 inline-flex items-center justify-center hover:text-foreground" aria-label="关闭">
+          <X className="h-[16px] w-[16px]" />
         </button>
       </div>
 
@@ -402,13 +401,13 @@ function GroupManagerDialog({
             onChange={event => setNewName(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void create() }}
             placeholder="新分组名称"
-            className="h-8 min-w-0 flex-1 rounded-btn border border-border bg-elevated px-3 text-xs text-foreground outline-none focus:border-accent/50"
+            className="ctl ctl-md ctl-input min-w-0 flex-1 px-2.5 focus:border-accent/50 bg-elevated"
           />
           <button
             type="button"
             onClick={() => void create()}
             disabled={pending}
-            className="inline-flex h-8 items-center gap-1.5 rounded-btn bg-accent px-3 text-xs text-white disabled:opacity-50"
+            className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
             新建
@@ -437,13 +436,13 @@ function GroupManagerDialog({
                     maxLength={24}
                     onChange={event => setEditingName(event.target.value)}
                     onKeyDown={event => { if (event.key === 'Enter') void rename(group.id) }}
-                    className={`h-7 min-w-0 flex-1 rounded-btn border bg-elevated px-2 text-xs text-foreground outline-none ${resolveWatchlistGroupColor(editingColor).border}`}
+                    className={`ctl ctl-md ctl-input min-w-0 flex-1 bg-elevated px-2.5 ${resolveWatchlistGroupColor(editingColor).border}`}
                     autoFocus
                   />
                   <button type="button" disabled={pending} onClick={() => void rename(group.id)} className={`p-1 ${resolveWatchlistGroupColor(editingColor).text}`} title="保存分组">
                     <Check className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" onClick={() => setEditingId(null)} className="p-1 text-muted hover:text-foreground" title="取消">
+                  <button type="button" onClick={() => setEditingId(null)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground" title="取消">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -460,11 +459,11 @@ function GroupManagerDialog({
                   type="button"
                   disabled={pending}
                   onClick={() => void run(async () => { await onDelete(group.id); setDeletingId(null) })}
-                  className="rounded px-2 py-1 text-[11px] text-danger bg-danger/10 hover:bg-danger/20 disabled:opacity-50"
+                  className="ctl ctl-sm ctl-btn soft px-1.5 hover:bg-danger/20 disabled:opacity-50 bg-danger/10"
                 >
                   确认
                 </button>
-                <button type="button" onClick={() => setDeletingId(null)} className="p-1 text-muted hover:text-foreground" aria-label="取消删除">
+                <button type="button" onClick={() => setDeletingId(null)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground" aria-label="取消删除">
                   <X className="h-3.5 w-3.5" />
                 </button>
               </>
@@ -478,7 +477,7 @@ function GroupManagerDialog({
                       type="button"
                       disabled={pending || index === 0}
                       onClick={() => void move(group.id, -1)}
-                      className="p-1 text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted"
+                      className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted"
                       title="上移"
                       aria-label={`上移分组 ${group.name}`}
                     >
@@ -488,7 +487,7 @@ function GroupManagerDialog({
                       type="button"
                       disabled={pending || index === groups.length - 1}
                       onClick={() => void move(group.id, 1)}
-                      className="p-1 text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted"
+                      className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted"
                       title="下移"
                       aria-label={`下移分组 ${group.name}`}
                     >
@@ -505,7 +504,7 @@ function GroupManagerDialog({
                     setDeletingId(null)
                     setError('')
                   }}
-                  className="p-1 text-muted hover:text-accent"
+                  className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent"
                   title="编辑分组"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -513,7 +512,7 @@ function GroupManagerDialog({
                 <button
                   type="button"
                   onClick={() => { setDeletingId(group.id); setEditingId(null); setError('') }}
-                  className="p-1 text-muted hover:text-danger"
+                  className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger"
                   title="删除分组"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -591,7 +590,7 @@ export function WatchlistGroupPicker({ groups, groupIds, symbol, disabled, onTog
         type="button"
         disabled={disabled}
         onClick={event => { event.stopPropagation(); open ? setOpen(false) : openMenu() }}
-        className={`relative inline-flex h-5 items-center justify-center gap-0.5 rounded border border-transparent px-1 transition-colors ${
+        className={`ctl ctl-sm ctl-btn relative inline-flex items-center justify-center gap-0.5 border-transparent px-1.5 ${
           memberGroups.length > 0
             ? 'hover:border-accent/30'
             : 'text-muted hover:border-accent/30 hover:text-accent'
@@ -610,7 +609,7 @@ export function WatchlistGroupPicker({ groups, groupIds, symbol, disabled, onTog
               <span
                 key={g.id}
                 style={{ zIndex: dots.length - i }}
-                className={`relative h-2 w-2 rounded-full ring-1 ring-border/50 ${resolveWatchlistGroupColor(g.color).dot} ${i > 0 ? '-ml-1' : ''}`}
+                className={`relative h-[8px] w-[8px] rounded-full ring-1 ring-border/50 ${resolveWatchlistGroupColor(g.color).dot} ${i > 0 ? '-ml-1' : ''}`}
               />
             ))}
             {memberGroups.length > 3 && (

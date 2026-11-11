@@ -25,7 +25,7 @@ export function ExternalLinkWidget({ title, url }: { title: string; url: string 
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 pb-1.5">
         <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
           <span className="h-3 w-[2px] bg-accent" />
-          <Link2 className="h-3 w-3 shrink-0 text-accent" />
+          <Link2 className="h-[12px] w-[12px] shrink-0 text-accent" />
           <span className="truncate" title={title}>{title}</span>
           {host && <span className="shrink-0 truncate font-mono text-[10px] text-muted">{host}</span>}
         </span>
@@ -36,7 +36,7 @@ export function ExternalLinkWidget({ title, url }: { title: string; url: string 
           className="inline-flex shrink-0 items-center gap-1 rounded-btn px-1.5 py-0.5 text-[10px] text-secondary transition-colors hover:bg-elevated hover:text-foreground"
           title="在新窗口打开"
         >
-          <ExternalLink className="h-3 w-3" />新窗口
+          <ExternalLink className="h-[12px] w-[12px]" />新窗口
         </a>
       </div>
       <iframe

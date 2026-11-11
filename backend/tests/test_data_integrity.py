@@ -605,7 +605,7 @@ def test_pipeline_self_heals_snapshot_day(tmp_path, monkeypatch):
     from app.config import settings as app_settings
     from app.jobs import daily_pipeline
     from app.services import instrument_sync, kline_sync
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     today = datetime.now(CN_TZ).date()
     yesterday = _recent_trading_day_before(today)
@@ -653,20 +653,19 @@ def test_pipeline_self_heals_snapshot_day(tmp_path, monkeypatch):
 def test_quotes_flush_partition_keeps_quote_ts_for_integrity_scan(tmp_path, monkeypatch):
     """实时行情覆写当日分区必须写 quote_ts, 否则停机后自检漏判盘中快照。
 
-    盘中手动触发盘后管道时, "今天已有数据 → 实时行情覆写"分支会用
-    tf.quotes.get_by_universes 整分区覆写。若覆写不带 quote_ts, 停机后次日
-    启动自检把这份半日数据当成 batch 权威历史, 停机时刻的 close/volume 永久
-    留存并污染 lookback 指标 —— 正是本模块要拦的场景。
+    盘中手动触发盘后管道时, "今天已有数据 → 实时行情覆写"分支会用生效源的
+    全市场快照整分区覆写。若覆写不带 quote_ts, 停机后次日启动自检把这份半日
+    数据当成 batch 权威历史, 停机时刻的 close/volume 永久留存并污染 lookback
+    指标 —— 正是本模块要拦的场景。
     """
     from app.services import kline_sync
-    from app.tickflow import client as tf_client
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     snapshot_ms = _ts_ms(FRIDAY, time(11, 58))
 
-    class _FakeQuotes:
+    class _FakeProvider:
         @staticmethod
-        def get_by_universes(universes):
+        def get_realtime():
             return [{
                 "symbol": "600001.SH",
                 "open": 10.0, "high": 10.2, "low": 9.8, "last_price": 10.1,
@@ -674,7 +673,17 @@ def test_quotes_flush_partition_keeps_quote_ts_for_integrity_scan(tmp_path, monk
                 "timestamp": snapshot_ms,
             }]
 
-    monkeypatch.setattr(tf_client, "get_client", lambda: SimpleNamespace(quotes=_FakeQuotes))
+    class _FakeSources:
+        @staticmethod
+        def provider_has_dataset(name, ds):
+            return ds == "realtime"
+
+        @staticmethod
+        def get_provider(name):
+            return _FakeProvider()
+
+    monkeypatch.setattr(kline_sync.preferences, "get_realtime_data_provider", lambda: "fake")
+    monkeypatch.setattr(kline_sync, "_dataset_provider", lambda ds: (_FakeProvider(), "fake"))
     monkeypatch.setattr(kline_sync, "cn_today", lambda: FRIDAY)
 
     repo = KlineRepository(DataStore(tmp_path))

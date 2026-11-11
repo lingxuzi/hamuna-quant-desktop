@@ -55,8 +55,8 @@ export function useAdjFactorSyncGate() {
         className="relative w-[90vw] max-w-[420px] rounded-card border border-border bg-base shadow-2xl p-6"
       >
         <div className="flex items-start gap-3">
-          <div className="shrink-0 h-10 w-10 rounded-full bg-warning/12 flex items-center justify-center">
-            <AlertTriangle className="h-5 w-5 text-warning" />
+          <div className="shrink-0 h-[40px] w-[40px] rounded-full bg-warning/12 flex items-center justify-center">
+            <AlertTriangle className="h-[20px] w-[20px] text-warning" />
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground mb-1.5">当前无除权因子能力</h3>
@@ -73,7 +73,7 @@ export function useAdjFactorSyncGate() {
                 type="checkbox"
                 checked={noRemind}
                 onChange={e => setNoRemind(e.target.checked)}
-                className="h-3 w-3 accent-accent cursor-pointer"
+                className="h-[12px] w-[12px] accent-accent cursor-pointer"
               />
               不再提示
             </label>
@@ -82,7 +82,7 @@ export function useAdjFactorSyncGate() {
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={() => setPending(null)}
-            className="px-4 h-9 rounded-btn text-sm text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+            className="ctl ctl-lg ctl-ghost px-3.5 hover:text-foreground hover:bg-elevated"
           >
             取消
           </button>
@@ -92,7 +92,7 @@ export function useAdjFactorSyncGate() {
               pending.run()
               setPending(null)
             }}
-            className="px-4 h-9 rounded-btn bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+            className="ctl ctl-lg ctl-btn pri px-3.5 hover:bg-accent/90"
           >
             仍然同步
           </button>

@@ -28,7 +28,7 @@ from app.backtest.matrix import (
 from app.config import settings
 from app.enriched_generation import EnrichedGenerationUnavailableError
 from app.parquet import scan_enriched_parquet
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -631,7 +631,7 @@ class BacktestEngine:
         """Load a matrix-native backtest directly from projected parquet batches."""
         if feature_plan.execution_backend != "matrix_native":
             raise ValueError("direct market matrix loading requires matrix_native backend")
-        from app.tickflow.repository import enriched_dirname
+        from app.data_providers.repository import enriched_dirname
 
         parquet_root = self.repo.store.data_dir / enriched_dirname(asset_type)
         instruments = self.repo.get_instruments_asset(asset_type)
@@ -769,7 +769,7 @@ class BacktestEngine:
         except Exception as e:  # noqa: BLE001
             logger.debug("backtest load panel cache miss: %s", e)
 
-        from app.tickflow.repository import enriched_dirname
+        from app.data_providers.repository import enriched_dirname
         enriched_glob = str(self.repo.store.data_dir / enriched_dirname(asset_type) / "**" / "*.parquet")
 
         try:

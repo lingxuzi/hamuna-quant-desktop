@@ -28,7 +28,7 @@ export function FinancialSyncPanel() {
   const { data: status, isLoading } = useFinancialStatus()
   const syncMut = useFinancialSync()
 
-  // 本次同步的起止追踪: 后端每张表完成即更新 last_sync, 用时间戳判断进度,
+  // 本次同步的起止追踪:后端每张表完成即更新 last_sync, 用时间戳判断进度,
   // 与财务分析页同一套口径 (那里是全页 5 张卡, 这里是紧凑列表)。
   const [syncStartedAt, setSyncStartedAt] = useState<number | null>(null)
   const [syncSingleTable, setSyncSingleTable] = useState<string | null>(null)
@@ -71,9 +71,9 @@ export function FinancialSyncPanel() {
       onSuccess: (r) => {
         if (!r.synced?.started) {
           if (r.synced?.reason === 'already running') {
-            toast('财务数据正在同步中,请稍候', 'success')
+            toast('财务数据正在同步中，请稍候', 'success')
           } else if (r.synced?.reason === 'no FINANCIAL capability') {
-            toast('财务数据能力未就绪,请检查 API Key 或刷新页面后重试', 'error')
+            toast('财务数据能力未就绪，请检查 API Key 或刷新页面后重试', 'error')
           } else {
             toast(`同步未能开始${r.synced?.reason ? `:${r.synced.reason}` : ''}`, 'error')
           }
@@ -91,7 +91,7 @@ export function FinancialSyncPanel() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted">
-        <Loader2 className="h-4 w-4 animate-spin" /> 读取财务数据状态…
+        <Loader2 className="h-[16px] w-[16px] animate-spin" /> 读取财务数据状态…
       </div>
     )
   }
@@ -99,7 +99,7 @@ export function FinancialSyncPanel() {
   if (!status?.available) {
     return (
       <div className="rounded-card border border-dashed border-border bg-base/30 px-4 py-6 text-center">
-        <Table2 className="mx-auto h-6 w-6 text-muted" />
+        <Table2 className="mx-auto h-[24px] w-[24px] text-muted" />
         <div className="mt-2 text-xs text-secondary">当前数据源不提供财务数据</div>
         <div className="mt-1 text-[11px] text-muted">在 设置 → 数据源 配置提供财务数据的数据源后可用</div>
       </div>
@@ -176,7 +176,7 @@ export function FinancialSyncPanel() {
       <div className="flex items-center gap-2">
         {syncing && (
           <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-accent/80">
-            <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+            <Loader2 className="h-[12px] w-[12px] shrink-0 animate-spin" />
             <span className="truncate">
               {isFullSync
                 ? `已同步 ${syncedCount}/${TABLE_ORDER.length} 张表…`
@@ -187,7 +187,7 @@ export function FinancialSyncPanel() {
         <button
           onClick={() => handleSync('all')}
           disabled={syncing}
-          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-btn border border-accent/30 bg-gradient-to-r from-accent/25 to-accent/10 px-3 text-xs font-medium text-accent transition-all duration-150 hover:from-accent/35 hover:to-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-40"
+          className="ctl ctl-md ctl-btn ml-auto inline-flex shrink-0 items-center gap-1.5 border-accent/30 bg-gradient-to-r from-accent/25 to-accent/10 px-2.5 transition-all duration-150 hover:from-accent/35 hover:to-accent/20 focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           {syncing ? '同步中…' : '全部同步'}

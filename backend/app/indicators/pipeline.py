@@ -1536,7 +1536,7 @@ def recompute_daily_symbols(
     均线/MACD 等宽指标由现有读取链按新版本重新计算。
     """
     from app.services import daily_health, data_integrity, preferences
-    from app.tickflow.repository import daily_dirname, enriched_dirname
+    from app.data_providers.repository import daily_dirname, enriched_dirname
 
     root = Path(repo.store.data_dir)
     files = repo.daily_repair_files(asset_type)

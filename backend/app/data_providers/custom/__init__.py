@@ -17,6 +17,7 @@ from app.data_providers.custom.loader import (
     probe_plugin_key,
     provider_has_dataset,
     refresh_plugin,
+    resolve_provider,
     save_config,
     uninstall_plugin,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "probe_plugin_key",
     "provider_has_dataset",
     "refresh_plugin",
+    "resolve_provider",
     "save_config",
     "uninstall_plugin",
 ]

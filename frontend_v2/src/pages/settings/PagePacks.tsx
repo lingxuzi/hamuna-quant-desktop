@@ -5,7 +5,7 @@
  * (packToExtension) → 校验结果回填 manifest(成功即启用) → 刷新页面后在
  * 启动引导窗口正式挂载(main.tsx → loadRuntimePageExtensions)。
  * 启动期失败(路由冲突等)由注册表记入 loadErrors, 这里按 runtime: 前缀
- * 展示。打包方式见 frontend/page-pack-template 与 docs/page-sdk.md。
+ * 展示。打包方式见 frontend_v2/page-pack-template 与 docs/page-sdk.md。
  */
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -121,11 +121,11 @@ export function SettingsPagePacksPanel() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-border bg-surface p-6">
+      <section className="border-t border-border-strong pt-6">
         <div className="text-[11px] uppercase tracking-[0.2em] text-accent/80">页面插件</div>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">上传打包页面产物, 免重建挂载</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-secondary">
-          用 <span className="font-mono text-xs text-accent">frontend/page-pack-template</span> 打包页面
+          用 <span className="font-mono text-xs text-accent">frontend_v2/page-pack-template</span> 打包页面
           (产物为单文件 ES 模块), 在此上传即成为完整页面 — 路由、侧栏入口、菜单管理自动注册,
           刷新后生效。契约与安全边界见 <span className="font-mono text-xs text-accent">docs/page-sdk.md</span>。
         </p>
@@ -135,7 +135,7 @@ export function SettingsPagePacksPanel() {
             value={idInput}
             onChange={(e) => setIdInput(e.target.value)}
             placeholder="页面插件 ID (字母/数字/下划线)"
-            className="h-9 w-56 rounded-btn border border-border bg-elevated px-3 text-sm text-foreground placeholder:text-muted/60 focus:border-accent/50 focus:outline-none"
+            className="ctl ctl-lg ctl-input w-56 px-3.5 placeholder:text-muted/60 focus:border-accent/50 bg-elevated"
           />
           <input
             ref={fileRef}
@@ -146,7 +146,7 @@ export function SettingsPagePacksPanel() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-border bg-elevated px-3 text-xs text-secondary hover:bg-elevated/80 hover:text-foreground transition-colors"
+            className="ctl ctl-lg ctl-btn inline-flex items-center gap-1.5 px-3.5 hover:bg-elevated/80 hover:text-foreground bg-elevated"
           >
             <Package className="h-3.5 w-3.5" />
             {fileRef.current?.files?.[0]?.name ?? '选择产物文件'}
@@ -155,7 +155,7 @@ export function SettingsPagePacksPanel() {
             type="button"
             disabled={busy}
             onClick={handleUpload}
-            className="inline-flex h-9 items-center gap-1.5 rounded-btn bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            className="ctl ctl-lg ctl-btn pri inline-flex items-center gap-1.5 px-3.5 hover:bg-accent/90 disabled:opacity-50"
           >
             <Upload className="h-3.5 w-3.5" />
             {busy ? '上传并校验中…' : '上传并校验'}
@@ -163,11 +163,11 @@ export function SettingsPagePacksPanel() {
         </div>
       </section>
 
-      <section className="leaf-cell">
+      <section className="mt-10 first:mt-0">
         <div className="text-[11px] uppercase tracking-[0.2em] text-accent/80">导入源码</div>
         <h3 className="mt-2 text-lg font-semibold tracking-tight text-foreground">.tsx 源码一键导入, 自动编译挂载</h3>
         <p className="mt-2 max-w-3xl text-xs leading-5 text-secondary">
-          上传源码扩展文件 (.tsx) 或从本项目 <span className="font-mono text-accent">frontend/src/custom/</span> 直接选择,
+          上传源码扩展文件 (.tsx) 或从本项目 <span className="font-mono text-accent">frontend_v2/src/custom/</span> 直接选择,
           后端用项目自带的 esbuild 自动编译并适配契约, 免重新构建。产物为标准页面插件, 与上方上传的包同一管理。
           边界: 源码里注册的插槽(slot)会被跳过; 页面内路由参数读到空值; 仅源码/桌面部署可发起导入。
         </p>
@@ -176,7 +176,7 @@ export function SettingsPagePacksPanel() {
           <button
             type="button"
             onClick={() => importFileRef.current?.click()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-border bg-elevated px-3 text-xs text-secondary hover:bg-elevated/80 hover:text-foreground transition-colors"
+            className="ctl ctl-lg ctl-btn inline-flex items-center gap-1.5 px-3.5 hover:bg-elevated/80 hover:text-foreground bg-elevated"
           >
             <FileCode className="h-3.5 w-3.5" />
             {importFileRef.current?.files?.[0]?.name ?? '选择 .tsx 源文件'}
@@ -185,7 +185,7 @@ export function SettingsPagePacksPanel() {
             type="button"
             disabled={busyImport}
             onClick={handleImportFile}
-            className="inline-flex h-9 items-center gap-1.5 rounded-btn bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            className="ctl ctl-lg ctl-btn pri inline-flex items-center gap-1.5 px-3.5 hover:bg-accent/90 disabled:opacity-50"
           >
             <Upload className="h-3.5 w-3.5" />
             {busyImport ? '编译导入中…' : '编译并导入'}
@@ -196,7 +196,7 @@ export function SettingsPagePacksPanel() {
               <select
                 value={importNs}
                 onChange={e => setImportNs(e.target.value)}
-                className="h-9 rounded-btn border border-border bg-base px-2 text-xs text-foreground"
+                className="ctl ctl-lg ctl-select"
               >
                 <option value="">选择扩展…</option>
                 {sourceNs.data!.map(ns => <option key={ns} value={ns}>{ns}</option>)}
@@ -205,7 +205,7 @@ export function SettingsPagePacksPanel() {
                 type="button"
                 disabled={busyImport || !importNs}
                 onClick={handleImportFromProject}
-                className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-border bg-elevated px-3 text-xs text-secondary hover:bg-elevated/80 hover:text-foreground disabled:opacity-50 transition-colors"
+                className="ctl ctl-lg ctl-btn inline-flex items-center gap-1.5 px-3.5 hover:bg-elevated/80 hover:text-foreground disabled:opacity-50 bg-elevated"
               >
                 <FolderDown className="h-3.5 w-3.5" />
                 导入
@@ -227,7 +227,7 @@ export function SettingsPagePacksPanel() {
         </section>
       )}
 
-      <section className="leaf-cell overflow-hidden">
+      <section className="mt-10 first:mt-0">
         <div className="grid grid-cols-[1fr_8rem_6rem_5rem_4rem] items-center border-b border-border px-4 py-2 text-[11px] text-muted">
           <div>页面 / ID</div><div>路径</div><div>大小 / 时间</div><div className="text-center">启用</div><div className="text-center">操作</div>
         </div>
@@ -264,7 +264,7 @@ export function SettingsPagePacksPanel() {
               <button
                 type="button"
                 onClick={() => { if (confirm(`删除页面插件 "${p.label || p.id}"?`)) deleteMut.mutate(p.id) }}
-                className="rounded p-1.5 text-muted hover:bg-danger/10 hover:text-danger transition-colors"
+                className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-danger/10 hover:text-danger"
                 title="删除"
               >
                 <Trash2 className="h-3.5 w-3.5" />

@@ -101,20 +101,20 @@ export function AddWidgetPanel({
         type="button"
         onClick={() => setOpen(v => !v)}
         className={cn(
-          'inline-flex items-center gap-1 rounded-btn border px-2 py-1 text-[11px] transition-colors',
+          'ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5',
           open
             ? 'border-accent/50 bg-accent/10 text-accent'
             : 'border-border bg-elevated text-secondary hover:text-foreground hover:border-accent/40',
         )}
       >
-        <Plus className="h-3 w-3" />添加组件
+        <Plus className="h-[12px] w-[12px]" />添加组件
       </button>
 
       {open && anchorRef.current && anchorVersion > 0 && createPortal(
         <div
           ref={panelRef}
           style={{ left: anchorRef.current.left, top: anchorRef.current.top, width: PANEL_W }}
-          className="fixed z-[9999] leaf-cell p-2 shadow-2xl shadow-scrim/40"
+          className="fixed z-[9999] bg-surface border border-border p-2 shadow-2xl shadow-scrim/40"
         >
           <div className="mb-1.5 px-0.5 text-[10px] font-medium text-muted">内置组件</div>
           <div className="max-h-56 space-y-0.5 overflow-y-auto">
@@ -151,19 +151,19 @@ export function AddWidgetPanel({
                 onChange={e => setTitle(e.target.value)}
                 placeholder="标题, 如: 东财行情"
                 maxLength={30}
-                className="w-full rounded-btn bg-base px-2 py-1.5 text-xs text-foreground ring-1 ring-border/40 placeholder:text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/40"
+                className="ctl ctl-md ctl-input w-full px-2.5 ring-1 ring-border/40 placeholder:text-muted/40 focus:ring-2 focus:ring-accent/40 bg-base"
               />
               <input
                 value={url}
                 onChange={e => { setUrl(e.target.value); setUrlError('') }}
                 placeholder="https://… (仅 http/https)"
-                className="w-full rounded-btn bg-base px-2 py-1.5 font-mono text-xs text-foreground ring-1 ring-border/40 placeholder:text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/40"
+                className="ctl ctl-md ctl-input w-full px-2.5 font-mono ring-1 ring-border/40 placeholder:text-muted/40 focus:ring-2 focus:ring-accent/40 bg-base"
               />
               {urlError && <div className="text-[10px] text-danger">{urlError}</div>}
               <button
                 type="button"
                 onClick={addExtLink}
-                className="w-full rounded-btn bg-accent/15 px-2 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25"
+                className="ctl ctl-md ctl-btn soft w-full px-2.5 hover:bg-accent/25 bg-accent/15"
               >
                 添加到看板
               </button>

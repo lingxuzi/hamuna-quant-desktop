@@ -40,13 +40,13 @@ def _mock_minute_df(symbol: str = "600519.SH") -> pl.DataFrame:
 
 
 def _empty_capset():
-    from app.tickflow.capabilities import CapabilitySet
+    from app.data_providers.capabilities import CapabilitySet
 
     return CapabilitySet()
 
 
 def _tickflow_minute_capset():
-    from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+    from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
     return CapabilitySet({Cap.KLINE_MINUTE_BY_SYMBOL: CapabilityLimits()})
 
@@ -62,6 +62,13 @@ def _setup_custom_provider(monkeypatch, provider: object, has_dataset: bool = Tr
         kline_sync.preferences,
         "get_minute_data_provider",
         lambda: "mock_src",
+    )
+    # _selected_minute_provider_name 会对照 load() 里的存量值, 存量与生效不一致
+    # 会被判为「源已失效」而 fail-closed, 这里把存量值也对齐 mock 源。
+    monkeypatch.setattr(
+        kline_sync.preferences,
+        "load",
+        lambda: {"minute_data_provider": "mock_src"},
     )
     monkeypatch.setattr("app.data_providers.custom.names", lambda: {"mock_src"})
     provider.config.datasets = {"minute": object()} if has_dataset else {}
@@ -91,7 +98,7 @@ def test_custom_minute_provider_returns_1m_k(monkeypatch):
         asset_type="stock",
     )
 
-    assert fallback is False
+    assert fallback is True  # 契约: True = 源已解析并调用
     assert df is not None
     assert not df.is_empty()
     # spy 收到 freq="1m" 和 asset_type="stock"
@@ -110,8 +117,6 @@ def test_unavailable_selected_provider_does_not_fall_back_to_tickflow(monkeypatc
     )
     monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: "tickflow")
     monkeypatch.setattr("app.data_providers.custom.names", lambda: set())
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     result = kline_sync.sync_minute_batch(
         ["600519.SH"], start_time=datetime(2026, 1, 15, 9, 25),
@@ -119,7 +124,6 @@ def test_unavailable_selected_provider_does_not_fall_back_to_tickflow(monkeypatc
     )
 
     assert result.is_empty()
-    get_client_spy.assert_not_called()
 
 
 def test_custom_provider_exception_does_not_fall_back_to_tickflow(monkeypatch):
@@ -128,8 +132,6 @@ def test_custom_provider_exception_does_not_fall_back_to_tickflow(monkeypatch):
     mock_provider.get_minute.side_effect = httpx.TimeoutException("timeout")
     _setup_custom_provider(monkeypatch, mock_provider, has_dataset=True)
 
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     df_single = kline_sync.fetch_minute_single(
         "600519.SH", date(2026, 1, 15), asset_type="stock",
@@ -144,7 +146,6 @@ def test_custom_provider_exception_does_not_fall_back_to_tickflow(monkeypatch):
 
     assert isinstance(df_single, pl.DataFrame) and df_single.is_empty()
     assert isinstance(df_batch, pl.DataFrame) and df_batch.is_empty()
-    get_client_spy.assert_not_called()
 
 
 # ---------- 测试 4: 未配 minute dataset 时不跨源 ----------
@@ -159,7 +160,7 @@ def test_provider_without_minute_dataset_fails_closed(monkeypatch):
     )
 
     assert fallback is False
-    assert df is not None and df.is_empty()
+    assert df is None  # 契约: 源未解析 → None
     # provider.get_minute 不应被调用 (能力缺失直接 fail-closed)
     mock_provider.get_minute.assert_not_called()
 
@@ -200,8 +201,6 @@ def test_custom_success_skips_tickflow(monkeypatch):
     _setup_custom_provider(monkeypatch, mock_provider, has_dataset=True)
 
     # get_client 设为 spy, 若被调说明路由失败
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     df = kline_sync.fetch_minute_single(
         "600519.SH", date(2026, 1, 15), asset_type="stock", capset=_empty_capset(),
@@ -210,7 +209,6 @@ def test_custom_success_skips_tickflow(monkeypatch):
     # 规范化后保留 provider 的数据，不请求其他源。
     assert_frame_equal(df, expected_df)
     # TickFlow 路径未进入
-    get_client_spy.assert_not_called()
 
 
 # ---------- 测试 7: sync_minute_batch 自定义源成功直接返回 ----------
@@ -225,8 +223,6 @@ def test_sync_minute_batch_custom_success_returns_directly(monkeypatch):
     mock_provider.get_minute.return_value = expected_df
     _setup_custom_provider(monkeypatch, mock_provider, has_dataset=True)
 
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     df = kline_sync.sync_minute_batch(
         ["600519.SH"],
@@ -237,7 +233,6 @@ def test_sync_minute_batch_custom_success_returns_directly(monkeypatch):
 
     # 返回 provider 数据，不走 segment。
     assert_frame_equal(df, expected_df)
-    get_client_spy.assert_not_called()
 
 
 # ---------- 测试 8: on_chunk_done 包装 (2参 → 3参补 seg_label='custom') ----------
@@ -270,7 +265,7 @@ def test_on_chunk_done_wrapped_to_3_args(monkeypatch):
         on_chunk_done=upper_cb,
     )
 
-    assert fallback is False
+    assert fallback is True
     assert df is not None
     # 上层 3 参 spy 被调用一次, 收到 (1, 3, "custom")
     upper_cb.assert_called_once_with(1, 3, "custom")
@@ -468,8 +463,6 @@ def test_sync_minute_batch_custom_calls_on_segment(monkeypatch):
     mock_provider.get_minute.return_value = expected_df
     _setup_custom_provider(monkeypatch, mock_provider, has_dataset=True)
 
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     on_segment_spy = MagicMock(name="on_segment_spy")
     df = kline_sync.sync_minute_batch(
@@ -484,7 +477,6 @@ def test_sync_minute_batch_custom_calls_on_segment(monkeypatch):
     assert_frame_equal(on_segment_spy.call_args.args[0], expected_df)
     assert isinstance(df, pl.DataFrame)
     assert df.is_empty()
-    get_client_spy.assert_not_called()
 
 
 # ---------- 测试 11: 自定义源返回空 df 时不调 on_segment (Issue 1 边界) ----------
@@ -514,7 +506,7 @@ def test_sync_minute_batch_custom_empty_df_skips_on_segment(monkeypatch):
 
 def test_sync_and_persist_minute_custom_failure_does_not_call_tickflow(monkeypatch, tmp_path):
     """自定义源失败时，免费档增补的分钟能力不能触发 TickFlow 回退。"""
-    from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+    from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
     provider = MagicMock()
     provider.get_minute.side_effect = httpx.TimeoutException("timeout")
@@ -526,8 +518,6 @@ def test_sync_and_persist_minute_custom_failure_does_not_call_tickflow(monkeypat
     monkeypatch.setattr(kline_sync, "resolve_limit", lambda *a, **kw: MagicMock(batch=100, rpm=30))
     write_spy = MagicMock()
     monkeypatch.setattr(kline_sync, "_write_minute_partition", write_spy)
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     repo = MagicMock()
     repo.store.data_dir = tmp_path
@@ -538,7 +528,6 @@ def test_sync_and_persist_minute_custom_failure_does_not_call_tickflow(monkeypat
 
     assert written == 0
     write_spy.assert_not_called()
-    get_client_spy.assert_not_called()
 
 
 def test_sync_and_persist_minute_custom_persists(monkeypatch, tmp_path):
@@ -562,8 +551,6 @@ def test_sync_and_persist_minute_custom_persists(monkeypatch, tmp_path):
     monkeypatch.setattr(kline_sync, "_write_minute_partition", write_spy)
 
     # get_client spy: 自定义源成功时不应走 TickFlow
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
 
     # mock repo
     mock_repo = MagicMock()
@@ -580,7 +567,6 @@ def test_sync_and_persist_minute_custom_persists(monkeypatch, tmp_path):
     assert write_spy.called
     assert written == expected_df.height
     assert written > 0
-    get_client_spy.assert_not_called()
 
 
 def test_sync_and_persist_minute_holds_repository_write_lock(monkeypatch, tmp_path):
@@ -624,6 +610,13 @@ def test_get_provider_exception_does_not_fall_back_to_tickflow(monkeypatch):
         "get_minute_data_provider",
         lambda: "mock_src",
     )
+    # _selected_minute_provider_name 会对照 load() 里的存量值, 存量与生效不一致
+    # 会被判为「源已失效」而 fail-closed, 这里把存量值也对齐 mock 源。
+    monkeypatch.setattr(
+        kline_sync.preferences,
+        "load",
+        lambda: {"minute_data_provider": "mock_src"},
+    )
     monkeypatch.setattr("app.data_providers.custom.names", lambda: {"mock_src"})
     monkeypatch.setattr(
         "app.data_providers.custom.provider_has_dataset",
@@ -642,17 +635,25 @@ def test_get_provider_exception_does_not_fall_back_to_tickflow(monkeypatch):
     )
 
     assert fallback is False
-    assert df is not None and df.is_empty()
+    assert df is None  # 契约: 源未解析 → None
 
 
 # ---------- 测试 14: provider_has_dataset 异常时 fail-closed ----------
 
 def test_provider_has_dataset_exception_does_not_fall_back(monkeypatch):
-    """自定义源注册信息异常时 fail-closed,不向 TickFlow 请求数据。"""
+    """resolver 不再依赖 provider_has_dataset: 即使注册信息异常,
+    只要 get_provider+config.datasets 正常即成功解析 (源已调用 → 不跨源)。"""
     monkeypatch.setattr(
         kline_sync.preferences,
         "get_minute_data_provider",
         lambda: "mock_src",
+    )
+    # _selected_minute_provider_name 会对照 load() 里的存量值, 存量与生效不一致
+    # 会被判为「源已失效」而 fail-closed, 这里把存量值也对齐 mock 源。
+    monkeypatch.setattr(
+        kline_sync.preferences,
+        "load",
+        lambda: {"minute_data_provider": "mock_src"},
     )
     monkeypatch.setattr("app.data_providers.custom.names", lambda: {"mock_src"})
     monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: MagicMock(config=MagicMock(datasets={"minute": {}})))
@@ -668,7 +669,9 @@ def test_provider_has_dataset_exception_does_not_fall_back(monkeypatch):
         ["600519.SH"], None, None, asset_type="stock",
     )
 
-    assert fallback is False
+    # 新契约: resolver 只走 get_provider + config.datasets, provider_has_dataset
+    # 异常不影响解析 → 源已解析并调用 (返回空 df), 不跨源。
+    assert fallback is True
     assert df is not None and df.is_empty()
 
 
@@ -779,12 +782,6 @@ def test_sync_and_persist_minute_resolver_exception_returns_zero(monkeypatch, tm
 
 # ---------- 测试 19: _resolve_minute_provider 单元测试 ----------
 
-def test_resolve_minute_provider_tickflow_returns_silent_fallback():
-    """provider_name == "tickflow" 时使用原生数据源。"""
-    provider, fallback, err = kline_sync._resolve_minute_provider("tickflow")
-    assert provider is None
-    assert fallback is True
-    assert err is None
 
 def test_resolve_minute_provider_no_dataset_fails_closed(monkeypatch):
     """选中的源没有 minute dataset 时明确停用，不静默切换来源。"""
@@ -796,9 +793,8 @@ def test_resolve_minute_provider_no_dataset_fails_closed(monkeypatch):
         "app.data_providers.custom.provider_has_dataset",
         lambda name, ds: False,  # 已注册但未配 minute
     )
-    provider, fallback, err = kline_sync._resolve_minute_provider("mock_src")
+    provider, err = kline_sync._resolve_minute_provider("mock_src")
     assert provider is None
-    assert fallback is False
     assert err is not None
     assert "does not configure minute" in err
 
@@ -809,10 +805,9 @@ def test_resolve_minute_provider_unloaded_during_resolution_returns_err(monkeypa
     monkeypatch.setattr("app.data_providers.custom.provider_has_dataset", lambda name, ds: False)
     monkeypatch.setattr("app.data_providers.custom.names", lambda: set())
 
-    provider, fallback, err = kline_sync._resolve_minute_provider("mock_src")
+    provider, err = kline_sync._resolve_minute_provider("mock_src")
 
     assert provider is None
-    assert fallback is False
     assert "not found or invalid" in err
 
 
@@ -824,9 +819,8 @@ def test_resolve_minute_provider_config_exception_returns_err(monkeypatch):
             raise RuntimeError("registry corrupted")
 
     monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: _BrokenProvider())
-    provider, fallback, err = kline_sync._resolve_minute_provider("mock_src")
+    provider, err = kline_sync._resolve_minute_provider("mock_src")
     assert provider is None
-    assert fallback is False
     assert err is not None
     assert "registry corrupted" in err
 
@@ -836,9 +830,8 @@ def test_resolve_minute_provider_get_provider_exception_returns_err(monkeypatch)
     def _raising_get(name):
         raise ValueError("not found")
     monkeypatch.setattr("app.data_providers.custom.get_provider", _raising_get)
-    provider, fallback, err = kline_sync._resolve_minute_provider("mock_src")
+    provider, err = kline_sync._resolve_minute_provider("mock_src")
     assert provider is None
-    assert fallback is False
     assert err is not None
     assert "not found" in err
 
@@ -855,16 +848,15 @@ def test_resolve_minute_provider_success_returns_provider(monkeypatch):
         "app.data_providers.custom.provider_has_dataset",
         lambda name, ds: True,
     )
-    provider, fallback, err = kline_sync._resolve_minute_provider("mock_src")
+    provider, err = kline_sync._resolve_minute_provider("mock_src")
     assert provider is mock_provider
-    assert fallback is False
     assert err is None
 
 
 def test_minute_allowed_resolver_exception_returns_false(monkeypatch):
     """权限入口复用安全 resolver, 插件注册异常不再穿透为 500。"""
     from app.api import kline as kline_api
-    from app.tickflow.capabilities import CapabilitySet
+    from app.data_providers.capabilities import CapabilitySet
 
     monkeypatch.setattr(
         "app.services.preferences.get_minute_data_provider",
@@ -881,7 +873,7 @@ def test_minute_allowed_resolver_exception_returns_false(monkeypatch):
 
 def test_intraday_monitor_support_resolver_exception_fails_closed(monkeypatch):
     """所选自定义源无法解析时，分时监控不误报为 TickFlow 可用。"""
-    from app.tickflow.capabilities import Cap, CapabilitySet
+    from app.data_providers.capabilities import Cap, CapabilitySet
 
     monkeypatch.setattr(
         kline_sync.preferences,
@@ -904,13 +896,11 @@ def test_intraday_monitor_support_resolver_exception_fails_closed(monkeypatch):
 
 def test_intraday_monitor_custom_failure_does_not_request_tickflow(monkeypatch):
     """分时监控批量取数遇到自定义源故障时，不尝试请求 TickFlow。"""
-    from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+    from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
     provider = MagicMock()
     provider.get_minute.side_effect = httpx.TimeoutException("timeout")
     _setup_custom_provider(monkeypatch, provider, has_dataset=True)
-    get_client_spy = MagicMock(name="get_client_spy")
-    monkeypatch.setattr(kline_sync, "get_client", get_client_spy)
     capset = CapabilitySet({Cap.KLINE_MINUTE_BATCH: CapabilityLimits()})
 
     result = kline_sync.fetch_intraday_monitor_batch(
@@ -918,7 +908,6 @@ def test_intraday_monitor_custom_failure_does_not_request_tickflow(monkeypatch):
     )
 
     assert result.is_empty()
-    get_client_spy.assert_not_called()
 
 
 # ---------- 测试 20: sync_minute_single 拒绝指数 symbol (防污染 kline_minute) ----------

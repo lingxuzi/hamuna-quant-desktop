@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.api.paper import router
 from app.strategy import paper
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 SYM = "600519.SH"
 DAY = date(2026, 9, 24)  # 周四, 次日仍是交易日

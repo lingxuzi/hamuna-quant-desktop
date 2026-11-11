@@ -203,3 +203,29 @@ export const IconData = make(
     <rect x="4.5" y="15.5" width="15" height="5" />
   </>,
 )
+
+/** 设置 — 双滑杆 */
+export const IconSettings = make(
+  <>
+    <line x1="4" y1="8" x2="20" y2="8" />
+    <rect x="9" y="5.5" width="3.5" height="5" />
+    <line x1="4" y1="16" x2="20" y2="16" />
+    <rect x="13" y="13.5" width="3.5" height="5" />
+  </>,
+)
+
+/** 品牌 — 印章 (方框 + 内印) */
+export const IconBrand = make(
+  <>
+    <rect x="4" y="4" width="16" height="16" />
+    <rect x="8.5" y="8.5" width="7" height="7" fill="currentColor" stroke="none" />
+  </>,
+)
+
+/** 开发 — 代码角括号 */
+export const IconDev = make(
+  <>
+    <path d="M9 7L4 12L9 17" />
+    <path d="M15 7L20 12L15 17" />
+  </>,
+)

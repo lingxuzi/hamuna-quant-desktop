@@ -4,6 +4,8 @@ import { Plus, Settings2, Zap } from 'lucide-react'
 import type { CustomSignal } from '@/lib/api'
 import { CustomSignalDialog } from './CustomSignalDialog'
 import { AddFactorSignalDialog } from '@/pages/backtest/AddFactorSignalDialog'
+import { ICON_BTN_SM } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 interface Props {
   kind: 'entry' | 'exit'
@@ -19,7 +21,7 @@ export function SignalTriggerActions({ kind, signals, onChange, buttonClassName,
   const [factorOpen, setFactorOpen] = useState(false)
 
   const accent = kind === 'entry' ? 'hover:text-accent hover:border-accent/40' : 'hover:text-warning hover:border-warning/40'
-  const btnCls = buttonClassName ?? 'rounded-btn border border-border bg-base p-1 text-muted transition-colors cursor-pointer'
+  const btnCls = buttonClassName ?? cn(ICON_BTN_SM, 'bg-base text-muted cursor-pointer')
   const iconCls = iconClassName ?? 'h-3.5 w-3.5'
 
   const enableSignal = (signalId: string, signalKind: 'entry' | 'exit' | 'both') => {

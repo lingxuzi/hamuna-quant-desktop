@@ -7,8 +7,10 @@ import { toast } from '@/components/Toast'
 import { api, type MiningAvailability, type MiningBudgetProfile } from '@/lib/api'
 import { startAutoMining } from '@/lib/miningTask'
 import { QK } from '@/lib/queryKeys'
+import { INPUT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
-const INPUT_CLS = 'h-8 w-full rounded-input border border-border bg-surface px-2.5 text-xs text-foreground focus:border-accent focus:outline-none'
+const INPUT_CLS = cn(INPUT_MD, 'w-full')
 
 function isoDaysAgo(days: number) {
   const value = new Date()
@@ -108,15 +110,15 @@ export function AutoMiningDialog({
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 shrink-0 text-accent" />
+            <Sparkles className="h-[16px] w-[16px] shrink-0 text-accent" />
             <span id="auto-mining-title" className="text-sm font-semibold text-foreground">自动挖掘达标组合</span>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-muted">
             不用挑因子：先全量统计筛选（|t|≥2、q≤0.1、IC/IR 达标），再用达标池做相关性去重 → 组合搜索 → 嵌套样本外验证。结果里能看到哪些因子/组合达标、不达标的差在哪。
           </p>
         </div>
-        <button type="button" onClick={onClose} aria-label="关闭" className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted transition-colors hover:text-foreground">
-          <X className="h-4 w-4" />
+        <button type="button" onClick={onClose} aria-label="关闭" className="ctl ctl-md ctl-ghost inline-flex w-[28px] px-0 shrink-0 items-center justify-center hover:text-foreground">
+          <X className="h-[16px] w-[16px]" />
         </button>
       </div>
 
@@ -130,7 +132,7 @@ export function AutoMiningDialog({
                   key={value}
                   type="button"
                   onClick={() => setAssetType(value)}
-                  className={`h-7 rounded-[5px] px-3 text-[11px] font-medium transition-colors ${assetType === value ? 'bg-accent text-white' : 'text-secondary hover:text-foreground'}`}
+                  className={`ctl ctl-md ctl-ghost rounded-[5px] px-2.5 ${assetType === value ? 'bg-accent text-white' : 'text-secondary hover:text-foreground'}`}
                 >
                   {value === 'stock' ? '股票' : 'ETF'}
                 </button>
@@ -184,7 +186,7 @@ export function AutoMiningDialog({
           type="button"
           onClick={submitAutoMining}
           disabled={!start || !end || start > end || currentAvailable === false}
-          className="inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" />
           开始自动挖掘

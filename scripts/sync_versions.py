@@ -1,8 +1,8 @@
-"""版本号统一派生 — 从 frontend/package.json 同步三处伴生版本标记。
+"""版本号统一派生 — 从 frontend_v2/package.json 同步三处伴生版本标记。
 
-版本号唯一权威 = frontend/package.json (issue #513: 发版只改它时, VERSION /
+版本号唯一权威 = frontend_v2/package.json (issue #513: 发版只改它时, VERSION /
 backend/pyproject.toml / _FALLBACK_VERSION 三处伴生标记会漂移; Docker 部署
-下运行时读不到 frontend/package.json, 实际生效的是 _FALLBACK_VERSION, 于是
+下运行时读不到 frontend_v2/package.json, 实际生效的是 _FALLBACK_VERSION, 于是
 界面/日志/version API 显示旧版本)。
 
 用法:
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PKG = ROOT / "frontend" / "package.json"
+PKG = ROOT / "frontend_v2" / "package.json"
 VERSION_FILE = ROOT / "VERSION"
 PYPROJECT = ROOT / "backend" / "pyproject.toml"
 APP_INIT = ROOT / "backend" / "app" / "__init__.py"

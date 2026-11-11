@@ -3,31 +3,36 @@ import { useNavigate } from 'react-router-dom'
 import type { CapabilityMatrix, CapabilityRoute } from './api'
 
 export const CAP_LABELS: Record<string, { name: string; hint: string }> = {
-  'quote.by_symbol':         { name: '自选实时监控', hint: 'Free 可按标的查询实时行情,用于少量自选监控' },
-  'quote.batch':             { name: '实时行情(批量)',   hint: '一次拿多只股票的价' },
-  'quote.pool':              { name: '标的池查询',        hint: '按沪深300等池子拿行情' },
-  'kline.daily.by_symbol':   { name: '日 K(按标的)',    hint: '单只股票历史日 K' },
-  'kline.daily.batch':       { name: '日 K(批量)',      hint: '一次拿多只股票的日 K — 策略 / 信号扫描 必需' },
-  'kline.minute.by_symbol':  { name: '分钟 K(按标的)',  hint: '单股 1m/5m/15m/30m/60m K 线' },
-  'kline.minute.batch':      { name: '分钟 K(批量)',    hint: '多股分钟 K' },
-  'intraday.universe':       { name: '全量分钟',        hint: '标的池单请求拉全市场当日分钟K (盘中增量落盘, Expert 专有)' },
+  // 能力矩阵里的数据集 id (后端能力注册表同口径)
+  'daily':                  { name: '日 K',            hint: '历史K线与实时覆写' },
+  'adj_factor':             { name: '复权因子',         hint: '让 MA/MACD 等指标在分红送转日不失真' },
+  'realtime':               { name: '实时行情',         hint: '当前价、涨跌幅与分时' },
+  'minute':                 { name: '分钟 K',           hint: '1 分钟 K 线' },
+  'full_minute':            { name: '全量分钟',         hint: '盘中全市场当日分钟K (增量落盘)' },
+  'depth5':                 { name: '五档盘口',         hint: '买卖五档报价' },
+  'financial':              { name: '财务数据',         hint: '利润表 / 资负表 / 现金流 / 关键指标' },
 
-  'depth5':                  { name: '五档盘口',          hint: '买卖五档报价' },
-  'depth5.batch':            { name: '五档盘口(批量)',   hint: '批量买卖五档快照' },
-  'websocket':               { name: '实时推送(WS)',    hint: '免轮询的实时行情订阅' },
-  'financial':               { name: '财务数据',          hint: '利润表 / 资负表 / 现金流 / 关键指标' },
-  'adj_factor':              { name: '复权因子',          hint: '让 MA/MACD 等指标在分红送转日不失真' },
+  // 功能卡片用的能力键 (缺能力提示用)
+  'quote.by_symbol':        { name: '自选实时监控',      hint: '按标的查询实时行情, 用于少量自选监控' },
+  'quote.batch':            { name: '实时行情(批量)',    hint: '一次拿多只股票的价' },
+  'kline.daily.by_symbol':  { name: '日 K(按标的)',     hint: '单只股票历史日 K' },
+  'kline.daily.batch':      { name: '日 K(批量)',       hint: '一次拿多只股票的日 K — 策略 / 信号扫描 必需' },
+  'kline.minute.by_symbol': { name: '分钟 K(按标的)',   hint: '单股 1m K 线' },
+  'kline.minute.batch':     { name: '分钟 K(批量)',     hint: '多股分钟 K' },
+  'intraday.universe':      { name: '全量分钟',         hint: '盘中一次拉全市场当日分钟K' },
+  'depth5.batch':           { name: '五档盘口(批量)',    hint: '批量买卖五档快照' },
+  'websocket':              { name: '实时推送(WS)',     hint: '免轮询的实时行情订阅' },
 }
 
 // ===== 数据源无关的能力提示 (所有数据源共用一套标准) =====
-// 功能门槛一律以能力键表达, 不再出现 TickFlow 档位词 (档位仅出现在 TickFlow 专属界面)。
+// 功能门槛一律以能力键表达, 不出现任何数据源专有的档位词。
 
 /** 能力键 → 用户可读能力名 */
 export function capName(capKey: string): string {
   return CAP_LABELS[capKey]?.name ?? capKey
 }
 
-/** 数据不可用标准徽章: 「分钟 K(批量) · 不可用」, 通用状态陈述, 默认点击跳转 设置→数据源 (to=null 关闭跳转) */
+/** 数据不可用标准徽章:「分钟 K(批量) · 不可用」, 通用状态陈述, 默认点击跳转 设置→数据源 (to=null 关闭跳转) */
 export function MissingCapChip({ capKey, label, to = '/settings?tab=data-sources', className = '' }: {
   capKey?: string
   label?: string
@@ -61,9 +66,9 @@ export function MissingCapChip({ capKey, label, to = '/settings?tab=data-sources
 }
 
 // ===== 能力路由门控 (各页统一判定) =====
-// usable = 生效源当前能否提供该能力 (区别于 TickFlow 套餐视角):
-// 路由到可用插件/自定义源时同样可用; 路由到 TickFlow 但档位不足时不可用。
-// 矩阵未加载时返回 undefined, 调用方回退 TickFlow 套餐视角, 避免首屏闪烁。
+// usable = 生效源当前能否提供该能力: 路由到可用插件/自定义源时同样可用,
+// 路由到内置源但依赖未就绪时不可用。
+// 矩阵未加载时返回 undefined, 调用方按「未知」处理, 避免首屏闪烁。
 // 数据来自 useCapabilityMatrix (设置页与其他页面共享同一缓存)。
 
 export type RouteCapId = 'realtime' | 'daily' | 'minute' | 'adj_factor' | 'financial'
@@ -76,106 +81,8 @@ export function routeCapUsable(matrix: CapabilityMatrix | undefined, id: RouteCa
   return routeCap(matrix, id)?.usable
 }
 
-/** 生效源非 TickFlow 且当前可用时返回其展示名 (卡片徽章显示实际数据源), 否则 null */
+/** 生效源非内置源时返回其展示名 (卡片徽章显示实际数据源), 否则 null */
 export function routeProviderDisplay(matrix: CapabilityMatrix | undefined, id: RouteCapId): string | null {
   const cap = routeCap(matrix, id)
-  return cap && cap.usable && cap.effective !== 'tickflow' ? cap.effective_display : null
+  return cap && cap.usable && cap.effective !== 'easytdx' ? cap.effective_display : null
 }
-
-// ===== TickFlow 档位 (仅 TickFlow 专属界面) =====
-
-// 套餐等级 —— 仅用于 TickFlow 专属界面 (Key 配置 / 端点测速 / 引导页 tickflow 分支)。
-// 通用功能门槛一律用能力键 (capName/needCapText/MissingCapChip), 不用档位词。
-// 基础档提取与后端 quote_service.py 一致:取 label 第一个词("Pro +" → "pro")。
-// none = None 档(无 key / 无效 key),低于 free,仅历史日K无实时行情。
-export const TIER_RANK: Record<string, number> = { none: -1, free: 0, starter: 1, pro: 2, expert: 3 }
-export const EXPERT_RANK = TIER_RANK.expert
-
-export function tierRank(label: string): number {
-  const base = (label.split(' ')[0] ?? '').split('+')[0].trim().toLowerCase()
-  return TIER_RANK[base] ?? -1
-}
-
-export function isExpertOrAbove(label: string): boolean {
-  return tierRank(label) >= EXPERT_RANK
-}
-
-/** 档位完整样式(tag 背景 + 圆点 + 文字渐变), 与左侧菜单 TierBadge 一致 */
-export interface TierStyle {
-  tagBg: { background: string; border?: string }
-  dotStyle: { background: string }
-  labelTextStyle: { color?: string; background?: string; WebkitBackgroundClip?: string; backgroundClip?: string }
-  desc: string
-}
-
-/**
- * 档位是「量级」不是「类别」→ 账簿体例用赭石一色的深浅 + 字框表示层级,
- * 不用紫蓝渐变(那是旧皮肤的 AI 味)。字框描边随档位加深, 文字始终同一色相。
- */
-const TIER_STYLE: Record<string, TierStyle> = {
-  none: {
-    desc: '未配置 Key · 仅历史日K',
-    tagBg: { background: 'transparent', border: '1px solid hsl(var(--fg-muted) / 0.5)' },
-    dotStyle: { background: 'hsl(var(--fg-muted))' },
-    labelTextStyle: { color: 'hsl(var(--fg-muted))' },
-  },
-  free: {
-    desc: '历史日K · 自选实时',
-    tagBg: { background: 'transparent', border: '1px solid hsl(var(--fg-secondary) / 0.6)' },
-    dotStyle: { background: 'hsl(var(--fg-secondary))' },
-    labelTextStyle: { color: 'hsl(var(--fg-secondary))' },
-  },
-  starter: {
-    desc: '除权因子 · 全市场实时',
-    tagBg: { background: 'transparent', border: '1px solid hsl(var(--accent) / 0.55)' },
-    dotStyle: { background: 'hsl(var(--accent) / 0.7)' },
-    labelTextStyle: { color: 'hsl(var(--accent))' },
-  },
-  pro: {
-    desc: '分钟K · 盘口',
-    tagBg: { background: 'transparent', border: '1px solid hsl(var(--accent) / 0.8)' },
-    dotStyle: { background: 'hsl(var(--accent))' },
-    labelTextStyle: { color: 'hsl(var(--accent))' },
-  },
-  expert: {
-    desc: 'WebSocket · 财务数据',
-    tagBg: { background: 'hsl(var(--accent) / 0.1)', border: '1px solid hsl(var(--accent))' },
-    dotStyle: { background: 'hsl(var(--accent))' },
-    labelTextStyle: { color: 'hsl(var(--accent))' },
-  },
-}
-
-/** 从档位 label 提取基础档位名(小写): "Expert +" → "expert" */
-export function tierBaseName(label: string): string {
-  return (label.split(' ')[0] ?? '').split('+')[0].trim().toLowerCase()
-}
-
-/** 返回档位完整样式 */
-export function tierStyle(label: string): TierStyle {
-  return TIER_STYLE[tierBaseName(label)] ?? TIER_STYLE.free
-}
-
-/** 所有档位(有序, 供档位列表渲染) */
-export const ALL_TIERS = ['none', 'free', 'starter', 'pro', 'expert'] as const
-
-/** 返回档位标签的渐变文字样式(用于大字显示, 如 Keys 页档位) */
-export function tierTextStyle(label: string): { color?: string; background?: string; WebkitBackgroundClip?: string; backgroundClip?: string } {
-  return tierStyle(label).labelTextStyle
-}
-
-/** 渲染档位 tag(与左侧菜单一致的胶囊样式) */
-export function TierTag({ label, className = '' }: { label: string; className?: string }) {
-  const t = tierStyle(label)
-  const base = tierBaseName(label)
-  // none 档显示英文「None」,其余档显示英文档名
-  const display = base === 'none' ? 'None' : base
-  return (
-    <span
-      className={`inline-flex h-[18px] max-w-[80px] shrink-0 items-center overflow-hidden rounded px-1.5 text-[10px] font-bold font-mono leading-none ${className}`}
-      style={t.tagBg}
-    >
-      <span className="truncate capitalize" style={t.labelTextStyle}>{display}</span>
-    </span>
-  )
-}
-

@@ -5,7 +5,7 @@
 // 旧判定把 null 一律当 trading_days=0, 导致升级后有数据的老用户打开客户端
 // 即被误弹"当前暂无数据 / 立即获取数据"引导卡与欢迎弹窗。
 import { describe, expect, it } from 'vitest'
-import { resolveHasNoData } from './Dashboard'
+import { resolveHasNoData } from '@/lib/useSharedQueries'
 import type { DataStatus } from '@/lib/api'
 
 function ds(partial: Partial<DataStatus>): DataStatus {

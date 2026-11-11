@@ -111,7 +111,7 @@ def _derive_pack_id(raw: str, fallback: str) -> str:
 
 @router.get("/import-source/namespaces")
 def list_source_namespaces() -> list[str]:
-    """本项目 frontend/src/custom/ 下可导入的源码扩展清单。"""
+    """本项目 frontend_v2/src/custom/ 下可导入的源码扩展清单。"""
     return ext_source_import.list_namespaces()
 
 
@@ -150,7 +150,7 @@ class ImportFromProjectBody(BaseModel):
 
 @router.post("/import-source/from-project")
 def import_source_from_project(request: Request, body: ImportFromProjectBody) -> PagePackMeta:
-    """把本项目 frontend/src/custom/<ns>/extension.tsx 编译导入为页面插件。"""
+    """把本项目 frontend_v2/src/custom/<ns>/extension.tsx 编译导入为页面插件。"""
     try:
         src = ext_source_import.namespace_source_path(body.namespace)
     except ValueError as e:

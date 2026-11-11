@@ -43,7 +43,7 @@ export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }:
           <button
             onClick={() => setValue(Math.max(1, value - 1))}
             disabled={!hasBatchCap || isRunning}
-            className="h-6 w-6 flex items-center justify-center rounded-l-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+            className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-l-btn hover:bg-border/50 disabled:opacity-30"
           >−</button>
           <div className="h-6 w-8 flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums text-foreground bg-base">
             {value}
@@ -51,7 +51,7 @@ export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }:
           <button
             onClick={() => setValue(Math.min(unit === 'year' ? 10 : 36, value + 1))}
             disabled={!hasBatchCap || isRunning}
-            className="h-6 w-6 flex items-center justify-center rounded-r-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+            className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-r-btn hover:bg-border/50 disabled:opacity-30"
           >+</button>
         </div>
 
@@ -60,7 +60,7 @@ export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }:
             <button
               key={u}
               onClick={() => { setUnit(u); if (u === 'year' && value > 10) setValue(1); if (u === 'month' && value > 36) setValue(6) }}
-              className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
+              className={`ctl ctl-sm ctl-ghost px-1.5 ${
                 unit === u ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-elevated'
               }`}
             >{u === 'month' ? '月' : '年'}</button>
@@ -78,11 +78,11 @@ export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }:
       <button
         onClick={() => extend.mutate()}
         disabled={!hasBatchCap || isRunning || extend.isPending || !earliestDate}
-        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:pointer-events-none transition-colors duration-150"
+        className="ctl ctl-md ctl-btn soft w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 disabled:pointer-events-none duration-150 bg-accent/90"
       >
         {extend.isPending ? (
           <>
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-[12px] w-[12px] animate-spin" />
             请求中…
           </>
         ) : (

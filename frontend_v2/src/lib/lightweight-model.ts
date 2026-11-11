@@ -2,9 +2,25 @@ import type { Time, UTCTimestamp, CandlestickData, LineData, HistogramData, Whit
 import type { MinuteKlineSession } from './api'
 import type { OHLC } from './chart-types'
 import { computeIntradayAverage, formatMinuteTime, FULL_DAY_TIMES } from './intraday-chart'
+import { alpha } from './theme'
 
-// 涨跌用墨红/墨绿(与 --bull/--bear 同色系), 指标线用赭石近邻色, 避免电光蓝破坏纸面
-export const CHART_COLORS = { up: '#9B2C2C', down: '#2C5F4A', flat: '#8A8078', average: '#B7410E', blue: '#2C5F4A', purple: '#8A5A12' }
+/**
+ * 分时图调色板 — 由 useChartTheme() 注入, 随皮肤切换。
+ *
+ * 画布不吃 CSS 变量, 但 token 是按皮肤定义的, 图表因此与表格同色:
+ * 涨/跌/平/均价分别取 --bull / --bear / --fg-muted / --accent。
+ */
+export interface IntradayPalette {
+  /** 涨 */
+  bull: string
+  /** 跌 */
+  bear: string
+  /** 平 / 中性参考 */
+  neutral: string
+  /** 均价线 (赭石) */
+  accent: string
+}
+
 const SESSION_TIMES = new Set(FULL_DAY_TIMES)
 // 午休不占用交易时间：11:30 / 13:00 共用中点，下一格直接进入 13:01。
 const PLOT_DAY_TIMES = FULL_DAY_TIMES.filter(time => time !== '11:30')
@@ -64,7 +80,11 @@ export interface IntradayPoint {
   sourceTimes?: string[]
 }
 
-export function buildIntradayModel(sessions: MinuteKlineSession[], showAverage = true) {
+export function buildIntradayModel(
+  sessions: MinuteKlineSession[],
+  palette: IntradayPalette,
+  showAverage = true,
+) {
   const series: PlotSeries[] = []
   const points = new Map<string, IntradayPoint>()
   const timeline: WhitespaceData<Time>[] = []
@@ -77,13 +97,13 @@ export function buildIntradayModel(sessions: MinuteKlineSession[], showAverage =
     const averages = computeIntradayAverage(rows)
     const byTime = new Map(rows.map((row, i) => [formatMinuteTime(row.datetime), { row, average: averages[i] }]))
     const lastPrice = rows.at(-1)?.close
-    const color = session.prev_close == null || lastPrice == null ? CHART_COLORS.flat
-      : lastPrice > session.prev_close ? CHART_COLORS.up : lastPrice < session.prev_close ? CHART_COLORS.down : CHART_COLORS.flat
+    const color = session.prev_close == null || lastPrice == null ? palette.neutral
+      : lastPrice > session.prev_close ? palette.bull : lastPrice < session.prev_close ? palette.bear : palette.neutral
     let priceSegment: PlotData[] = [], averageSegment: PlotData[] = [], segment = 0
     let previous = session.prev_close
     const flush = () => {
       if (priceSegment.length) series.push({ id: `${session.date}:price:${segment}`, type: 'Area', pane: 0, color, data: priceSegment })
-      if (showAverage && averageSegment.length) series.push({ id: `${session.date}:average:${segment}`, type: 'Line', pane: 0, color: CHART_COLORS.average, data: averageSegment })
+      if (showAverage && averageSegment.length) series.push({ id: `${session.date}:average:${segment}`, type: 'Line', pane: 0, color: palette.accent, data: averageSegment })
       priceSegment = []; averageSegment = []; segment++
     }
     for (const minute of PLOT_DAY_TIMES) {
@@ -111,8 +131,8 @@ export function buildIntradayModel(sessions: MinuteKlineSession[], showAverage =
       }
       volume.push(Number.isFinite(row.volume) && row.volume >= 0 ? {
         time, value: row.volume,
-        color: previous == null || row.close === previous ? 'rgba(161,161,170,0.45)'
-          : row.close > previous ? 'rgba(199,64,64,0.55)' : 'rgba(45,155,101,0.55)',
+        color: previous == null || row.close === previous ? alpha(palette.neutral, 0.45)
+          : row.close > previous ? alpha(palette.bull, 0.55) : alpha(palette.bear, 0.55),
       } : { time })
       previous = row.close
       points.set(timeKey(time), { date: session.date, row, average: last.average, prevClose: session.prev_close,

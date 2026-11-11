@@ -2,7 +2,7 @@
 
 数据源插件是可选的行情数据来源(fuyao、akshare 等),作为独立模块放在
 `backend/app/plugins/` 下。services 层(kline_sync / quote_service / financial_sync)
-全部通过统一路由点分流:插件声明了某数据集就走插件,未声明自动回退 TickFlow。
+全部通过统一路由点分流:插件声明了某数据集就走插件,未声明自动回退内置源 easytdx。
 因此**一个合格的插件只需要正确实现契约,不需要改动任何 service / API 代码**;
 反过来,插件也必须遵守内部数据契约(单位、代码格式、复权口径),框架不会替你转换。
 
@@ -55,12 +55,12 @@ key_manage_label: "获取 Key / 查看用量"    # (可选)缺省为「管理 Ke
 这两处详情及数据源安装预览的 `description`、详情中的 `usage_notes` 支持基础 Markdown：1–4 级标题、加粗、行内代码、无序/有序列表、引用、分隔线、表格和 HTTP/HTTPS 链接。YAML 多行正文可用 `|` 编写；名称、按钮与链接文案保持纯文本。当前不是完整 GFM，不支持图片、代码围栏或原始 HTML；原始 HTML 和不安全协议链接只显示为文字，不会执行。
 
 只声明真实提供的数据集;未声明的数据集 `provider_has_dataset` 返回 False,自动回退
-TickFlow。不要声明做不了的数据集(粒度含义见下文"能力声明的粒度")。
+内置源 easytdx。不要声明做不了的数据集(粒度含义见下文"能力声明的粒度")。
 
 #### api_key_env(界面配置 API Key)
 
 声明 `api_key_env` 的插件可以在设置页的数据源卡片中直接填写 Key, 对齐
-TickFlow 的「先探后存」语义:
+数据源插件的「先探后存」语义:
 
 1. entry 模块需提供模块级 `probe_api_key(key) -> (ok, reason)`,
    后端用候选 Key 实探一次, **无效不落盘**
@@ -112,7 +112,7 @@ def availability() -> tuple[bool, str]:
 | --- | --- | --- |
 | `change_pct` | **小数制**, `0.0366` = 3.66% | 接口给百分数(3.66)时必须在 provider 内显式 /100 |
 | `turnover_rate`(realtime 入口) | **小数制**, `0.05` = 5% | 下游 enriched 管道统一转百分数值存储 |
-| `volume` | **手**, `436231` = 43,623,100 股 | 日K 与实时快照均以手计(1手=100股), 股票/ETF/指数一致(与上游 TickFlow 口径一致, 可用 amount÷volume÷100≈当日均价自验); 接口给股时必须在 provider 内显式 /100(参考 fuyao) |
+| `volume` | **手**, `436231` = 43,623,100 股 | 日K 与实时快照均以手计(1手=100股), 股票/ETF/指数一致(与内置源 easytdx 口径一致, 可用 amount÷volume÷100≈当日均价自验); 接口给股时必须在 provider 内显式 /100(参考 fuyao) |
 | `amount` / `turnover` | 元 | |
 | 日K OHLC | **不复权原始价** | 复权由 adj_factor + enriched 管道处理, provider 不得自行复权 |
 
@@ -192,12 +192,12 @@ class MyProvider:
         """财务数据(声明 financial 数据集时实现, table 见 financial_sync 调用)。"""
 
     def get_instruments(self, asset_type="stock") -> list[dict]:
-        """(可选)标的维表: 返回 tickflow Instrument 形状的行, 供 instrument_sync 复用 flatten"""
+        """(可选)标的维表: 返回内置源 Instrument 形状的行, 供 instrument_sync 复用 flatten"""
 
     def test_dataset(self, dataset: str, symbols=None) -> dict:
         """(强烈建议)设置页"试拉"按钮。
         返回 {provider, dataset, rows, columns, preview, error?}; 未支持的数据集
-        返回 error 字段说明会回退 TickFlow。"""
+        返回 error 字段说明会回退内置源 easytdx。"""
 ```
 
 `get_depth_batch` 返回结构如下。价格和数量数组均按一档到五档排列;数量单位为“手”,
@@ -228,15 +228,15 @@ provider 不应自行切换或回退到其他数据源。
 
 入口守卫（`kline_sync._enforce_minute_beijing_wallclock`）对所有分钟源强制归一：
 带时区 → 自动换算成北京墙钟；naive 但整体呈 UTC 特征（如 01:30）→ 自动 +8 纠偏并
-记日志；完全无法识别的口径 → 拒收并回退 TickFlow。契约仍要求源头写对，守卫只是兜底。
+记日志；完全无法识别的口径 → 拒收并回退内置源 easytdx。契约仍要求源头写对，守卫只是兜底。
 
 可选类属性 `minute_history_days = 5` 声明 1 分钟历史深度（交易日）；未声明视为
-深历史（TickFlow 基准）。浅源（如免费分时仅保留最近 5 个交易日的源）声明后，
+深历史（内置源 easytdx 基准）。浅源（如免费分时仅保留最近 5 个交易日的源）声明后，
 个股分时档位自动收窄为可行选项并默认 5 日，深源默认 20 日。
 
 > **全量分钟 (full_minute) 数据集契约**:声明 `full_minute` 数据集并把
 > `full_minute_data_provider` 路由到你的源,即接入「全量分钟」能力(盘中全市场
-> 当日分钟K增量落盘,由内置服务 `minute_refresh` 调度,与 TickFlow Expert 同一
+> 当日分钟K增量落盘,由内置服务 `minute_refresh` 调度,与内置源同一
 > 能力键 `intraday.universe`)。需实现:
 >
 > - `get_intraday_batch(symbols, count=300, asset_type="stock") -> pl.DataFrame`
@@ -265,7 +265,7 @@ provider 不应自行切换或回退到其他数据源。
 | `get_realtime` | **软失败**: 返回 `[]` + warning 日志, 保证轮询线程不中断 |
 | `get_realtime_indices` | **软失败**: 返回 `None` + warning 日志, 保留上轮有效缓存; 成功无数据返回 `[]` |
 | `get_depth_batch` | 单批异常由服务隔离并保留其他批次; 不跨数据源回退 |
-| `get_minute` | 抛异常时调用方自动回退 TickFlow 重试 |
+| `get_minute` | 抛异常时调用方自动回退内置源 easytdx 重试 |
 | `get_daily` / `get_adj_factors` / `get_financials` | 异常由上层同步流程捕获记录; 无数据返回空 DataFrame |
 | `iter_daily` | 可选; 每批必须符合 `get_daily` 契约。流正常结束后才提交 staging; 未捕获异常会丢弃 staging。provider 内已定义的单标的软失败语义保持不变 |
 
@@ -294,7 +294,7 @@ provider 不应自行切换或回退到其他数据源。
 
 `provider_has_dataset(name, dataset)` 通过 `dataset in provider.config.datasets` 判断。
 这是 services 层路由的关键: 用户在设置页选了插件, 但某数据集未声明时, 该数据集
-自动回退 TickFlow。
+自动回退该能力的默认源(内置源 easytdx 或插件源 fuyao)。
 
 ```python
 class MyConfig:
@@ -335,15 +335,13 @@ uv run --extra dev python -m ruff check app/plugins/<your_plugin>/ tests/test_<y
   - `client.py` — httpx 客户端(X-api-key 认证 + 统一信封解包 + 分页 + 页间隔限频 + 单标的日K + dump 预签名下载, S3 下载不带 Key 头)
   - `provider.py` — Provider 实现(实测/文档双字段名映射、百分数→小数制、volume 股→手、上海零点戳 +8h 时区、dump 按 release 版本缓存、软失败、Key 探测)
   - `tests/test_fuyao_provider.py` — 73 个契约测试, 是新插件的测试范本
-- **`backend/app/plugins/tdxquant/`** — 通达信量化数据服务(runtime: python; `tdxaidata` 已是后端默认依赖, ctypes 包装的私有 TCP 协议, wheel 自带跨平台原生库)
-  - 提供 `realtime`(五市场全 A 股票池枚举 + 600 只/批快照, 批间失败隔离)、`depth5`(快照自带买卖五档数组, 手口径透传)、`daily`(count 模式单标的拉取, 原始价, volume 股→手, amount 万元→元, `iter_daily` 逐标的流式)、`adj_factor`(事件接口每10股口径 ÷10 转每股 + 本地K线一次配价, 交易所公式推导单事件比值, 涨跌停自检)、`minute`(1m count 模式单标的, 240 根/日, 深度约 40 交易日, datetime=Date+Time 拼北京墙钟 naive, 与日K同口径 股→手/万元→元)、`full_minute`(修复轮 `get_intraday_batch` 当日窗口 + 稳态增量 `get_intraday_latest` 每股最新 N 根; 无批量端点, 全市场一轮 10 分钟量级); 指数快照直接支持(上证指数走 TDX 999999.SH 别名, `get_realtime_indices` 映射); 快照无名称列由维表关联; 未声明 financial → 回退 TickFlow; 清单声明 `billing: points` + `key_manage_url`(商城积分明细入口)
-  - `client.py` — 原生层封装(lib 私有物化 + token 注入双 ini + `TDX_AI_DATA_LIB` 指向、空闲首连 "Invalid server response" 重试包装、股票池 12h 缓存)
-  - `provider.py` — Provider 实现(快照昨收=LastClose/高低=Max/Min 字段映射、涨跌幅 (Now-LastClose)/LastClose 小数制、RefreshTime 北京墙钟→epoch ms、软失败)
-  - `probe.py` — 候选 Key 探测的独立子进程(原生 DLL 每进程单 Key): 分阶段进度留痕定位原生层死点; 服务端明确拒绝凭据或额度时不保存。因 TDX 会话按 IP 复用(错误 Key 在活跃会话下也能拉数), 通过探测仅代表格式与连通性检查通过, 不保证所有数据接口均有权限。
+- **`backend/app/plugins/easytdx/`** — 通达信 MAC 协议直连数据源(runtime: python; 依赖 `easy-tdx-plus`, 未装时灰显并提供一键安装; 内置源, 无需 Key 与计费)
+  - 提供 `daily`(原始价日K, 单标的每页 700 根自动翻页)、`adj_factor`(除权除息事件, 按交易所公式推导单事件 ex_factor, 带涨跌停自检)、`realtime`(全市场实时快照, 约 5600 只/轮)、`minute`(1m 分钟K, 240 根/日, 服务端保留约 20 个交易日)、`depth5`(上游仅买一/卖一, 第 2-5 档留空)、`full_minute`(逐标的拉当日 1m, 无批量端点); 未声明 financial → 回退插件源 fuyao
+  - `client.py` — easy_tdx 客户端封装(MacClient 走行情, TdxClient 仅用于除权事件)
+  - `provider.py` — Provider 实现(单位换算: vol 股→手、turnover 百分数→小数制、股本 万股→股; datetime 为服务端墙钟 naive, 不做时区换算)
+  - `plugin.yaml` — 内置源的清单载体(数据集声明 / usage_notes / runtime / 一键安装用的 requirements.txt)
 
-TdxQuant 在 SDK 清理响应前检查服务端错误, 保留错误原因并脱敏; 明确的凭据/额度拒绝不重试, 实时分钟轮立即熔断。历史分钟请求失败会通过 `app.data_providers.base.ProviderRequestError` 传递到任务层并标记失败, 不转换成成功的 0 行或跨源重试; 其他插件也可用该异常显式声明请求失败。带时区的分钟请求窗口在插件边界归一为北京墙钟, 再与原生分钟列比较。正常停牌、休市或窗口内无数据的空结果保留原语义。
-
-除权事件也在原生 `get_cw_data` 响应上执行上述检查：SDK 1.2.2 的 `get_divid_factors` 会将服务端失败与正常无事件都转换为空 DataFrame，不能用 DataFrame 是否为空判断请求成功。插件按 SDK 的 `Date/Type/Value` 契约解析事件，保留每 10 股单位及闭区间日期筛选；正常无事件返回空列表，事件或配价请求失败则中止本轮、保留原有因子文件，并向任务层及数据源试拉返回明确错误。
+easytdx 声明的数据集未覆盖到某能力时, `provider_has_dataset` 返回 False, 该能力回退其默认源(日K / 除权 / 实时 / 分钟 / 五档 / 全量分钟 → easytdx,财务 → fuyao)。历史分钟请求失败会通过 `app.data_providers.base.ProviderRequestError` 传递到任务层并标记失败, 不转换成成功的 0 行或跨源重试; 插件可用该异常显式声明请求失败。带时区的分钟请求窗口在插件边界归一为北京墙钟, 再与原生分钟列比较。正常停牌、休市或窗口内无数据的空结果保留原语义。
 
 ## 路由机制(无需关心, 仅参考)
 

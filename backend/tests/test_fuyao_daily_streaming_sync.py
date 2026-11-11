@@ -7,8 +7,8 @@ from datetime import date, datetime
 import polars as pl
 import pytest
 
+from app.data_providers.repository import DataStore, KlineRepository
 from app.services import kline_sync
-from app.tickflow.repository import DataStore, KlineRepository
 
 
 def _daily(symbol: str, day: date) -> pl.DataFrame:
@@ -40,14 +40,20 @@ def repo(tmp_path):
 
 
 def _route_fuyao(monkeypatch, provider):
-    monkeypatch.setattr(kline_sync.preferences, "get_daily_data_provider", lambda: "fuyao")
-    from app.data_providers import custom
+    """把日K生效源路由到扶摇替身。
+
+    取数链走 custom.loader.resolve_provider, 它用的是 loader 模块内的
+    provider_has_dataset / get_provider —— 只补 app.data_providers.custom 的
+    重导出名字不生效 (会真的去调扶摇插件), 必须补 loader 上的。
+    """
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda dataset: "fuyao")
+    from app.data_providers.custom import loader
     monkeypatch.setattr(
-        custom,
+        loader,
         "provider_has_dataset",
         lambda name, dataset: name == "fuyao" and dataset == "daily",
     )
-    monkeypatch.setattr(custom, "get_provider", lambda name: provider)
+    monkeypatch.setattr(loader, "get_provider", lambda name: provider)
 
 
 def test_sync_promotes_staged_files_without_reading_them_back(monkeypatch, repo):

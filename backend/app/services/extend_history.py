@@ -12,7 +12,7 @@
   - kline_sync.sync_and_persist_daily_batch / sync_adj_factor
   - indicators.pipeline.run_pipeline
   - pipeline_jobs.JobStore
-  - tickflow.repository.KlineRepository
+  - app.data_providers.repository.KlineRepository
 """
 from __future__ import annotations
 
@@ -20,10 +20,9 @@ import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
+from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.repository import KlineRepository
 from app.services import kline_sync
-from app.services.pipeline_jobs import job_store
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +47,9 @@ def _resolve_universe(capset: CapabilitySet, repo=None) -> list[str]:
     import polars as pl
 
     from app.config import settings
-    from app.tickflow.pools import get_pool
+    from app.services import watchlist
 
-    base: set[str] = set(get_pool("watchlist"))
+    base: set[str] = set(watchlist.symbols())
     inst_path = Path(settings.data_dir) / "instruments" / "instruments.parquet"
     if inst_path.exists():
         try:
@@ -157,9 +156,11 @@ def run_extend_history(
     adj_start_str = new_start.strftime("%Y-%m-%d")
     adj_end_str = today.strftime("%Y-%m-%d")
 
+    from app.data_providers import custom as custom_sources
     from app.services import preferences as _prefs
     adj_provider = _prefs.get_adj_factor_provider()
-    can_sync_adj = capset.has(Cap.ADJ_FACTOR) or adj_provider != "tickflow"
+    can_sync_adj = capset.has(Cap.ADJ_FACTOR) or custom_sources.provider_has_dataset(
+        adj_provider, "adj_factor")
     if can_sync_adj:
         emit("extend_history", 48, f"获取除权因子 [{adj_start_str} ~ {adj_end_str}]…")
         logger.info("extend_history: adj_factor [%s ~ %s]", adj_start_str, adj_end_str)

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ICON_BTN_SM, FIELD_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 /** 弹层固定宽度(px) — 与下方 w-[260px] 保持一致,用于水平边界裁剪计算 */
 const POPUP_WIDTH = 260
@@ -162,9 +164,7 @@ export function DatePicker({
         ref={btnRef}
         type="button"
         onClick={handleOpen}
-        className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-input border border-border
-          bg-elevated hover:border-accent/50 text-xs text-foreground num
-          focus:outline-none focus:border-accent/60 transition-colors duration-150 cursor-pointer ${buttonClassName}`}
+        className={cn(FIELD_MD, 'num', buttonClassName)}
       >
         <Calendar className="h-3.5 w-3.5 text-accent" />
         <span className={value ? undefined : 'text-muted'}>{displayLabel}</span>
@@ -182,16 +182,16 @@ export function DatePicker({
               transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
               style={{ position: 'fixed', top: pos.top, left: pos.left }}
               className="z-[9999] w-[260px] rounded-card border border-border
-                bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.4)] p-3"
+                bg-surface shadow-2xl shadow-scrim/40 p-3"
             >
             {/* 月份导航 */}
             <div className="flex items-center justify-between mb-2">
               <button
                 type="button"
                 onClick={showYearPicker ? () => setViewYear(viewYear - 12) : prevMonth}
-                className="p-1 rounded-btn hover:bg-elevated text-secondary hover:text-foreground transition-colors"
+                className={cn(ICON_BTN_SM, 'border-transparent bg-transparent')}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-[16px] w-[16px]" />
               </button>
               <button
                 type="button"
@@ -206,9 +206,9 @@ export function DatePicker({
               <button
                 type="button"
                 onClick={showYearPicker ? () => setViewYear(viewYear + 12) : nextMonth}
-                className="p-1 rounded-btn hover:bg-elevated text-secondary hover:text-foreground transition-colors"
+                className={cn(ICON_BTN_SM, 'border-transparent bg-transparent')}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-[16px] w-[16px]" />
               </button>
             </div>
 
@@ -226,7 +226,7 @@ export function DatePicker({
                         setViewYear(y)
                         setShowYearPicker(false)
                       }}
-                      className={`h-8 text-xs rounded-btn transition-colors duration-100
+                      className={`ctl ctl-md ctl-ghost duration-100
                         ${isSelected ? 'bg-accent text-white font-bold' : ''}
                         ${isThisYear && !isSelected ? 'border border-accent/40' : ''}
                         ${!isSelected ? 'hover:bg-elevated cursor-pointer text-foreground' : ''}
@@ -263,7 +263,7 @@ export function DatePicker({
                       }
                     }}
                     className={`
-                      h-7 w-full text-xs rounded-btn transition-colors duration-100
+                      ctl ctl-md ctl-ghost w-full duration-100
                       ${c.cur ? 'text-foreground' : 'text-muted/40'}
                       ${isSelected ? 'bg-accent text-white font-bold' : ''}
                       ${isToday && !isSelected ? 'border border-accent/40' : ''}

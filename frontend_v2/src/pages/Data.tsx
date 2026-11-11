@@ -2,30 +2,20 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Database,
-  Play,
-  Square,
-  Loader2,
-  HardDrive,
-  Clock,
   Calendar,
-  CheckSquare,
-  Trash2,
-  Plus,
-  Wifi,
-  SlidersHorizontal,
+  Database,
+  HardDrive,
+  Loader2,
+  Clock,
   AlertTriangle,
   Info,
-  WandSparkles,
   Upload,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { EndpointTestDialog } from '@/components/EndpointTestDialog'
 import { api, type ExtDataConfig } from '@/lib/api'
 import {
   useCapabilities,
   useCapabilityMatrix,
-  useSettings,
   usePreferences,
   useQuoteStatus,
   useQuoteInterval,
@@ -37,7 +27,6 @@ import { QK, DAILY_DATA_QUERY_PREFIXES } from '@/lib/queryKeys'
 import { PageHeader } from '@/components/PageHeader'
 import { useAdjFactorSyncGate } from '@/components/AdjFactorSyncGate'
 import { formatScheduleDatePart, formatScheduleTimePart, isToday } from '@/lib/format'
-import { findDataSource } from '@/lib/dataSources'
 
 // 拆分出的子组件
 import { StatCard, type FieldTab, type CapLimitValue } from '@/components/data/StatCard'
@@ -70,9 +59,6 @@ export function Data() {
   const topRef = useRef<HTMLDivElement>(null)
 
   const caps = useCapabilities()
-  const settings = useSettings()
-  // 测试端点仅探测 TickFlow 通道 — 未配置 TickFlow Key 时隐藏入口
-  const hasTickflowKey = settings.data?.has_tickflow_key ?? settings.data?.mode === 'api_key'
 
   const status = useDataStatus({
     refetchInterval: (query) => {
@@ -165,7 +151,6 @@ export function Data() {
   const [indexExtendValue, setIndexExtendValue] = useState(6)
   const [indexExtendUnit, setIndexExtendUnit] = useState<'month' | 'year'>('month')
   const [schemaTable, setSchemaTable] = useState<string | null>(null)
-  const [showEndpointTest, setShowEndpointTest] = useState(false)
   const [showCreateExt, setShowCreateExt] = useState(false)
   const [showImportExt, setShowImportExt] = useState(false)
   const [showRepair, setShowRepair] = useState(false)
@@ -193,24 +178,14 @@ export function Data() {
 
   const prefs = usePreferences()
 
-  // 数据源列表 + 当前数据源 (顶部"切换数据源"按钮展示)
-  const dataSources = useQuery({
-    queryKey: QK.dataSources,
-    queryFn: api.dataSources,
-    staleTime: 60_000,
-  })
-  const activeProvider = prefs.data?.daily_data_provider || 'tickflow'
-  const activeDataSourceName = activeProvider === 'tickflow'
-    ? 'TickFlow'
-    : (findDataSource(dataSources.data, activeProvider)?.display_name || activeProvider)
 
   // —— 能力路由门控 (全项目统一判定) ——
-  // usable = 生效源当前能否提供该能力 (含插件/自定义源; TickFlow 档位不足则不可用),
-  // 区别于 useCapabilities 的 TickFlow 套餐视角。矩阵未加载时回退套餐视角, 避免首屏闪烁。
+  // usable = 生效源当前能否提供该能力 (含插件/自定义源; 源未就绪则不可用),
+  // 区别于 useCapabilities 的静态能力视角。矩阵未加载时回退静态视角, 避免首屏闪烁。
   const matrix = useCapabilityMatrix()
   const tfCaps = caps.data?.capabilities
   const usableOr = (id: RouteCapId, tfHas: boolean) => routeCapUsable(matrix.data, id) ?? tfHas
-  // 合并视角 caps: 套餐限额键位 + 路由可用性覆盖, 卡片徽章/显隐/设置弹窗共用
+  // 合并视角 caps: 能力限额键位 + 路由可用性覆盖, 卡片徽章/显隐/设置弹窗共用
   const mergedCaps = useMemo(() => {
     const m: Record<string, CapLimitValue> = { ...(tfCaps ?? {}) }
     const merge = (tfKey: string, usable: boolean) => { m[tfKey] = usable ? (m[tfKey] ?? true) : false }
@@ -263,7 +238,7 @@ export function Data() {
   const quoteStatus = useQuoteStatus()
   const toggleQuote = useToggleRealtimeQuotes()
 
-  // 路由感知能力门控: 矩阵判定生效源可用性, 未加载回退套餐视角
+  // 路由感知能力门控: 矩阵判定生效源可用性, 未加载回退静态能力视角
   const hasAdjCap = usableOr('adj_factor', !!tfCaps?.['adj_factor'])
   const hasDailyBatchCap = usableOr('daily', !!tfCaps?.['kline.daily.batch'])
   const hasMinuteCap = usableOr('minute', !!tfCaps?.['kline.minute.batch'])
@@ -325,6 +300,10 @@ export function Data() {
   // busy 降级 (预热/同步/修复期间) 且冷启动缓存未热时 storage 为 null — 单独取别名,
   // 各消费点用 storage?. 判空 (直接 s.storage.x 会在 status 非空时仍抛 TypeError)
   const storage = s?.storage
+  // 页头状态签 (design/v2/25): 日K 行数 / 指数行数 / 磁盘占用, 均取已有 status 响应
+  // busy 期间统计 null = 未知 (契约见下方 statsPending): 不进「行数为空」警示
+  const dailyRows = s?.daily?.rows ?? (s?.stats_pending === true ? null : 0)
+  const indexRows = s?.index_daily?.rows
   const isLoading = status.isLoading
   const isRunning = job.data?.status === 'running' || job.data?.status === 'pending'
   const isStarting = startSync.isPending
@@ -333,8 +312,6 @@ export function Data() {
   // 的 null = 表确为空 (后端空表返回 null 而非 rows:0) → 显示首装引导。
   const statsPending = s?.stats_pending === true
   const hasData = statsPending || !!(s?.instruments?.rows || s?.daily?.rows)
-  // none 档(无 key / 无效 key) → 禁用立即同步 (同步依赖付费档的批量端点)
-  const isNoKey = settings.data?.mode === 'none'
   const indexOverviewStats = s ? {
     rows: 0,
     earliest_date: s.index_daily?.earliest_date ?? s.index_enriched?.earliest_date ?? null,
@@ -363,6 +340,42 @@ export function Data() {
     5000,
     Math.max(30, Math.ceil((Date.now() - indexTargetDate.getTime()) / 86_400_000) + 1),
   )
+
+  // 「字段」列只对三张增强表取 schema 计数 (设计稿: 增强 15 / 11 / 12, 原表为 —)
+  const [schemaCounts, setSchemaCounts] = useState<Record<string, number>>({})
+  const pendingSchemaTable: string | null = schemaCounts.enriched != null
+    && schemaCounts.index_enriched != null
+    && schemaCounts.etf_enriched != null
+    ? null
+    : (schemaCounts.enriched == null ? 'enriched'
+      : schemaCounts.index_enriched == null ? 'index_enriched' : 'etf_enriched')
+  const schemaCount = useQuery({
+    queryKey: ['data-schema-count', pendingSchemaTable],
+    queryFn: () => api.enrichedSchema(pendingSchemaTable!),
+    enabled: !!pendingSchemaTable,
+    staleTime: Infinity,
+  })
+  useEffect(() => {
+    if (pendingSchemaTable && schemaCount.data) {
+      setSchemaCounts(prev => ({ ...prev, [pendingSchemaTable]: schemaCount.data.length }))
+    }
+  }, [pendingSchemaTable, schemaCount.data])
+
+  // —— 设计稿 25-data 的读数带 / 行情表 / 名录 / 存储表数据口径 ——
+  const latestTradeDay = s?.daily?.latest_date ?? s?.enriched?.latest_date ?? s?.index_daily?.latest_date ?? null
+  const coverSymbols = s?.instruments?.symbols_covered ?? 0
+  const coverNamed = s?.instruments?.named ?? 0
+  const totalFiles = storage
+    ? (storage.daily_files + storage.enriched_files + storage.minute_files + storage.adj_factor_files
+      + storage.instruments_files
+      + (storage.index_daily_files ?? 0) + (storage.index_enriched_files ?? 0)
+      + (storage.etf_daily_files ?? 0) + (storage.etf_enriched_files ?? 0)
+      + (storage.ext_data_files ?? 0) + (storage.financials_files ?? 0))
+    : 0
+  const refreshStatus = () => {
+    qc.invalidateQueries({ queryKey: QK.dataStatus })
+    qc.invalidateQueries({ queryKey: QK.pipelineJobs })
+  }
 
   const STAGE_CARD: Record<string, string> = {
     sync_instruments: 'instruments',
@@ -605,115 +618,78 @@ export function Data() {
     }
   }
 
+  // 设计稿 25-data: 行情表 7 行 / 名录 3 行 / 存储 11 行 (含合计) 的数据源
+  const marketRows: Array<{ name: string; table: string; stats: { rows: number; symbols_covered: number; trading_days: number; earliest_date: string | null; latest_date: string | null } | null; enriched: boolean }> = [
+    { name: '日K',       table: 'kline_daily',     stats: s?.daily ?? null,          enriched: false },
+    { name: '日K·增强',  table: 'kline_enriched',  stats: s?.enriched ?? null,       enriched: true },
+    { name: '指数日K',   table: 'index_daily',     stats: s?.index_daily ?? null,    enriched: false },
+    { name: '指数·增强', table: 'index_enriched',  stats: s?.index_enriched ?? null, enriched: true },
+    { name: 'ETF 日K',   table: 'etf_daily',       stats: s?.etf_daily ?? null,      enriched: false },
+    { name: 'ETF·增强',  table: 'etf_enriched',    stats: s?.etf_enriched ?? null,   enriched: true },
+    { name: '除权因子',  table: 'adj_factor',      stats: s?.adj_factor ?? null,     enriched: false },
+  ]
+  const catalogRows = [
+    { name: 'A 股名录',  table: 'instruments',       stats: s?.instruments ?? null },
+    { name: '指数名录',  table: 'instruments_index', stats: s?.index_instruments ?? null },
+    { name: 'ETF 名录',  table: 'instruments_etf',   stats: s?.etf_instruments ?? null },
+  ]
+  const storageRows = [
+    { key: 'daily',          name: '日K',       files: storage?.daily_files,          size: storage?.daily_size_mb },
+    { key: 'enriched',       name: '日K·增强',  files: storage?.enriched_files,       size: storage?.enriched_size_mb },
+    { key: 'index_daily',    name: '指数日K',   files: storage?.index_daily_files,    size: storage?.index_daily_size_mb },
+    { key: 'index_enriched', name: '指数·增强', files: storage?.index_enriched_files, size: storage?.index_enriched_size_mb },
+    { key: 'etf_daily',      name: 'ETF 日K',   files: storage?.etf_daily_files,      size: storage?.etf_daily_size_mb },
+    { key: 'etf_enriched',   name: 'ETF·增强',  files: storage?.etf_enriched_files,   size: storage?.etf_enriched_size_mb },
+    { key: 'minute',         name: '分钟K',     files: storage?.minute_files,         size: storage?.minute_size_mb },
+    { key: 'adj_factor',     name: '除权因子',  files: storage?.adj_factor_files,     size: storage?.adj_factor_size_mb },
+    { key: 'ext_data',       name: '增强外数据', files: storage?.ext_data_files,      size: storage?.ext_data_size_mb },
+    { key: 'financials',     name: '财务',      files: storage?.financials_files,     size: storage?.financials_size_mb },
+  ]
+  // 五档定版时间 (设置 → 实时监控 可改), 设计稿调度第三行的「下次」口径
+  const depthFinalize = prefs.data?.depth_finalize_time ?? { hour: 15, minute: 2 }
+  const fmtHM = (t: { hour: number; minute: number }) =>
+    `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`
+  const fmtRun = (iso: string | null | undefined) =>
+    iso ? `${formatScheduleDatePart(iso)} ${formatScheduleTimePart(iso)}` : null
+
   return (
     <>
       <div ref={topRef} />
       <PageHeader seal="存"
         title="数据"
-        subtitle="本地数据画像 · 同步状态 · 历史记录"
+        subtitle="DATA"
+        titleExtra={
+          <>
+            <span className={`tb-chip${dailyRows ? '' : ' warn'}`}>日K {dailyRows ? `${dailyRows.toLocaleString()} 行` : '行数为空'}</span>
+            {indexRows != null && <span className="tb-chip">指数 {indexRows.toLocaleString()} 行</span>}
+            {storage && <span className="tb-chip">占用 {storage.total_size_mb.toLocaleString()} MB</span>}
+          </>
+        }
         right={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button className="ctl-btn ctl-sm" onClick={refreshStatus} disabled={isLoading}>刷新状态</button>
             <button
+              className="ctl-btn ctl-sm pri"
               onClick={() => adjGate.guard(() => startSync.mutate())}
-              disabled={isStarting}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-gradient-to-r from-accent/25 to-accent/10 border border-accent/30 text-accent text-xs font-medium hover:from-accent/35 hover:to-accent/20 disabled:opacity-40 transition-all duration-150 ${
-                !hasData && !isLoading && !isStarting && !isRunning ? 'animate-breath-sync' : ''
-              }`}
+              disabled={isStarting || isRunning}
+              title="重跑盘后日K流水线"
             >
-              {(isStarting || isRunning) ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )}
-              {isStarting ? '启动中…' : isRunning ? '同步中…' : '立即同步'}
+              {(isStarting || isRunning) && <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />}
+              重跑日K
             </button>
-            {isRunning && !!activeJobId && (
-              <button
-                onClick={() => setShowStopConfirm(true)}
-                title="停止当前同步任务"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-danger/[0.12] border border-danger/30 text-danger text-xs font-medium hover:bg-danger/20 transition-all duration-150"
-              >
-                <Square className="h-3 w-3 fill-current" />
-                停止
-              </button>
-            )}
-            <button
-              onClick={() => setOpenSettings('pipeline-scope')}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-            >
-              <CheckSquare className="h-3.5 w-3.5" />
-              数据范围
-            </button>
-            <button
-              onClick={() => setShowRepair(true)}
-              disabled={isRunning}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none"
-            >
-              <WandSparkles className="h-3.5 w-3.5" />
-              自检/修补
-            </button>
-            <div className="w-px h-4 bg-border" />
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setShowCreateExt(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                扩展数据
-              </button>
-              {hasTickflowKey && (
-              <button
-                onClick={() => setShowEndpointTest(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-              >
-                <Wifi className="h-3.5 w-3.5" />
-                测试端点
-              </button>
-              )}
-              <button
-                onClick={() => setOpenSettings('page-settings')}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                页面设置
-              </button>
-              <div className="w-px h-4 bg-border" />
-              <Link
-                to="/settings?tab=data-sources&highlight=data-sources"
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-                title="切换数据源"
-              >
-                <Database className="h-3.5 w-3.5" />
-                <span className="text-foreground/80 max-w-[120px] truncate">{activeDataSourceName}</span>
-              </Link>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                disabled={isRunning}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-muted hover:text-danger hover:bg-danger/8 text-xs transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                清除数据
-              </button>
-            </div>
           </div>
         }
       />
+      {/* 第二行状态条: 设计稿 .tag-row (数据状态 · 检查于 …) */}
+      <div className="toolbar" style={{ borderTop: 0 }}>
+        <div className="tag-row">
+          <span>数据状态 · 检查于 {s?.checked_at ?? '—'}</span>
+          <span>统计{s?.stats_pending === true ? '待生成' : '已就绪'}</span>
+          <span>指标{s?.indicators_ready === false ? '待生成' : '已就绪'}</span>
+        </div>
+      </div>
 
-      <div className="mx-auto px-8 py-6 space-y-6 max-w-6xl">
-        {/* 无 Key 提示 —— 非阻断: 历史日K走免费通道, 实时等能力取决于所选数据源 */}
-        {isNoKey && (
-          <div className="flex items-center gap-2 rounded-card border border-border bg-elevated/40 px-3 py-2 text-xs">
-            <Info className="h-4 w-4 shrink-0 text-muted" />
-            <span className="text-secondary leading-relaxed">
-              当前无需 API Key,历史日K将使用免费通道获取。
-              实时行情、分钟K等能力取决于所选数据源,可在
-              <Link to="/settings?tab=data-sources&highlight=data-sources" className="mx-0.5 font-medium text-accent hover:underline">
-                数据源设置
-              </Link>
-              中配置。
-            </span>
-          </div>
-        )}
+      <div className="space-y-0">
 
         {/* 实时进度 */}
         <AnimatePresence>
@@ -730,8 +706,189 @@ export function Data() {
           )}
         </AnimatePresence>
 
-        {/* 实时行情 + 存储 + 调度 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* ===== 读数带 (设计稿 .readout 六格) ===== */}
+        <div className="readout mt-2">
+          <div>
+            <span className="k">最 新 交 易 日</span>
+            <div className="v">{latestTradeDay ?? '—'}</div>
+            <small>每日 {fmtHM(pipelineSched)} 例行入库</small>
+          </div>
+          <div>
+            <span className="k">个 股 覆 盖</span>
+            <div className="v">{coverSymbols.toLocaleString()}</div>
+            <small>名录 {coverSymbols.toLocaleString()} · 有名 {coverNamed.toLocaleString()}</small>
+          </div>
+          <div className={dailyRows === 0 ? 'down' : undefined}>
+            <span className="k">日 K 行 数</span>
+            <div className="v">{dailyRows != null ? dailyRows.toLocaleString() : '—'}</div>
+            <small>{dailyRows == null ? '统计后台刷新中' : dailyRows === 0 ? '分区存在 · 行数为空' : '全市场日线与增量同步'}</small>
+          </div>
+          <div>
+            <span className="k">指 数 日 K</span>
+            <div className="v">{(indexRows ?? 0).toLocaleString()}</div>
+            <small>{(s?.index_daily?.symbols_covered ?? 0).toLocaleString()} 个代码 · {(s?.index_daily?.trading_days ?? 0).toLocaleString()} 个交易日</small>
+          </div>
+          <div>
+            <span className="k">占 用 磁 盘</span>
+            <div className="v">{storage ? `${storage.total_size_mb.toFixed(1)} MB` : '—'}</div>
+            <small>{totalFiles.toLocaleString()} 个分区目录</small>
+          </div>
+          <div>
+            <span className="k">指 标 就 绪</span>
+            <div className="v">{s?.indicators_ready === false ? '否' : '是'}</div>
+            <small>增强表可支撑因子计算</small>
+          </div>
+        </div>
+
+        {/* ===== 行情表 (设计稿「行 情 表」) ===== */}
+        <div className="sec-h mt-5">
+          行 情 表 ｜ 六 张 主 表 的 覆 盖 与 日 期 范 围
+        </div>
+        <table className="dt">
+          <colgroup><col style={{ width: 132 }} /><col style={{ width: 78 }} /><col style={{ width: 66 }} /><col style={{ width: 62 }} /><col style={{ width: 52 }} /><col /><col style={{ width: 92 }} /></colgroup>
+          <thead>
+            <tr><th>表</th><th>行数</th><th>代码</th><th>交易日</th><th>字段</th><th></th><th>最新</th></tr>
+          </thead>
+          <tbody>
+            {marketRows.map(r => {
+              const st = r.stats
+              return (
+                <tr key={r.table}>
+                  <td>
+                    {r.name}
+                    <span>{r.table}</span>
+                  </td>
+                  <td className={st && st.rows === 0 ? 'z' : undefined}>{st ? st.rows.toLocaleString() : '—'}</td>
+                  <td>{st ? st.symbols_covered.toLocaleString() : '—'}</td>
+                  <td>{st ? st.trading_days.toLocaleString() : '—'}</td>
+                  <td>{r.enriched ? (schemaCounts[r.table] ?? '…') : '—'}</td>
+                  <td className="z">
+                    {st?.earliest_date ? `${st.earliest_date} →` : ''}
+                  </td>
+                  <td className="num">{st?.latest_date ?? '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        {/* ===== 名录 (设计稿「名 录」) ===== */}
+        <div className="sec-h mt-5">
+          名 录 ｜ 用 于 选 股 与 板 块 归 属 的 静 态 表
+        </div>
+        <table className="dt">
+          <colgroup><col style={{ width: 132 }} /><col style={{ width: 78 }} /><col style={{ width: 66 }} /><col /></colgroup>
+          <thead>
+            <tr><th>表</th><th>行数</th><th>代码</th><th></th></tr>
+          </thead>
+          <tbody>
+            {catalogRows.map(r => (
+              <tr key={r.table}>
+                <td>
+                  {r.name}
+                  <span>{r.table}</span>
+                </td>
+                <td>{r.stats ? r.stats.rows.toLocaleString() : '—'}</td>
+                <td>{r.stats ? r.stats.symbols_covered.toLocaleString() : '—'}</td>
+                <td></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* ===== 存储 (设计稿「存 储」) ===== */}
+        <div className="sec-h mt-5">
+          存 储 ｜ 按 表 分 区 的 落 盘 体 积
+        </div>
+        <table className="dt">
+          <colgroup><col /><col style={{ width: 78 }} /><col style={{ width: 92 }} /></colgroup>
+          <thead>
+            <tr><th>分区</th><th>文件数</th><th>体积 MB</th></tr>
+          </thead>
+          <tbody>
+            {storageRows.map(r => (
+              <tr key={r.key}>
+                <td>
+                  {r.name}
+                  <span>{r.key}</span>
+                </td>
+                <td className={(r.files ?? 0) === 0 ? 'z' : undefined}>{(r.files ?? 0).toLocaleString()}</td>
+                <td>{(r.size ?? 0).toFixed(2)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td>
+                <b>合计</b>
+                <span>total</span>
+              </td>
+              <td><b>{totalFiles.toLocaleString()}</b></td>
+              <td><b>{storage ? storage.total_size_mb.toFixed(2) : '—'}</b></td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* ===== 调度 (设计稿「调 度」三行定时任务) ===== */}
+        <div className="sec-h mt-5">
+          调 度 ｜ 三 个 定 时 任 务
+        </div>
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>名录刷新</b>
+              <small>每个交易日 {fmtHM(instrumentsSched)} 拉取全市场代码表，覆盖沪深京</small>
+            </div>
+            <div className="ctl">
+              <span className="v dim">上次 {fmtRun(s?.last_instruments_run) ?? '—'}</span>
+              <span className="v">下次 {fmtRun(s?.next_instruments_run) ?? '—'}</span>
+            </div>
+          </div>
+          <div className="r">
+            <div className="lab">
+              <b>日K 流水线</b>
+              <small>收盘后 {fmtHM(pipelineSched)} 拉取当日日K并生成增强表与除权因子</small>
+            </div>
+            <div className="ctl">
+              <span className="v dim">上次 {fmtRun(s?.last_pipeline_run) ?? '—'}</span>
+              <span className="v">下次 {fmtRun(s?.next_pipeline_run) ?? '—'}</span>
+            </div>
+          </div>
+          <div className="r">
+            <div className="lab">
+              <b>五档定版</b>
+              <small>盘中 {fmtHM(depthFinalize)} 固化当日五档盘口快照，供封单监控复用</small>
+            </div>
+            <div className="ctl">
+              <span className="v dim">已定版</span>
+              <span className="v">每个交易日 {fmtHM(depthFinalize)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== v2 保留功能: 实时行情 / 同步控制 / 数据画像 / 同步历史 ===== */}
+        <div className="sec-h mt-8">
+          实 时 行 情 与 调 度 ｜ v2 保 留 的 同 步 控 制
+        </div>
+        {/* 同步控制操作条 — 原工具条按钮 (设计稿 25 未包含, 移入本节保留) */}
+        <div className="flex flex-wrap items-center gap-2 py-3">
+          {isRunning && (
+            <button className="ctl-btn ctl-sm" onClick={() => setShowStopConfirm(true)}>
+              停止
+            </button>
+          )}
+          <button className="ctl-btn ctl-sm" onClick={() => setOpenSettings('pipeline-scope')}>数据范围</button>
+          <button className="ctl-btn ctl-sm" onClick={() => setShowRepair(true)} disabled={!hasData}>自检·修补</button>
+          <button className="ctl-btn ctl-sm" onClick={() => setShowCreateExt(true)}>扩展数据</button>
+          <button className="ctl-btn ctl-sm" onClick={() => setOpenSettings('page-settings')}>页面设置</button>
+          <Link
+            to="/settings?tab=data-sources"
+            className="ctl-btn ctl-sm inline-flex items-center"
+            style={{ display: 'inline-flex', alignItems: 'center' }}
+          >
+            数据源
+          </Link>
+          <button className="ctl-btn ctl-sm" onClick={() => setShowClearConfirm(true)}>清除数据</button>
+        </div>
+        <div className="hgrid grid grid-cols-1 md:grid-cols-3">
           <QuoteConfigCard
             enabled={realtimeEnabled}
             running={quoteStatus.data?.running ?? false}
@@ -749,10 +906,10 @@ export function Data() {
           />
 
           {/* 自动调度 */}
-          <div className="leaf-cell">
+          <div className="px-4 py-3">
             <div className="flex items-center gap-2 mb-3">
-              <Calendar className="h-4 w-4 text-secondary" />
-              <h3 className="text-sm font-medium text-foreground">自动调度</h3>
+              <Calendar className="h-[16px] w-[16px] text-secondary" />
+              <h3 className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">自动调度</h3>
             </div>
             {isLoading ? (
               <div className="space-y-2">
@@ -799,9 +956,9 @@ export function Data() {
                     </span>
                     <button
                       onClick={() => setShowInstScheduleEdit(v => !v)}
-                      className={`p-0.5 rounded hover:bg-elevated transition-colors ${showInstScheduleEdit ? 'text-accent' : 'text-secondary'}`}
+                      className={`ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center hover:bg-elevated ${showInstScheduleEdit ? 'text-accent' : 'text-secondary'}`}
                     >
-                      <Clock className="h-3 w-3" />
+                      <Clock className="h-[12px] w-[12px]" />
                     </button>
                   </div>
                   <div className="flex items-center gap-2 font-mono text-secondary">
@@ -846,9 +1003,9 @@ export function Data() {
                     </span>
                     <button
                       onClick={() => setShowScheduleEdit(v => !v)}
-                      className={`p-0.5 rounded hover:bg-elevated transition-colors ${showScheduleEdit ? 'text-accent' : 'text-secondary'}`}
+                      className={`ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center hover:bg-elevated ${showScheduleEdit ? 'text-accent' : 'text-secondary'}`}
                     >
-                      <Clock className="h-3 w-3" />
+                      <Clock className="h-[12px] w-[12px]" />
                     </button>
                   </div>
                   <div className="flex items-center gap-2 font-mono text-secondary">
@@ -889,11 +1046,11 @@ export function Data() {
           </div>
 
           {/* 存储 */}
-          <div className="leaf-cell">
+          <div className="px-4 py-3">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <HardDrive className="h-4 w-4 text-secondary" />
-                <h3 className="text-sm font-medium text-foreground">存储</h3>
+                <HardDrive className="h-[16px] w-[16px] text-secondary" />
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">存储</h3>
               </div>
               {isLoading ? (
                 <Skeleton w="w-12" />
@@ -949,11 +1106,11 @@ export function Data() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SectionTitle icon={Database}>数据画像</SectionTitle>
             <button type="button" onClick={() => setShowImportExt(true)}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-btn border border-border px-3 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+              className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 hover:bg-elevated hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent bg-elevated">
               <Upload className="h-3.5 w-3.5" />导入扩展配置
             </button>
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
+          <div className="mt-3 hgrid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-stretch">
             {getCardOrder().filter(k => cardVisible[k]).map((k: CardKey) => (
               <Fragment key={k}>{renderStatCard(k)}</Fragment>
             ))}
@@ -972,9 +1129,9 @@ export function Data() {
         {/* 同步历史 */}
         <div>
           <SectionTitle icon={Clock}>同步历史</SectionTitle>
-          <div className="mt-3 rounded-card border border-border overflow-hidden">
+          <div className="mt-3 border-t border-rule-strong">
             {history.isLoading ? (
-              <div className="px-5 py-6 space-y-3">
+              <div className="py-6 space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -995,7 +1152,7 @@ export function Data() {
                 ))}
               </div>
             ) : (
-              <div className="px-5 py-8 text-center text-sm text-muted">
+              <div className="py-8 text-center text-sm text-muted">
                 暂无同步记录 — 点右上角"立即同步"开始。
               </div>
             )}
@@ -1014,15 +1171,6 @@ export function Data() {
         table={schemaTable}
         onClose={() => setSchemaTable(null)}
       />
-
-      {showEndpointTest && (
-        <EndpointTestDialog
-          hasKey={settings.data?.mode === 'api_key'}
-          tierLabel={settings.data?.tier_label ?? ''}
-          currentEndpoint={settings.data?.current_endpoint ?? ''}
-          onClose={() => setShowEndpointTest(false)}
-        />
-      )}
 
       <AnimatePresence>
         {showImportExt && <ExtConfigImportDialog onClose={() => setShowImportExt(false)} />}
@@ -1138,15 +1286,15 @@ export function Data() {
                     <button
                       onClick={() => setIndexExtendValue(v => Math.max(1, v - 1))}
                       disabled={!hasDailyBatchCap || !!activeJobId || syncIndexDaily.isPending}
-                      className="h-6 w-6 flex items-center justify-center rounded-l-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+                      className="ctl ctl-sm ctl-btn filled w-[24px] px-0 rounded-l-btn hover:bg-border/50 disabled:opacity-30"
                     >−</button>
-                    <div className="h-6 w-8 flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums text-foreground bg-base">
+                    <div className="h-ctl-sm w-[32px] flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums text-foreground bg-base">
                       {indexExtendValue}
                     </div>
                     <button
                       onClick={() => setIndexExtendValue(v => Math.min(indexExtendUnit === 'year' ? 10 : 36, v + 1))}
                       disabled={!hasDailyBatchCap || !!activeJobId || syncIndexDaily.isPending}
-                      className="h-6 w-6 flex items-center justify-center rounded-r-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+                      className="ctl ctl-sm ctl-btn filled w-[24px] px-0 rounded-r-btn hover:bg-border/50 disabled:opacity-30"
                     >+</button>
                   </div>
 
@@ -1156,7 +1304,7 @@ export function Data() {
                         key={u}
                         onClick={() => { setIndexExtendUnit(u); if (u === 'year' && indexExtendValue > 10) setIndexExtendValue(1); if (u === 'month' && indexExtendValue > 36) setIndexExtendValue(6) }}
                         disabled={!hasDailyBatchCap || !!activeJobId || syncIndexDaily.isPending}
-                        className={`px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 ${
+                        className={`ctl ctl-sm ctl-ghost px-1.5 disabled:opacity-40 ${
                           indexExtendUnit === u ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-elevated'
                         }`}
                       >{u === 'month' ? '月' : '年'}</button>
@@ -1183,7 +1331,7 @@ export function Data() {
                         value={indexBatchInput}
                         onChange={e => setIndexBatchInput(e.target.value)}
                         disabled={updateIndexBatchSize.isPending || !!activeJobId || syncIndexDaily.isPending}
-                        className="w-20 px-2 py-1 rounded-btn bg-elevated border border-border text-xs font-mono text-foreground outline-none focus:border-accent disabled:opacity-40"
+                        className="ctl ctl-sm ctl-input w-20 px-1.5 font-mono focus:border-accent disabled:opacity-40"
                       />
                       <button
                         onClick={() => {
@@ -1192,7 +1340,7 @@ export function Data() {
                           updateIndexBatchSize.mutate(size)
                         }}
                         disabled={updateIndexBatchSize.isPending || !!activeJobId || syncIndexDaily.isPending}
-                        className="px-2.5 py-1 rounded-btn bg-elevated border border-border text-xs text-secondary hover:text-foreground disabled:opacity-40 transition-colors"
+                        className="ctl ctl-sm ctl-btn filled px-1.5 hover:text-foreground disabled:opacity-40"
                       >
                         {updateIndexBatchSize.isPending ? '保存中…' : '保存'}
                       </button>
@@ -1205,11 +1353,11 @@ export function Data() {
                 <button
                   onClick={() => syncIndexDaily.mutate()}
                   disabled={!hasDailyBatchCap || !!activeJobId || syncIndexDaily.isPending}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:pointer-events-none transition-colors duration-150"
+                  className="ctl ctl-md ctl-btn soft w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 disabled:pointer-events-none duration-150"
                 >
                   {syncIndexDaily.isPending ? (
                     <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-[12px] w-[12px] animate-spin" />
                       获取中…
                     </>
                   ) : (
@@ -1265,8 +1413,8 @@ export function Data() {
               className="relative w-[90vw] max-w-[420px] rounded-card border border-border bg-base shadow-2xl p-6"
             >
               <div className="flex items-start gap-3">
-                <div className="shrink-0 h-10 w-10 rounded-full bg-danger/[0.12] flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-danger" />
+                <div className="shrink-0 h-[40px] w-[40px] rounded-full bg-danger/[0.12] flex items-center justify-center">
+                  <AlertTriangle className="h-[20px] w-[20px] text-danger" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">确认停止数据同步？</h3>
@@ -1286,14 +1434,14 @@ export function Data() {
                 <button
                   onClick={() => setShowStopConfirm(false)}
                   disabled={stopSync.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors disabled:opacity-50"
+                  className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 disabled:opacity-50"
                 >
                   取消
                 </button>
                 <button
                   onClick={() => stopSync.mutate()}
                   disabled={stopSync.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-danger/90 text-white text-sm font-medium hover:bg-danger disabled:opacity-50 transition-colors"
+                  className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger disabled:opacity-50"
                 >
                   {stopSync.isPending ? '停止中…' : '确认停止'}
                 </button>
@@ -1324,8 +1472,8 @@ export function Data() {
               className="relative w-[90vw] max-w-[420px] rounded-card border border-border bg-base shadow-2xl p-6"
             >
               <div className="flex items-start gap-3">
-                <div className="shrink-0 h-10 w-10 rounded-full bg-danger/[0.12] flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-danger" />
+                <div className="shrink-0 h-[40px] w-[40px] rounded-full bg-danger/[0.12] flex items-center justify-center">
+                  <AlertTriangle className="h-[20px] w-[20px] text-danger" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">确认清除本地数据？</h3>
@@ -1350,14 +1498,14 @@ export function Data() {
                 <button
                   onClick={() => setShowClearConfirm(false)}
                   disabled={clearData.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors disabled:opacity-50"
+                  className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 disabled:opacity-50"
                 >
                   取消
                 </button>
                 <button
                   onClick={() => clearData.mutate()}
                   disabled={clearData.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-danger/90 text-white text-sm font-medium hover:bg-danger disabled:opacity-50 transition-colors"
+                  className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger disabled:opacity-50"
                 >
                   {clearData.isPending ? '清除中…' : '清除数据'}
                 </button>

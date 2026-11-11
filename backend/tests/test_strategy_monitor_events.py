@@ -467,5 +467,5 @@ def test_system_notifications_delivered_off_calling_thread(monkeypatch):
     thread_name, title, body = records[0]
     assert thread_name.startswith("sys-notify")
     assert thread_name != threading.current_thread().name
-    assert title == "TickFlow · 价格"
+    assert title == "行情提醒 · 价格"
     assert "000001.SZ" in body

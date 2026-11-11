@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 SYM = "600001.SH"
 

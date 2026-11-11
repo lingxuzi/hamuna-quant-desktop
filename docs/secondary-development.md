@@ -18,7 +18,7 @@
 - 自定义、AI 和叠加策略目录：`data/strategies/`。策略与信号已全面去内置化——无内置策略目录，新装环境策略库为空（默认信号定义由种子自动种入；旧版本升级用户自动补回原内置策略、失效策略文件自动迁移归档）。策略参数类型支持 `float/int/bool/select/date/string`；每策略可配「叠加条件」（`overlay_filter`，存于策略 override）：字段+运算符+值的多行 AND 硬过滤，选股/回测/监控三处一致生效，不改策略代码。
 - 数据源 Provider 与 `plugin.yaml` 机制：详见 [`plugin-development.md`](plugin-development.md)。
 - 扩展数据与声明式分析页面：适合不需要自定义 React 交互的页面。
-- 前端源码扩展注册：`frontend/src/custom/<namespace>/extension.tsx`，支持静态页面、导航和已开放插槽。
+- 前端源码扩展注册：`frontend_v2/src/custom/<namespace>/extension.tsx`，支持静态页面、导航和已开放插槽。
 - 后端源码扩展注册：`backend/app/custom/<module>.py`，支持 FastAPI 路由、启动钩子和通知格式化器。
 - 外部后端扩展包及配套页面安装：`data/extensions/<id>/versions/<version>/`，复用现有注册契约，静态预览、重启生效、失败保留旧版本。入口为「设置 → 导入与备份」，见 [统一导入与外部后端扩展包](extension-packages.md)。
 - 当前前端插槽：`layout.navigation.extra`、`stock-preview.footer`、`watchlist.toolbar`。
@@ -130,7 +130,7 @@ stock-preview.footer
 watchlist.toolbar
 ```
 
-各插槽 context 契约（均要求 `apiVersion: 1`，定义见 `frontend/src/extensions/types.ts` 的 `FrontendSlotContextMap`）：
+各插槽 context 契约（均要求 `apiVersion: 1`，定义见 `frontend_v2/src/extensions/types.ts` 的 `FrontendSlotContextMap`）：
 
 - `layout.navigation.extra`：`{ collapsed, pathname }`，侧边栏导航底部。
 - `stock-preview.footer`：`{ symbol, name, view }`，个股详情对话框底部（日K/分时图表下方）；`view` 为 `'daily' | 'intraday'`。适合个股附加面板：龙虎榜、资金流、外部研究链接等。
@@ -163,13 +163,13 @@ const extension: FrontendExtension = {
 
 路由注册与菜单注册已经解耦：页面可以存在但不显示在菜单中；菜单只能引用同一扩展内的已注册路由。首版只支持静态绝对路径。扩展路由不得覆盖核心或其他扩展路径，冲突时只禁用该扩展并输出明确错误。
 
-完整前端模板位于 [`frontend/src/custom/_template/extension.tsx.example`](../frontend/src/custom/_template/extension.tsx.example)。
+完整前端模板位于 [`frontend_v2/src/custom/_template/extension.tsx.example`](../frontend_v2/src/custom/_template/extension.tsx.example)。
 
 较大的页面应让 `extension.tsx` 只保留路由、导航与轻量组件，使用 `React.lazy(() => import('./Page').then(m => ({ default: m.Page })))` 注册页面组件；路由宿主已有 `Suspense`。源码模块并发加载、按路径排序注册，冲突处理顺序不变。运行时页面插件清单与各脚本均有加载超时，单个脚本失败只禁用该扩展；契约仍为 v1。
 
 ### 3.4 前端禁止事项
 
-- 不直接在多个组件中拼接后端 URL，统一使用 `frontend/src/lib/api.ts` 或未来公开客户端。
+- 不直接在多个组件中拼接后端 URL，统一使用 `frontend_v2/src/lib/api.ts` 或未来公开客户端。
 - 不自行创建与现有 TanStack Query 重复的缓存；查询键仍由 `queryKeys.ts` 集中管理。
 - 不用插槽绕过权限、数据口径或表单校验。
 - 不通过 DOM 查询、全局事件或 monkey patch 修改核心组件。
@@ -305,10 +305,10 @@ def setup(registrar: BackendExtensionRegistrar) -> None:
 backend/app/main.py
 backend/app/strategy/engine.py
 backend/app/backtest/engine.py
-frontend/src/router.tsx
-frontend/src/components/Layout.tsx
-frontend/src/lib/api.ts
-frontend/src/lib/queryKeys.ts
+frontend_v2/src/router.tsx
+frontend_v2/src/components/Layout.tsx
+frontend_v2/src/lib/api.ts
+frontend_v2/src/lib/queryKeys.ts
 ```
 
 高冲突不代表禁止修改，而是要求改动更小、测试更完整。若多个二开需求反复修改同一热点，应把共同接线能力提升为正式插槽或策略接口。

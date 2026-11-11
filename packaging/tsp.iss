@@ -23,7 +23,7 @@
 #define MyAppExeName      "TSP.exe"
 #define MyAppPublisher    "TSP"
 
-; 版本号: 从 frontend/package.json 读取, 与 Release tag 保持一致
+; 版本号: 从 frontend_v2/package.json 读取, 与 Release tag 保持一致
 ; 手动指定更可靠 (CI 传入 /DMyAppVersion)
 #ifndef MyAppVersion
   #define MyAppVersion     "0.0.0"

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.services import heavy_job_limiter, pipeline_jobs, preferences
 from app.services.heavy_job_limiter import HeavyJobLimiter
 from app.services.pipeline_jobs import JobCancelledError, JobStore, run_with_capacity
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 
 def wait_for(predicate, timeout=2):
@@ -196,7 +196,7 @@ def test_api_jobs_wait_before_computing(
 
     monkeypatch.setattr(importlib.import_module(module_name), function_name, compute)
     monkeypatch.setattr(pipeline, "job_store", store)
-    monkeypatch.setattr("app.tickflow.pools.get_pool", lambda *args: [])
+    monkeypatch.setattr("app.services.watchlist.symbols", lambda *args: [])
     monkeypatch.setattr(daily_pipeline, "_refresh_single_view", lambda *args: None)
     app = FastAPI()
     app.include_router(pipeline.router)

@@ -216,7 +216,7 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
           {/* 标题栏 */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
             <div className="flex items-center gap-2">
-              <Repeat className="h-4 w-4 text-accent" />
+              <Repeat className="h-[16px] w-[16px] text-accent" />
               <span id="rps-rotation-title" className="text-sm font-medium text-foreground">{dimLabel}涨幅轮动</span>
               <span className="text-[11px] text-muted">
                 {conceptCount > 0 ? `${dates.length} 天 · ${conceptCount} 个${dimLabel}` : '暂无数据'}
@@ -229,7 +229,7 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
                       key={lv}
                       onClick={() => { setLevel(lv); setSelected(null) }}
                       className={cn(
-                        'h-5 rounded-[5px] px-2 text-[10px] font-medium transition-colors',
+                        'ctl ctl-sm ctl-ghost rounded-[5px] px-1.5',
                         level === lv ? 'bg-accent text-white shadow-sm' : 'text-secondary hover:text-foreground',
                       )}
                     >
@@ -239,8 +239,8 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
                 </div>
               )}
             </div>
-            <button aria-label="关闭" onClick={onClose} className="p-1 rounded hover:bg-elevated transition-colors cursor-pointer">
-              <X className="h-4 w-4 text-muted" />
+            <button aria-label="关闭" onClick={onClose} className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated">
+              <X className="h-[16px] w-[16px] text-muted" />
             </button>
           </div>
 
@@ -260,23 +260,23 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
                   onChange={e => setFocus(e.target.value)}
                   placeholder="关注点(可选)"
                   disabled={analyzing}
-                  className="w-28 px-2 py-0.5 text-[11px] bg-elevated/50 border border-border rounded-btn text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent/40 disabled:opacity-50"
+                  className="ctl ctl-sm ctl-input w-28 px-1.5 bg-elevated/50 placeholder:text-muted/50 focus:border-accent/40 disabled:opacity-50"
                 />
                 <button
                   onClick={() => runAnalysis(days, focus)}
                   disabled={analyzing}
                   className={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-btn text-[11px] transition-colors cursor-pointer border',
+                    'ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5',
                     analyzing
                       ? 'opacity-60 cursor-not-allowed border-border text-muted'
                       : 'bg-accent/10 text-accent border-accent/30 hover:bg-accent/20',
                   )}
                 >
                   {analyzing
-                    ? <><RefreshCw className="h-3 w-3 animate-spin" />分析中</>
+                    ? <><RefreshCw className="h-[12px] w-[12px] animate-spin" />分析中</>
                     : analysis
-                      ? <><RefreshCw className="h-3 w-3" />重新分析</>
-                      : <><Sparkles className="h-3 w-3" />生成分析</>}
+                      ? <><RefreshCw className="h-[12px] w-[12px]" />重新分析</>
+                      : <><Sparkles className="h-[12px] w-[12px]" />生成分析</>}
                 </button>
               </div>
             </div>
@@ -325,14 +325,14 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
             <button
               onClick={() => setReversed(r => !r)}
               className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-btn text-[11px] transition-colors cursor-pointer border',
+                'ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5',
                 reversed
                   ? 'bg-accent/10 text-accent border-accent/30'
                   : 'border-border text-muted hover:text-secondary hover:bg-elevated',
               )}
               title="翻转排序(高↔低)"
             >
-              <ArrowDownUp className="h-3 w-3" />
+              <ArrowDownUp className="h-[12px] w-[12px]" />
               {reversed ? '低→高' : '高→低'}
             </button>
             {selected && (
@@ -349,7 +349,7 @@ export function RpsRotationDialog({ onClose, kind = 'concept' }: Props) {
           <div className="flex-1 min-h-0 flex flex-col">
             {isLoading ? (
               <div className="flex items-center justify-center py-16">
-                <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+                <div className="w-[20px] h-[20px] border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
               </div>
             ) : error ? (
               <div className="flex items-center justify-center py-16 text-[11px] text-danger">

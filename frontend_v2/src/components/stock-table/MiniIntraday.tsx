@@ -37,6 +37,20 @@ React.memo: rows 引用由上游收敛 (Watchlist 的 minuteData 出口 reuseUnc
 import { memo, useId } from 'react'
 import type { MinuteKlineRow } from '@/lib/api'
 import { AUCTION_WIDTH_RATIOS, type AuctionBarWidth } from '@/lib/list-columns'
+import { chartTheme, getTheme } from '@/lib/theme'
+
+/** 画布配色随主题走 (canvas 不吃 CSS 变量): 涨跌色与表格同源。 */
+function canvasColors() {
+  const ct = chartTheme(getTheme())
+  return {
+    BULL: ct.bull,
+    BEAR: ct.bear,
+    FLAT: ct.text,
+    LINE_PREV_CLOSE: ct.grid,
+    LINE_MATCH: ct.accent,
+    LINE_AVG: ct.accent,
+  }
+}
 
 export type MiniIntradayYMode = 'adaptive' | 'limit'
 
@@ -171,11 +185,7 @@ function AuctionOnly({ rows, prevClose, match, unmatched, width, height, auction
   height: number
   auctionWidth?: AuctionBarWidth
 }) {
-  const BULL = '#C74040'
-  const BEAR = '#2D9B65'
-  const FLAT = '#A1A1AA'
-  const LINE_PREV_CLOSE = '#7A7A85'
-  const LINE_MATCH = '#E0B84A'
+  const { BULL, BEAR, FLAT, LINE_PREV_CLOSE, LINE_MATCH } = canvasColors()
   const padY = 3
   const W = width
   const H = height
@@ -257,11 +267,7 @@ export const MiniIntraday = memo(function MiniIntraday({ rows, prevClose, change
   /** 竞价窄栏宽度档 (R3): 窄/标准/宽, 默认 'standard'≈30% 整图宽 */
   auctionWidth?: AuctionBarWidth
 }) {
-  const BULL = '#C74040'
-  const BEAR = '#2D9B65'
-  const FLAT = '#A1A1AA'              // 压线 (平盘): 灰, 与 EChartsIntraday 一致
-  const LINE_PREV_CLOSE = '#7A7A85'   // 昨收基准线: 深灰实线
-  const LINE_AVG = '#E0B84A'          // 均线: 暖黄
+  const { BULL, BEAR, FLAT, LINE_PREV_CLOSE, LINE_AVG } = canvasColors()
 
   const W = width
   const H = height

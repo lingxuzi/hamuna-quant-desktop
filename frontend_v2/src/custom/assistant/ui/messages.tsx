@@ -58,7 +58,7 @@ function AnswerDisclaimer() {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border/60 pt-1.5 text-[10px] leading-relaxed text-muted">
       <span className="inline-flex items-center gap-1">
-        <ShieldAlert className="h-3 w-3 shrink-0" />
+        <ShieldAlert className="h-[12px] w-[12px] shrink-0" />
         风险提示: AI 生成内容仅供参考, 不构成投资建议
       </span>
       <span>数据为本地快照, 可能存在延迟或口径差异, 请以交易所官方披露为准</span>
@@ -252,14 +252,14 @@ function ConfirmCard({ call }: { call: ToolCallRecord }) {
         <button
           type="button"
           onClick={() => { void decideAction(call.callId, true) }}
-          className="cursor-pointer rounded-btn bg-accent/15 px-2.5 py-1 font-medium text-accent transition-colors duration-150 ease-smooth hover:bg-accent/25"
+          className="ctl ctl-sm ctl-btn soft px-1.5 duration-150 ease-smooth hover:bg-accent/25 bg-accent/15"
         >
           {isRounds ? '继续' : '确认执行'}
         </button>
         <button
           type="button"
           onClick={() => { void decideAction(call.callId, false) }}
-          className="cursor-pointer rounded-btn px-2.5 py-1 text-secondary transition-colors duration-150 ease-smooth hover:bg-elevated hover:text-foreground"
+          className="ctl ctl-sm ctl-ghost px-1.5 duration-150 ease-smooth hover:bg-elevated hover:text-foreground"
         >
           {isRounds ? '停止' : '取消'}
         </button>
@@ -286,7 +286,7 @@ export const ErrorBubble = memo(function ErrorBubble({
   return (
     <div className="border-l-2 border-danger pl-3 text-sm">
       <div className="flex items-center gap-1.5 font-medium text-danger">
-        <AlertCircle className="h-4 w-4 shrink-0" />
+        <AlertCircle className="h-[16px] w-[16px] shrink-0" />
         {title}
       </div>
       <div className="mt-1 text-secondary">{message}</div>
@@ -295,7 +295,7 @@ export const ErrorBubble = memo(function ErrorBubble({
           <button
             type="button"
             onClick={onRetry}
-            className="cursor-pointer rounded-btn px-2 py-0.5 text-accent transition-colors duration-150 ease-smooth hover:bg-accent/10"
+            className="ctl ctl-sm ctl-ghost px-1.5 duration-150 ease-smooth hover:bg-accent/10"
           >
             重试
           </button>

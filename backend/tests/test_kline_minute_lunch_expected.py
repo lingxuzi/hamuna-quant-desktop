@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 from app.api import kline as kline_api
 from app.market_time import CN_TZ
 from app.services import preferences, trading_day
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 TODAY = date(2026, 9, 15)  # 周二, 交易日
 SYMBOL = "600519.SH"

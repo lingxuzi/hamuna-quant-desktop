@@ -28,7 +28,7 @@ from app.backtest.optimizer import StrategyOptimizer  # noqa: E402
 from app.backtest.strategy import StrategyBacktestConfig, StrategyBacktestService  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.strategy.engine import StrategyEngine  # noqa: E402
-from app.tickflow.repository import DataStore, KlineRepository  # noqa: E402
+from app.data_providers.repository import DataStore, KlineRepository  # noqa: E402
 
 STRATEGY_ID = "consolidation_limit_pullback"
 PARAM_GRID = {

@@ -1,34 +1,22 @@
-"""指数/ETF 日K同步的自定义数据源路由 (#502)。
+"""指数/ETF 日K同步的数据源路由 (#502)。
 
-修复前 sync_and_persist_index_daily / sync_and_persist_etf_daily 经
-kline_sync.sync_daily_batch 硬编码走 TickFlow, 无视日K数据源偏好;
-修复后与个股 sync_and_persist_daily_batch 同一路由语义:
-声明了 daily 数据集的自定义源接管 (asset_type=index/etf), 空手而归回退 TickFlow。
+指数/ETF 日K跟随日K数据源: 生效源声明 daily 数据集时接管 (asset_type=index/etf),
+源只服务股票 (fuyao) 时空手而归, 由链上下一跳 (内置 easytdx) 接管。
 """
 from types import SimpleNamespace
 
 import polars as pl
 import pytest
 
-from app.services import index_sync, kline_sync, preferences
-
-
-class _Caps:
-    """TickFlow 能力集替身: has() 恒返回配置值。"""
-
-    def __init__(self, ok: bool) -> None:
-        self.ok = ok
-
-    def has(self, cap) -> bool:
-        return self.ok
+from app.data_providers.capabilities import CapabilitySet
+from app.services import index_sync, preferences
 
 
 class _FakeProvider:
-    """自定义源替身: iter_daily 记录入参并产出预置帧; frames 为空模拟「仅服务股票」。"""
+    """自定义源替身: iter_daily/get_daily 记录入参并产出预置帧; frames 为空模拟「仅服务股票」。"""
 
-    def __init__(self, frames: list[pl.DataFrame] | None = None, use_get_daily: bool = False) -> None:
+    def __init__(self, frames: list[pl.DataFrame] | None = None) -> None:
         self.frames = frames or []
-        self.use_get_daily = use_get_daily
         self.iter_calls: list[dict] = []
 
     def iter_daily(self, symbols, start_time=None, end_time=None, asset_type="stock", on_chunk_done=None):
@@ -83,28 +71,27 @@ class _FakeRepo:
 
 @pytest.fixture
 def harness(tmp_path, monkeypatch):
-    """路由到 fake_src 并隔离 TickFlow 路径副作用; 返回可配置的测试上下文。"""
+    """路由到 fake_src, 默认日K源固定为内置 easytdx。"""
     monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "fake_src")
-    # TickFlow 路径副作用隔离: 限速/批量计算与网络调用全部替身化
-    tickflow_calls: list[list[str]] = []
-
-    def _fake_sync_daily_batch(symbols, **kwargs):
-        tickflow_calls.append(list(symbols))
-        return pl.DataFrame()
-
-    monkeypatch.setattr(kline_sync, "sync_daily_batch", _fake_sync_daily_batch)
     monkeypatch.setattr(index_sync, "compute_enriched", lambda df, factors=None, instruments=None: df)
-    monkeypatch.setattr(index_sync, "resolve_limit", lambda capset, cap, **kw: SimpleNamespace(batch=100, rpm=600))
-    monkeypatch.setattr(index_sync, "min_batch", lambda size, limit: 50)
-    monkeypatch.setattr(index_sync, "sleep_between_batches", lambda i, rpm: None)
-    return SimpleNamespace(tmp_path=tmp_path, monkeypatch=monkeypatch, tickflow_calls=tickflow_calls)
+    from app.data_providers import custom as custom_sources
+    # 默认日K源 = 内置 easytdx (capabilities._default_provider 读 custom.names())
+    monkeypatch.setattr(custom_sources, "names", lambda: {"fake_src", "easytdx"})
+    return SimpleNamespace(tmp_path=tmp_path, monkeypatch=monkeypatch)
 
 
-def _route(harness, provider):
+def _route(harness, provider, fallback=None):
+    """取数链 = 生效源 fake_src (+ 默认源 easytdx)。"""
     from app.data_providers import custom as custom_sources
 
-    harness.monkeypatch.setattr(custom_sources, "provider_has_dataset", lambda name, ds: name == "fake_src" and ds == "daily")
-    harness.monkeypatch.setattr(custom_sources, "get_provider", lambda name: provider)
+    providers = {"fake_src": provider}
+    if fallback is not None:
+        providers["easytdx"] = fallback
+    harness.monkeypatch.setattr(
+        custom_sources, "provider_has_dataset",
+        lambda name, ds: ds == "daily" and name in providers,
+    )
+    harness.monkeypatch.setattr(custom_sources, "get_provider", lambda name: providers[name])
 
 
 def _index_df() -> pl.DataFrame:
@@ -122,11 +109,11 @@ def _etf_df() -> pl.DataFrame:
 # ---------------------------------------------------------------- 指数日K
 def test_custom_provider_takes_over_index_daily(harness):
     provider = _FakeProvider(frames=[_index_df()])
-    _route(harness, provider)
+    fallback = _FakeProvider(frames=[_index_df()])
+    _route(harness, provider, fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    # TickFlow 无 KLINE_DAILY_BATCH 能力 (纯自定义源部署) 也要能同步成功
-    rows = index_sync.sync_and_persist_index_daily(repo, _Caps(ok=False))
+    rows = index_sync.sync_and_persist_index_daily(repo, CapabilitySet())
 
     assert rows == 2
     assert provider.iter_calls[0]["asset_type"] == "index"
@@ -134,81 +121,98 @@ def test_custom_provider_takes_over_index_daily(harness):
     assert repo.index_rows and repo.index_rows[0].height == 2
     assert repo.index_enriched and repo.index_enriched[0].height == 2
     assert repo.refreshed == 1
-    assert harness.tickflow_calls == []  # 不再走 TickFlow
+    assert fallback.iter_calls == []  # 生效源已接管, 不落到默认源
 
 
 def test_custom_index_daily_via_get_daily_only_provider(harness):
     """仅实现 get_daily (无 iter_daily) 的源: 包装为单帧, 同样接管。"""
-    provider = _FakeProvider(frames=[_index_df()], use_get_daily=True)
-    _route(harness, provider)
+    provider = _FakeProvider(frames=[_index_df()])
     provider.iter_daily = None  # 摘掉 iter_daily, 强制走 get_daily 分支
+    fallback = _FakeProvider(frames=[_index_df()])
+    _route(harness, provider, fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_index_daily(repo, _Caps(ok=True))
+    rows = index_sync.sync_and_persist_index_daily(repo, CapabilitySet())
 
     assert rows == 2
     assert provider.iter_calls[0]["asset_type"] == "index"
-    assert harness.tickflow_calls == []
+    assert fallback.iter_calls == []
 
 
-def test_custom_provider_stock_only_falls_back_to_tickflow(harness):
-    """源对 asset_type=index 空手而归 (fuyao/tdxquant/amber 均如此) → 回退 TickFlow。"""
+def test_custom_provider_stock_only_falls_back_to_easytdx(harness):
+    """源对 asset_type=index 空手而归 (fuyao 只服务股票) → 回退默认源 easytdx。"""
     provider = _FakeProvider(frames=[])
-    _route(harness, provider)
+    fallback = _FakeProvider(frames=[_index_df()])
+    _route(harness, provider, fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_index_daily(repo, _Caps(ok=True))
+    rows = index_sync.sync_and_persist_index_daily(repo, CapabilitySet())
 
-    assert rows == 0
-    assert repo.index_rows == []
-    assert len(harness.tickflow_calls) >= 1  # 回退到 TickFlow 路径
+    assert rows == 2
+    assert provider.iter_calls[0]["asset_type"] == "index"
+    assert fallback.iter_calls[0]["asset_type"] == "index"
+    assert repo.index_rows and repo.index_rows[0].height == 2
     assert repo.refreshed == 1
 
 
-def test_provider_without_daily_dataset_falls_back(harness):
+def test_provider_without_daily_dataset_falls_back_to_easytdx(harness):
     from app.data_providers import custom as custom_sources
 
-    harness.monkeypatch.setattr(custom_sources, "provider_has_dataset", lambda name, ds: False)
+    provider = _FakeProvider(frames=[_index_df()])
+    fallback = _FakeProvider(frames=[_index_df()])
+    _route(harness, provider, fallback)
+    # 生效源没声明 daily → 链上只剩默认源 easytdx
+    harness.monkeypatch.setattr(
+        custom_sources, "provider_has_dataset",
+        lambda name, ds: ds == "daily" and name == "easytdx",
+    )
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_index_daily(repo, _Caps(ok=True))
+    rows = index_sync.sync_and_persist_index_daily(repo, CapabilitySet())
 
-    assert rows == 0
-    assert len(harness.tickflow_calls) >= 1
+    assert rows == 2
+    assert provider.iter_calls == []
+    assert fallback.iter_calls[0]["asset_type"] == "index"
 
 
-def test_tickflow_provider_keeps_original_path(harness):
-    harness.monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "tickflow")
+def test_easytdx_selected_keeps_builtin_path(harness):
+    """生效源就是内置 easytdx: 链上只有一跳, 数据由它直接提供。"""
+    harness.monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "easytdx")
+    fallback = _FakeProvider(frames=[_index_df()])
+    _route(harness, _FakeProvider(frames=[_index_df()]), fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_index_daily(repo, _Caps(ok=True))
+    rows = index_sync.sync_and_persist_index_daily(repo, CapabilitySet())
 
-    assert rows == 0
-    assert len(harness.tickflow_calls) >= 1
-    assert repo.index_rows == []
+    assert rows == 2
+    assert fallback.iter_calls[0]["asset_type"] == "index"
 
 
 # ---------------------------------------------------------------- ETF 日K
 def test_custom_provider_takes_over_etf_daily(harness):
     provider = _FakeProvider(frames=[_etf_df()])
-    _route(harness, provider)
+    fallback = _FakeProvider(frames=[_etf_df()])
+    _route(harness, provider, fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_etf_daily(repo, _Caps(ok=False))
+    rows = index_sync.sync_and_persist_etf_daily(repo, CapabilitySet())
 
     assert rows == 1
     assert provider.iter_calls[0]["asset_type"] == "etf"
     assert repo.etf_rows and repo.etf_rows[0].height == 1
     assert repo.etf_enriched and repo.etf_enriched[0].height == 1
-    assert harness.tickflow_calls == []
+    assert fallback.iter_calls == []
 
 
-def test_custom_etf_stock_only_falls_back_to_tickflow(harness):
+def test_custom_etf_stock_only_falls_back_to_easytdx(harness):
     provider = _FakeProvider(frames=[])
-    _route(harness, provider)
+    fallback = _FakeProvider(frames=[_etf_df()])
+    _route(harness, provider, fallback)
     repo = _FakeRepo(harness.tmp_path)
 
-    rows = index_sync.sync_and_persist_etf_daily(repo, _Caps(ok=True))
+    rows = index_sync.sync_and_persist_etf_daily(repo, CapabilitySet())
 
-    assert rows == 0
-    assert len(harness.tickflow_calls) >= 1
+    assert rows == 1
+    assert provider.iter_calls[0]["asset_type"] == "etf"
+    assert fallback.iter_calls[0]["asset_type"] == "etf"
+    assert repo.etf_rows and repo.etf_rows[0].height == 1

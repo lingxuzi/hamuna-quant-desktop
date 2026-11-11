@@ -53,7 +53,7 @@ export function MiningLockControl() {
     <div className={`mb-3 rounded-card border px-3 py-2.5 ${blocked || error ? 'border-warning/40 bg-warning/10' : 'border-border bg-surface'}`}>
       <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-2 text-xs" role="status" aria-live="polite">
-          <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${busy || lockQuery.isPending ? 'animate-spin text-muted' : data?.mine && !error ? 'text-success' : 'text-warning'}`} />
+          <Icon className={`mt-0.5 h-[16px] w-[16px] shrink-0 ${busy || lockQuery.isPending ? 'animate-spin text-muted' : data?.mine && !error ? 'text-success' : 'text-warning'}`} />
           <div className="min-w-0">
             <div className="font-medium text-foreground">{title}</div>
             <div className="mt-0.5 break-words text-[11px] leading-4 text-secondary">
@@ -74,7 +74,7 @@ export function MiningLockControl() {
             type="button"
             disabled={busy}
             onClick={() => { release.reset(); recover.mutate() }}
-            className="inline-flex min-h-8 items-center gap-1.5 rounded-btn border border-border bg-elevated px-3 py-1.5 text-xs font-medium text-foreground hover:bg-base disabled:opacity-50"
+            className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 hover:bg-base disabled:opacity-50 bg-elevated"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${recover.isPending ? 'animate-spin' : ''}`} />
             {recover.isPending ? '正在检查并恢复…' : '检查并恢复挖掘'}

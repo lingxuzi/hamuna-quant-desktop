@@ -95,7 +95,6 @@ export const BACKEND_DEPENDENCIES: OssLicenseEntry[] = [
   { name: 'pyyaml', version: '6.0.3', license: 'MIT' },
   { name: 'sse-starlette', version: '3.4.4', license: 'BSD-3-Clause' },
   { name: 'tdxaidata', version: '1.2.2', license: 'MIT' },
-  { name: 'tickflow', version: '0.1.25', license: 'MIT' },
   { name: 'uvicorn', version: '0.47.0', license: 'BSD-3-Clause' },
   { name: 'winotify', version: '1.1.0', license: 'MIT' },
 ]

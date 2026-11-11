@@ -21,7 +21,7 @@ export function PluginMetadata({ plugin }: { plugin: PluginDataSourceItem }) {
       {links.map(({ url, label }, i) => <a key={i} href={url} target="_blank" rel="noopener noreferrer"
         className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-sm text-xs text-accent underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
         <span className="min-w-0 break-words">{label}</span>
-        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <ExternalLink className="h-[12px] w-[12px] shrink-0" aria-hidden="true" />
       </a>)}
     </div>}
   </div>

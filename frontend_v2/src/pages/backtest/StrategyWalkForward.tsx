@@ -17,6 +17,7 @@ import {
 import { buildDefaultOverrides, applyStrategyParams } from '@/lib/strategyOverrides'
 import {
   INPUT_CLS,
+  SELECT_CLS,
   PRIMARY_OBJECTIVES,
   GRID_MAX_COMBINATIONS,
   useParamSweep,
@@ -27,6 +28,11 @@ import {
 
 const TODAY = new Date().toISOString().slice(0, 10)
 const THREE_YEARS_AGO = new Date(Date.now() - 3 * 365 * 864e5).toISOString().slice(0, 10)
+
+/** 训练/测试/步长默认值 — 工具条状态签与本页输入同源 (design/v2/12 「训练 250 / 测试 60」) */
+export const WF_DEFAULT_TRAIN_DAYS = '252'
+export const WF_DEFAULT_TEST_DAYS = '63'
+export const WF_DEFAULT_STEP_DAYS = '63'
 
 function Stat({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
   return (
@@ -84,9 +90,9 @@ export function StrategyWalkForward() {
   const [start, setStart] = useState(THREE_YEARS_AGO)
   const [end, setEnd] = useState(TODAY)
   const [mode, setMode] = useState<'position' | 'full'>('position')
-  const [trainDays, setTrainDays] = useState('252')
-  const [testDays, setTestDays] = useState('63')
-  const [stepDays, setStepDays] = useState('63')
+  const [trainDays, setTrainDays] = useState(WF_DEFAULT_TRAIN_DAYS)
+  const [testDays, setTestDays] = useState(WF_DEFAULT_TEST_DAYS)
+  const [stepDays, setStepDays] = useState(WF_DEFAULT_STEP_DAYS)
   const [applying, setApplying] = useState(false)
 
   // 折预览: 运行前实时显示折数/窗口切分 (不回测)
@@ -156,7 +162,7 @@ export function StrategyWalkForward() {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_1fr]">
       {/* ── 配置面板 ── */}
-      <div className="space-y-3 leaf-cell">
+      <div className="space-y-3 bg-surface border border-border">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">策略</label>
           <StrategySelect strategies={strategies} value={sweep.strategyId} onChange={sweep.selectStrategy} />
@@ -164,7 +170,7 @@ export function StrategyWalkForward() {
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">优化目标</label>
-          <select value={objective} onChange={e => setObjective(e.target.value)} className={INPUT_CLS}>
+          <select value={objective} onChange={e => setObjective(e.target.value)} className={SELECT_CLS}>
             {PRIMARY_OBJECTIVES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
         </div>
@@ -218,7 +224,7 @@ export function StrategyWalkForward() {
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">模式</label>
-          <select value={mode} onChange={e => setMode(e.target.value as any)} className={INPUT_CLS}>
+          <select value={mode} onChange={e => setMode(e.target.value as any)} className={SELECT_CLS}>
             <option value="position">组合仓位</option>
             <option value="full">全量独立</option>
           </select>
@@ -229,18 +235,18 @@ export function StrategyWalkForward() {
         <div className="text-[11px] text-secondary">每折跑 {sweep.combos || 0} 组优化 × N 折，耗时较长</div>
 
         {task?.isPending ? (
-          <button onClick={stopWalkForward} className="inline-flex w-full items-center justify-center gap-1.5 rounded-btn bg-red-500/90 px-3 py-2 text-xs font-medium text-white hover:bg-red-500">
+          <button onClick={stopWalkForward} className="ctl ctl-sm ctl-ghost inline-flex w-full items-center justify-center gap-1.5 bg-red-500/90 px-1.5 hover:bg-red-500">
             <Square className="h-3.5 w-3.5" /> 停止
           </button>
         ) : (
-          <button onClick={onRun} disabled={!canRun} className="inline-flex w-full items-center justify-center gap-1.5 rounded-btn bg-accent px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+          <button onClick={onRun} disabled={!canRun} className="ctl ctl-sm ctl-btn pri inline-flex w-full items-center justify-center gap-1.5 px-1.5 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
             <Play className="h-3.5 w-3.5" /> 开始滚动样本外检验
           </button>
         )}
       </div>
 
       {/* ── 结果面板 ── */}
-      <div className="min-h-[300px] leaf-cell">
+      <div className="min-h-[300px] bg-surface border border-border">
         {task?.error && (
           <div className="mb-3 rounded-input border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{task.error}</div>
         )}
@@ -306,7 +312,7 @@ export function StrategyWalkForward() {
                 <button
                   onClick={() => onApplyLatestFold()}
                   disabled={applying}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+                  className="ctl ctl-md ctl-btn pri shrink-0 inline-flex items-center gap-1.5 px-2.5 hover:opacity-90 disabled:opacity-40"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" /> {applying ? '应用中…' : '应用到策略'}
                 </button>

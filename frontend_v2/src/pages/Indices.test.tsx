@@ -36,9 +36,11 @@ vi.mock('@/lib/useSharedQueries', () => ({
 vi.mock('@/components/EChartsCandlestick', () => ({
   EChartsCandlestick: ({ data, onDateClick }: {
     data: { date: string }[]; onDateClick: (date: string) => void
-  }) => <div>{data.map(row => (
-    <button key={row.date} data-day={row.date} onClick={() => onDateClick(row.date)}>{row.date}</button>
-  ))}</div>,
+  }) => (
+    <div>{data.map(row => (
+      <button key={row.date} data-day={row.date} onClick={() => onDateClick(row.date)}>{row.date}</button>
+    ))}</div>
+  ),
 }))
 vi.mock('@/components/EChartsIntraday', () => ({
   EChartsIntraday: ({ data, date }: { data: MinuteResponse['rows']; date: string }) => {
@@ -93,20 +95,31 @@ async function clickDay(day: string) {
   await settle()
 }
 
+// 切到分时: 分时图只在「分时」页签下挂载, 日K下的日期点击只换当期分时数据
+async function showMinute() {
+  const tab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(el => el.textContent === '分时')
+  expect(tab).toBeTruthy()
+  await act(async () => tab!.click())
+  await settle()
+}
+
+const isVisible = (el: Element | null) => !!el && !el.closest('[hidden]')
+
 it('keeps selected dates isolated across delayed, out-of-order and cached responses', async () => {
   await act(async () => root.render(
     <MemoryRouter><QueryClientProvider client={client}><Indices /></QueryClientProvider></MemoryRouter>,
   ))
   await settle()
+  await showMinute()
   const chart = () => host.querySelector<HTMLElement>('[data-chart]')
   await resolveDay('2026-09-11', 11)
   expect(chart()?.textContent).toBe('2026-09-11|2026-09-11T09:35:00|11')
 
   await clickDay('2026-09-10')
-  expect(chart()).toBeNull()
+  expect(isVisible(chart())).toBe(false)
   await clickDay('2026-09-09')
   await resolveDay('2026-09-10', 10)
-  expect(chart()).toBeNull()
+  expect(isVisible(chart())).toBe(false)
   await resolveDay('2026-09-09', 9)
   expect(chart()?.textContent).toBe('2026-09-09|2026-09-09T09:35:00|9')
 

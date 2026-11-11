@@ -47,14 +47,14 @@ export const QK = {
   // 盘中异动信号聚合 (异动监控「盘中」tab)
   abnormalIntraday:     (limit: number) => ['abnormal-intraday', limit] as const,
   // 不用 watchlist- 前缀: 日K历史盘中几乎不变, 若被 SSE quotes_updated 高频失效
-  // (expert 1s) 会导致全自选日K每秒重拉, staleTime 形同虚设。
+  // (实时推送最快 1s) 会导致全自选日K每秒重拉, staleTime 形同虚设。
   // 刷新点: staleTime 过期 + Watchlist 增删自选/改蜡烛天数时的手动失效;
   // 当日最后一根蜡烛由 Watchlist 用 enriched 实时 OHLC 前端修补 (零额外请求)。
   // symbols 不进 key: 千只自选时 key 内嵌全量拼串 (12-17KB), 增删 1 只即换 key
   // 整批重拉且新旧两份共存; 数据按 symbol upsert 进单 key, 仅天数变化换 key。
   watchlistKlineBatch:  (days: number) => ['kline-batch', days] as const,
-  // 不用 watchlist- 前缀: 避免被 SSE quotes_updated 高频失效(expert 1s/pro 2s)
-  // 导致每次都拉 TickFlow 触限流。分时图用固定 refetchInterval 刷新即可。
+  // 不用 watchlist- 前缀: 避免被 SSE quotes_updated 高频失效(实时推送最快 1s)
+  // 导致每次都拉数据源触限流。分时图用固定 refetchInterval 刷新即可。
   // 同上不嵌 symbols: 单 key + 按 symbol 增量合并, 请求集合由视口收敛
   // (见 lib/minuteBatchIncremental.ts)。
   minuteBatch:          () => ['minute-batch'] as const,

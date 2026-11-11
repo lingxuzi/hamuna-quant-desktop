@@ -5,10 +5,14 @@ import { KeyRound, Play, Plus, Save, Trash2, X, Zap, Check, ChevronDown } from '
 import { api, type CustomSourceConfig, type DatasetConfig } from '@/lib/api'
 import { toast } from '@/components/Toast'
 import { Switch } from '@/components/Switch'
+import { CTL_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 // 暗色适配的标准输入框样式 (与 AI 页统一, bg-base 在暗色下为深色, 不会白底白字)
-const INPUT_CLS =
-  'w-full h-9 px-2.5 rounded-lg bg-base border-0 ring-1 ring-border/40 text-xs text-foreground placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/40 transition-shadow'
+const INPUT_CLS = cn(
+  CTL_MD,
+  'w-full rounded-btn bg-base border-0 ring-1 ring-border/40 placeholder:text-muted/30 focus:outline-none focus:ring-2 focus:ring-accent/40 transition-shadow',
+)
 
 const DATASETS = ['daily', 'adj_factor', 'realtime', 'minute', 'depth5', 'full_minute', 'financial'] as const
 type DatasetKey = typeof DATASETS[number]
@@ -29,7 +33,7 @@ const DATASET_LABEL: Record<DatasetKey, string> = {
 const FINANCIAL_ALL_FIELDS = [
   // 报告期骨架 (五表通用)
   'symbol', 'period_end', 'announce_date',
-  // metrics: 核心指标 (pct 百分点制: 12.3 表示 12.3%)
+  // metrics: 核心指标 (pct 百分点制:12.3 表示 12.3%)
   'eps_basic', 'eps_diluted', 'bps', 'ocfps', 'roe', 'roe_diluted', 'roa',
   'gross_margin', 'net_margin', 'debt_to_asset_ratio', 'revenue_yoy',
   'net_income_yoy', 'operating_cash_to_revenue', 'inventory_turnover',
@@ -95,8 +99,8 @@ const FIELD_LABELS: Record<string, string> = {
   turnover_rate: '换手率 (小数 0.05=5%)',
   timestamp: '时间戳',
   session: '交易时段',
-  asks: '卖五档 [[价,量]×5] (量:手)',
-  bids: '买五档 [[价,量]×5] (量:手)',
+  asks: '卖五档 [[价，量]×5] (量：手)',
+  bids: '买五档 [[价，量]×5] (量：手)',
   // 财务骨架
   period_end: '报告期 (YYYY-MM-DD)',
   announce_date: '公告日期 (YYYY-MM-DD)',
@@ -236,7 +240,7 @@ export function DataSourceEditor({
 
   const save = useMutation({
     mutationFn: () => {
-      // 提交前校验: 每个已启用数据集必须填了 URL
+      // 提交前校验:每个已启用数据集必须填了 URL
       for (const [key, ds] of Object.entries(config.datasets)) {
         if (!ds.url.trim()) {
           throw new Error(`数据集「${DATASET_LABEL[key as DatasetKey] || key}」未填写接口 URL`)
@@ -289,12 +293,12 @@ export function DataSourceEditor({
   const isActive = !isNew && activeName === existingName
 
   return (
-    <section className="leaf-cell overflow-hidden">
+    <section className="mt-10 first:mt-0">
       {/* 头部 */}
       <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${isNew ? 'bg-accent/10' : 'bg-elevated'}`}>
-            {isNew ? <Plus className="h-4 w-4 text-accent" /> : <KeyRound className="h-4 w-4 text-secondary" />}
+          <div className={`h-[36px] w-[36px] rounded-lg flex items-center justify-center ${isNew ? 'bg-accent/10' : 'bg-elevated'}`}>
+            {isNew ? <Plus className="h-[16px] w-[16px] text-accent" /> : <KeyRound className="h-[16px] w-[16px] text-secondary" />}
           </div>
           <div>
             <h2 className="text-sm font-semibold text-foreground">{isNew ? '新增数据源' : '编辑数据源'}</h2>
@@ -310,7 +314,7 @@ export function DataSourceEditor({
           {!isNew && !isActive && config.name.trim() && (
             <button
               onClick={() => onActivate(config.name.toLowerCase().trim())}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+              className="ctl ctl-md ctl-btn soft inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/20 bg-accent/10"
             >
               <Zap className="h-3.5 w-3.5" /> 切换为当前数据源
             </button>
@@ -318,9 +322,9 @@ export function DataSourceEditor({
           {!isNew && onDelete && (
             <button
               onClick={onDelete}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-btn text-xs text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+              className="ctl ctl-md ctl-ghost inline-flex items-center gap-1 px-2.5 hover:text-danger hover:bg-danger/10"
             >
-              <Trash2 className="h-3 w-3" /> 删除
+              <Trash2 className="h-[12px] w-[12px]" /> 删除
             </button>
           )}
         </div>
@@ -380,7 +384,7 @@ export function DataSourceEditor({
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-btn text-sm transition-colors ${
+                    className={`ctl ctl-md ctl-ghost w-full flex items-center gap-2 px-2.5 ${
                       activeTab === key ? 'bg-elevated text-foreground' : 'text-secondary hover:bg-elevated/50'
                     }`}
                   >
@@ -422,13 +426,13 @@ export function DataSourceEditor({
           {Object.keys(config.datasets).length} 个数据集已配置
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onCancel} className="px-3 py-1.5 rounded-btn text-sm text-secondary hover:text-foreground transition-colors">
+          <button onClick={onCancel} className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground">
             取消
           </button>
           <button
             onClick={() => save.mutate()}
             disabled={!canSave}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-btn bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
             {save.isPending ? '保存中...' : '保存'}
@@ -563,7 +567,7 @@ function DatasetDetail({
                 className="w-full flex items-center gap-1.5 mb-2"
               >
                 <span className="text-[10px] uppercase tracking-widest text-muted">请求参数字段映射</span>
-                <ChevronDown className={`h-3 w-3 text-muted transition-transform ${showParams ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-[12px] w-[12px] text-muted transition-transform ${showParams ? 'rotate-180' : ''}`} />
               </button>
               <div className="text-[10px] text-muted/50 mb-1.5">
                 改外部接口的参数名（留空用默认）
@@ -672,7 +676,7 @@ function DatasetDetail({
 
             <div className="pt-3 border-t border-border/30">
               <div className="flex items-center gap-2 mb-2">
-                <Play className="h-3 w-3 text-muted" />
+                <Play className="h-[12px] w-[12px] text-muted" />
                 <span className="text-[11px] font-medium text-secondary">测试连接</span>
               </div>
               <div className="flex items-center gap-2">
@@ -685,7 +689,7 @@ function DatasetDetail({
                 <button
                   onClick={() => test.mutate()}
                   disabled={test.isPending || !cfg.url}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:text-foreground text-xs disabled:opacity-40 transition-colors"
+                  className="ctl ctl-md ctl-ghost inline-flex items-center gap-1 px-2.5 hover:text-foreground disabled:opacity-40 bg-elevated"
                 >
                   {test.isPending ? '测试中...' : '测试'}
                 </button>
@@ -694,7 +698,7 @@ function DatasetDetail({
                 <div className="mt-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs">
                   <span className="text-accent font-medium">{test.data.rows}</span> 行
                   <span className="text-muted mx-1.5">·</span>
-                  列: <span className="text-secondary">{test.data.columns.join(', ')}</span>
+                  列：<span className="text-secondary">{test.data.columns.join(', ')}</span>
                 </div>
               )}
               {test.isError && (
@@ -714,9 +718,9 @@ function DatasetDetail({
             <div className="text-[11px] text-muted/60">启用后此数据集将由该自定义源提供, 未启用则回退 TickFlow</div>
             <button
               onClick={() => onToggle(true)}
-              className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-btn bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+              className="ctl ctl-md ctl-btn soft mt-3 inline-flex items-center gap-1 px-2.5 hover:bg-accent/20 bg-accent/10"
             >
-              <Plus className="h-3 w-3" /> 启用{DATASET_LABEL[datasetKey]}
+              <Plus className="h-[12px] w-[12px]" /> 启用{DATASET_LABEL[datasetKey]}
             </button>
           </motion.div>
         )}
@@ -733,7 +737,7 @@ function FieldMapEditor({
 }: {
   fieldMap: Record<string, string>
   targets: string[]
-  // 下拉可选列; 缺省 = targets。财务预填仅骨架三列, 下拉给五表全列。
+  // 下拉可选列;缺省 = targets.财务预填仅骨架三列, 下拉给五表全列。
   options?: string[]
   onChange: (fm: Record<string, string>) => void
 }) {
@@ -820,9 +824,9 @@ function FieldMapEditor({
           </select>
           <button
             onClick={() => removeRow(row.id)}
-            className="text-muted hover:text-danger p-0.5 transition-colors"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger"
           >
-            <X className="h-3 w-3" />
+            <X className="h-[12px] w-[12px]" />
           </button>
         </div>
       ))}
@@ -830,7 +834,7 @@ function FieldMapEditor({
         onClick={addRow}
         className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 mt-1"
       >
-        <Plus className="h-3 w-3" /> 添加映射
+        <Plus className="h-[12px] w-[12px]" /> 添加映射
       </button>
     </div>
   )

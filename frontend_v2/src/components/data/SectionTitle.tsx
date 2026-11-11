@@ -3,8 +3,8 @@ import { formatDuration } from '@/lib/format'
 
 export function SectionTitle({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <h2 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-secondary">
-      <Icon className="h-3.5 w-3.5" />
+    <h2 className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.16em] text-muted">
+      <Icon className="h-[12px] w-[12px]" />
       {children}
     </h2>
   )
@@ -22,10 +22,10 @@ export function HistoryRow({ job, onClick }: { job: any; onClick: () => void }) 
   return (
     <button
       onClick={onClick}
-      className="w-full px-5 py-3 hover:bg-elevated/50 transition-colors duration-150 ease-smooth text-left flex items-center justify-between gap-4"
+      className="w-full py-2.5 hover:bg-elevated/50 transition-colors duration-150 ease-smooth text-left flex items-center justify-between gap-4"
     >
       <div className="flex items-center gap-3 min-w-0">
-        <Icon className={`h-4 w-4 shrink-0 ${statusIcon.color} ${(statusIcon as any).spinning ? 'animate-spin' : ''}`} />
+        <Icon className={`h-[16px] w-[16px] shrink-0 ${statusIcon.color} ${(statusIcon as any).spinning ? 'animate-spin' : ''}`} />
         <div className="min-w-0">
           <div className="font-mono text-xs text-foreground">{job.id}</div>
           <div className="text-[11px] text-muted">

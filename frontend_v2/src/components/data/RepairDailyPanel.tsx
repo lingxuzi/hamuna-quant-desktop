@@ -87,11 +87,11 @@ export function RepairDailyPanel({ hasCap, isRunning, latestDate, onStart }: {
       <button
         onClick={() => repair.mutate()}
         disabled={!canSubmit}
-        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:pointer-events-none transition-colors duration-150"
+        className="ctl ctl-md ctl-btn soft w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 disabled:pointer-events-none duration-150 bg-accent/90"
       >
         {repair.isPending ? (
           <>
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-[12px] w-[12px] animate-spin" />
             请求中…
           </>
         ) : (

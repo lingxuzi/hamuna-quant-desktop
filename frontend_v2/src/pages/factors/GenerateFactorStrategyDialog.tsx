@@ -4,8 +4,10 @@ import { Sparkles } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { toast } from '@/components/Toast'
 import { api } from '@/lib/api'
+import { INPUT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
-const INPUT_CLS = 'h-8 w-full rounded-input border border-border bg-surface px-2.5 text-xs text-foreground focus:border-accent focus:outline-none'
+const INPUT_CLS = cn(INPUT_MD, 'w-full')
 
 /** 渲染与挖掘发布同构的单因子排名策略源码 (FactorRankResearchMatrixStrategy)。 */
 function renderStrategyCode(strategyId: string, name: string, factorId: string, direction: 'high' | 'low', description: string): string {
@@ -95,7 +97,7 @@ export function GenerateFactorStrategyDialog({
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 shrink-0 text-accent" />
+            <Sparkles className="h-[16px] w-[16px] shrink-0 text-accent" />
             <span id="generate-factor-strategy-title" className="text-sm font-semibold text-foreground">因子生成策略</span>
           </div>
           <p className="mt-1 font-mono text-[11px] text-muted">{item.id}</p>
@@ -120,7 +122,7 @@ export function GenerateFactorStrategyDialog({
                 key={value}
                 type="button"
                 onClick={() => setDirection(value)}
-                className={`rounded-btn border px-2.5 py-1.5 text-[11px] transition-colors ${direction === value
+                className={`ctl ctl-md ctl-btn px-2.5 ${direction === value
                   ? 'border-accent/50 bg-accent/10 text-accent'
                   : 'border-border bg-base text-muted hover:border-accent/40'}`}
               >
@@ -131,17 +133,17 @@ export function GenerateFactorStrategyDialog({
           <p className="mt-1 text-[10px] text-muted">拿不准就先按默认生成，回测对比两个方向再定。</p>
         </div>
         <p className="text-[10px] leading-relaxed text-muted">
-          生成后：默认止损 -8%、最大持仓 30 个交易日、评分口径与检验/挖掘同一条计算管线（matrix_native）。策略文件保存在自定义策略目录，可在策略页查看。
+          生成后：默认止损 -8%、最大持仓 30 个交易日、评分口径与检验/挖掘同一条计算管线。策略文件保存在自定义策略目录，可在策略页查看。
         </p>
       </div>
 
       <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-        <button type="button" onClick={onClose} className="rounded-btn bg-elevated px-3 py-1.5 text-xs text-secondary transition-colors hover:text-foreground">取消</button>
+        <button type="button" onClick={onClose} className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground bg-elevated">取消</button>
         <button
           type="button"
           onClick={() => generate.mutate()}
           disabled={generate.isPending || !name.trim()}
-          className="inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" />
           {generate.isPending ? '生成中…' : '生成策略'}

@@ -28,6 +28,7 @@ const Dev = lazy(() => import('./pages/Dev').then(m => ({ default: m.Dev })))
 // Onboarding 只在首次使用时进入, Auth 只在登录页用到 — 均改按需加载
 const Onboarding = lazy(() => import('./pages/Onboarding').then(m => ({ default: m.Onboarding })))
 const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })))
+const Assistant = lazy(() => import('./pages/Assistant').then(m => ({ default: m.Assistant })))
 
 const CORE_ROUTE_PATHS = new Set([
   '/',
@@ -40,6 +41,7 @@ const CORE_ROUTE_PATHS = new Set([
   '/screener',
   '/backtest',
   '/factors',
+  '/assistant',
   '/mining',
   '/data',
   '/indices',
@@ -59,11 +61,11 @@ if (frontendExtensionErrors.length > 0) {
   console.error('部分前端扩展加载失败', frontendExtensionErrors)
 }
 
-// 旧链接兼容: 挖掘已并入因子页 (/factors?tab=mining), 保留 run/candidate 等参数重定向
+// 旧链接兼容: 挖掘已独立成回测子页 (/backtest?tab=mining, design/v2/15), 保留 run/candidate 等参数重定向
 function MiningRedirect() {
   const [searchParams] = useSearchParams()
   const search = searchParams.toString()
-  return <Navigate to={`/factors?tab=mining${search ? `&${search}` : ''}`} replace />
+  return <Navigate to={`/backtest?tab=mining${search ? `&${search}` : ''}`} replace />
 }
 
 // 首次使用守卫 —— 未完成向导则重定向到 /onboarding
@@ -136,6 +138,7 @@ export const router = createBrowserRouter([
       { path: 'screener', element: <Screener /> },
       { path: 'backtest', element: <Backtest /> },
       { path: 'factors', element: <Factors /> },
+      { path: 'assistant', element: <Assistant /> },
       { path: 'mining', element: <MiningRedirect /> },
       { path: 'data', element: <Data /> },
       { path: 'indices', element: <Indices /> },

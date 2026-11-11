@@ -9,7 +9,7 @@
   (今天不可能有未来事件), 盘中实时路径整体短路。
 
 基准标记 data/kline_minute/.raw_basis:
-- 存在 → 分区已是原始口径: 读取应用复权投影, TickFlow 拉取 adjust='none'。
+- 存在 → 分区已是原始口径: 读取应用复权投影, 源拉取 adjust='none'。
 - 不存在 → 旧基准 (拉取时前复权, 混合口径): 读取原样返回, 拉取维持 adjust='forward'。
 - 迁移任务把全部分区换算为原始口径后创建标记; 失败不标记, 幂等可续跑。
 
@@ -61,7 +61,7 @@ def mark_minute_basis_raw(data_dir: Path | str) -> None:
 
 
 def minute_fetch_adjust(data_dir: Path | str) -> str:
-    """TickFlow 分钟拉取的 adjust 参数: 已迁移 → 'none' (原始), 否则 'forward' (旧行为)。"""
+    """分钟拉取的 adjust 参数: 已迁移 → 'none' (原始), 否则 'forward' (旧行为)。"""
     return "none" if minute_basis_is_raw(data_dir) else "forward"
 
 

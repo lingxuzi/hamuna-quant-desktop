@@ -26,7 +26,6 @@ vi.mock('@/lib/api', () => ({ api: {
   quoteInterval: vi.fn(async () => ({ interval: 5 })),
 } }))
 vi.mock('@/components/StockPreviewDialog', () => ({ StockPreviewDialog: () => null }))
-vi.mock('@/components/EndpointTestDialog', () => ({ EndpointTestDialog: () => null }))
 
 let host: HTMLDivElement
 let root: Root
@@ -94,8 +93,8 @@ it('storage 为 null 时不崩, 存储卡片降级为占位', async () => {
   expect(host.textContent).toContain('—')  // 总大小降级占位
   // 各 storage 数值区降级显示, 不出现 NaN/undefined
   expect(host.textContent).not.toContain('undefined')
-  // busy 期间统计 null = 未知 (非"无数据"): 同步按钮不进首装引导呼吸态
-  expect(host.querySelector('.animate-breath-sync')).toBeNull()
+  // busy 期间统计 null = 未知 (非"无数据"): 读数带不进 .down 空库警示 (stats_pending=true)
+  expect(host.querySelector('.readout .down')).toBeNull()
 })
 
 it('非 busy 的空库 (stats_pending=false + 统计 null) 判为无数据, 显示首装引导', async () => {
@@ -108,7 +107,9 @@ it('非 busy 的空库 (stats_pending=false + 统计 null) 判为无数据, 显�
   })
 
   await renderPage()
-  expect(host.querySelector('.animate-breath-sync')).not.toBeNull()
+  // 设计稿 (design/v2/25) 空库口径: 工具条 warn chip「行数为空」+ 读数带 .down
+  expect(host.querySelector('.tb-chip.warn')).not.toBeNull()
+  expect(host.querySelector('.readout .down')).not.toBeNull()
 })
 
 it('统计后台刷新时每 2 秒重查, 完成后恢复正常轮询间隔', async () => {

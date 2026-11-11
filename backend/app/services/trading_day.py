@@ -7,12 +7,17 @@
 探测链 (按确定性排序, 先到先得):
   1. fuyao 交易日历 (已配置 fuyao 时): GET /api/a-share/calendar/trading-days,
      今天在近一年交易日列表内 ⇔ 交易日。权威日历, 无时段依赖, 无开盘缓冲问题。
-  2. tickflow 实时行情时间戳: 拉一篮流动性票快照 (单请求), max(timestamp)
-     日期 == 今天 ⇔ 交易日。非交易日全市场戳停在上一交易日 (2026-08-29 周六
-     实测 5551/5551, 含停牌股 — 戳是快照定版时刻, 非最后成交时刻);
-     交易日集合竞价阶段 (9:15-9:30) 戳是否已翻新未实测 → 开盘缓冲窗内
-     戳过期不作数, 保守视为未知。
-  3. 均不可用 → None: 调用方按周几近似继续。
+  2. easytdx 兜底 (未配 fuyao 时): 拉上证指数最近 1m K, 窗口 [今天 00:00, now]
+     内有任何一根 ⇔ 今天开过盘。
+  3. 都不可用 → None: 调用方按周几近似继续。
+
+⚠ 为什么不复用行情源快照的时间戳判休市: 内置 easytdx 走 MAC 协议, 报价
+只带本地时间戳 (无服务端时间), 非交易日快照戳的仍是「本地今天」—— 用它判
+休市会把节假日误判成交易日。宁可返回「未知」, 也不给出错误结论 (错误结论
+会直接停掉全市场行情轮询)。
+
+⚠ 兜底为什么用分钟 K 而不是日 K: 分钟 K 实时推送, 盘中必有当天的; 部分
+TDX 服务器的日 K 盘中不刷新, 拿它判休市会在交易日误停全市场轮询。
 
 安全约束:
   - 周末直接返回 False (周几判断零成本, 不打任何请求)。
@@ -27,22 +32,21 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dtime
 
-from app.market_time import CN_TZ, cn_now
+from app.market_time import cn_now
 from app.services.shared_work import SharedWork, WorkBusyError
-
-# tickflow 戳探针的开盘缓冲窗: 此时刻之前戳仍是上一交易日属正常 (集合竞价),
-# 不据此判休市。周一实测竞价戳翻新时机后可收紧。仅上午首个窗口需要。
-_STALE_BUFFER_UNTIL = dt_time(9, 40)
-
-# 一篮流动性票: 探 max(timestamp), 任一戳为今日即交易日 (OR 语义)。
-# 大盘蓝筹同日全部停牌 = 市场性事件, 与休市同处理无碍。
-_BASKET = ("000001.SZ", "600519.SH", "600036.SH", "601318.SH", "000651.SZ")
 
 _TTL_TRADING_S = 3600.0   # 交易日结论每小时复探 (跨日天然失效)
 _TTL_HOLIDAY_S = 1800.0   # 休市结论 30 分钟复探, 误判自愈上限
 _TTL_UNKNOWN_S = 300.0    # 未知结论 5 分钟后重试探测
+
+# 开盘缓冲: 过了这个时刻才敢把「今天没有 1m K」判成休市。
+# 9:30 之后留 5 分钟给 TDX 首根 1m K 的生成延迟 —— 缓冲期内无 K 线只说明
+# 「还没开盘」, 与「今天休市」在数据上无法区分, 只能返回未知。
+_OPEN_GRACE_T = dtime(9, 35)
+# 交易日兜底探针用的标的: 上证综指 (永不停牌, 不会因个股停牌误判休市)
+_CALENDAR_SYMBOL = "000001.SH"
 
 _CACHE_LOCK = threading.Lock()
 _CACHE_EPOCH = 0
@@ -85,34 +89,39 @@ def _probe_fuyao(now: datetime) -> bool | None:
         return None
 
 
-def _probe_tickflow(now: datetime) -> bool | None:
-    """tickflow 行情时间戳: max(timestamp) 日期 == 今天 ⇔ 交易日。
+def _probe_easytdx(now: datetime) -> bool | None:
+    """easytdx 兜底判据: 上证指数最近 1m K 里有没有今天的数据。
 
-    戳停在上一交易日: 开盘缓冲窗内 → None (可能是竞价未翻新), 窗后 → False。
-    无实时权限 / 网络失败 / 无有效戳 → None。
+    MAC 协议没有交易日历接口, 只能用分钟 K 反推: 窗口 [今天 00:00, now]
+    内有任何一根 ⇔ 今天开过盘。窗口取「今天零点起」而不是「最近 N 分钟」,
+    这样午休 (11:30-13:00) 也有数据, 不会把午休误判成休市。
+
+    拿不准时返回 None 而不是 False —— 错误结论会直接停掉全市场行情轮询,
+    未知只是不做优化。
     """
     try:
-        from app.tickflow.client import get_client
+        from app.data_providers import custom as custom_sources
 
-        rows = get_client().quotes.get(symbols=list(_BASKET)) or []
-        stamps = [r.get("timestamp") for r in rows if isinstance(r, dict)]
-        valid = [int(t) for t in stamps if isinstance(t, (int, float)) and t]
-        if not valid:
+        provider = custom_sources.get_provider("easytdx")
+        if provider is None:
             return None
-        latest_day = datetime.fromtimestamp(max(valid) / 1000, tz=CN_TZ).date()
-        if latest_day == now.date():
-            return True
-        if now.time() < _STALE_BUFFER_UNTIL:
-            return None
-        return False
-    except Exception:  # noqa: BLE001 — 无权限/网络失败按未知处理
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        df = provider.get_minute(
+            [_CALENDAR_SYMBOL], start_time=start, end_time=now, asset_type="index",
+        )
+        if df is None or df.height == 0:
+            # 今天一根 1m 都没有: 开盘前 (未开盘) 与休市在数据上无法区分,
+            # 过了开盘缓冲才敢判休市。
+            return False if now.time() >= _OPEN_GRACE_T else None
+        return True
+    except Exception:  # noqa: BLE001 — 探针失败按未知处理, 不上抛
         return None
 
 
 def is_trading_day(now: datetime | None = None) -> bool | None:
     """今天是否 A 股交易日。True=交易日, False=确定休市, None=未知 (维持周几近似)。
 
-    周末零成本直判; 工作日走探测链 (fuyao 日历 → tickflow 时间戳),
+    周末零成本直判; 工作日走探测链 (fuyao 日历 → 未知),
     结论按 TTL 缓存。线程安全: 实时行情与分钟增量两个线程共用。
     """
     now = now or cn_now()
@@ -122,7 +131,7 @@ def is_trading_day(now: datetime | None = None) -> bool | None:
     with _CACHE_LOCK:
         epoch = _CACHE_EPOCH
         # 「未知」(None) 也是一个结论, 同样按 TTL 缓存 —— 它正是 _TTL_UNKNOWN_S 要
-        # 挡住的场景 (未配 fuyao 且 tickflow 不可用时, 轮询每拍都会重打一次探测)。
+        # 挡住的场景 (未配 fuyao 时, 轮询每拍都会重打一次探测)。
         # _CACHE.day 只在探测写回时设置, 因此「当天已探过」用它判定即可。
         if (
             _CACHE.day == now.date()
@@ -138,7 +147,9 @@ def is_trading_day(now: datetime | None = None) -> bool | None:
                 return _CACHE.verdict
         verdict = _probe_fuyao(now)
         if verdict is None:
-            verdict = _probe_tickflow(now)
+            # fuyao 日历未配 / 不可用 → easytdx 兜底 (未配 fuyao 时不该退化成周几近似,
+            # 否则法定节假日会被当成交易日, 全市场白轮询一天)
+            verdict = _probe_easytdx(now)
 
         with _CACHE_LOCK:
             if epoch != _CACHE_EPOCH:

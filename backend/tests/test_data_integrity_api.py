@@ -22,7 +22,7 @@ from app.services import (
 
 @pytest.fixture
 def app_env(tmp_path, monkeypatch):
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
     store = pipeline_jobs.JobStore(store_dir=tmp_path / "jobs")
     monkeypatch.setattr(data, "job_store", store)
     monkeypatch.setattr(pipeline_jobs, "job_store", store)
@@ -121,7 +121,7 @@ def test_api_repair_reports_old_history_and_next_attempt_repairs_it(app_env, mon
     daily_health.record_scan(root, [], assets=["stock"], start=recent, end=recent)
     fetched = []
 
-    def fetch(symbols, _caps, **kwargs):
+    def fetch(symbols, **kwargs):
         fetched.append((kwargs["start_time"].date(), symbols))
         yield frame(old)
 

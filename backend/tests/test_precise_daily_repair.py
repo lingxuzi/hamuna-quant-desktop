@@ -9,7 +9,7 @@ import pytest
 
 from app.market_time import CN_TZ
 from app.services import data_integrity, integrity_check, kline_sync, preferences
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 A, B = "600001.SH", "600002.SH"
 TODAY = date(2026, 10, 30)
@@ -50,7 +50,7 @@ def env(tmp_path, monkeypatch):
     ).write_parquet(bad)
     calls = []
 
-    def fetch(symbols, capset, *, start_time, end_time, asset_type="stock", on_chunk_done=None):
+    def fetch(symbols, *, start_time, end_time, asset_type="stock", on_chunk_done=None):
         calls.append((list(symbols), start_time.date(), end_time.date(), asset_type))
         # 源即使多返回股票/日期, 也只能改请求范围里的异常记录。
         yield pl.concat([frame(BAD_DAY), frame(BAD_DAY + timedelta(days=1), prices=(50.0, 60.0))])
@@ -188,29 +188,25 @@ def test_nontrading_cleanup_waits_for_all_required_source_rows(env, monkeypatch)
     assert path.read_bytes() == before
 
 
-def test_repair_requests_full_beijing_day_through_tickflow_adapter(env, monkeypatch):
-    from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+def test_repair_requests_full_beijing_day_from_daily_provider(env, monkeypatch):
+    from app.data_providers import custom
 
     requested = []
-    def batch(symbols, **kwargs):
-        requested.append(kwargs)
-        ts = int(datetime.combine(BAD_DAY, time(15), tzinfo=CN_TZ).timestamp() * 1000)
-        if not kwargs["start_time"] <= ts <= kwargs["end_time"]:
-            return {}
-        return {A: {"timestamp": [ts], "open": [10.0], "high": [11.0], "low": [9.0],
-                    "close": [10.0], "volume": [100.0], "amount": [1000.0]}}
 
+    class FakeProvider:
+        def iter_daily(self, symbols, *, start_time, end_time, on_chunk_done=None, **_kwargs):
+            requested.append({"symbols": list(symbols), "start_time": start_time, "end_time": end_time})
+            yield frame(BAD_DAY, (A,), (10.0,))
+
+    monkeypatch.setattr(preferences, "get_data_provider", lambda dataset: "test_source")
+    monkeypatch.setattr(custom, "provider_has_dataset", lambda name, dataset: name == "test_source")
+    monkeypatch.setattr(custom, "get_provider", lambda name: FakeProvider())
     monkeypatch.setattr(kline_sync, "iter_daily_frames", REAL_ITER_DAILY_FRAMES)
-    monkeypatch.setattr(kline_sync, "get_client", lambda: SimpleNamespace(klines=SimpleNamespace(batch=batch)))
-    monkeypatch.setattr(kline_sync, "resolve_limit", lambda *a, **kw: SimpleNamespace(batch=100, rpm=None))
-    # 本用例测的正是 TickFlow 适配器; 默认源已是 easytdx, 须固定走 tickflow 分支
-    monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "tickflow")
     report = integrity_check.run_check(env.root, asset_types=["stock"])
-    caps = CapabilitySet({Cap.KLINE_DAILY_BATCH: CapabilityLimits()})
-    assert integrity_check.run_repair(env.repo, caps, report["id"])["status"] == "clean"
-    start = datetime.fromtimestamp(requested[0]["start_time"] / 1000, CN_TZ)
-    end = datetime.fromtimestamp(requested[0]["end_time"] / 1000, CN_TZ)
-    assert start == datetime.combine(BAD_DAY, time.min, tzinfo=CN_TZ)
+    assert integrity_check.run_repair(env.repo, env.caps, report["id"])["status"] == "clean"
+    assert requested[0]["symbols"] == [A]
+    assert requested[0]["start_time"] == datetime.combine(BAD_DAY, time.min, tzinfo=CN_TZ)
+    end = requested[0]["end_time"]
     assert end.date() == BAD_DAY and end.hour == 23 and end.minute == 59 and end.second == 59
 
 
@@ -295,21 +291,23 @@ def test_index_zero_activity_cannot_be_pruned_as_stock_residue(env):
     assert pl.read_parquet(path).equals(original) and not backup.exists()
 
 
-def test_empty_custom_stock_daily_does_not_silently_switch_to_tickflow(env, monkeypatch, caplog):
+def test_empty_custom_stock_daily_does_not_silently_switch_source(env, monkeypatch, caplog):
     from app.data_providers import custom
-    from app.services import preferences
 
     calls = []
     def fetch(symbols, **kwargs):
         calls.append((symbols, kwargs))
         return pl.DataFrame()
-    monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "test_source")
-    monkeypatch.setattr(custom, "provider_has_dataset", lambda *a: True)
-    monkeypatch.setattr(custom, "get_provider", lambda _: SimpleNamespace(get_daily=fetch))
-    monkeypatch.setattr(kline_sync, "iter_daily_frames", REAL_ITER_DAILY_FRAMES)
-    def wrong_source():
+    def wrong_source(*args, **kwargs):
         raise AssertionError("must not switch the selected stock daily source")
-    monkeypatch.setattr(kline_sync, "get_client", wrong_source)
+    def get_provider(name):
+        if name == "test_source":
+            return SimpleNamespace(get_daily=fetch)
+        return SimpleNamespace(get_daily=wrong_source, iter_daily=wrong_source)
+    monkeypatch.setattr(preferences, "get_data_provider", lambda dataset: "test_source")
+    monkeypatch.setattr(custom, "provider_has_dataset", lambda *a: True)
+    monkeypatch.setattr(custom, "get_provider", get_provider)
+    monkeypatch.setattr(kline_sync, "iter_daily_frames", REAL_ITER_DAILY_FRAMES)
     report = integrity_check.run_check(env.root, asset_types=["stock"])
     with caplog.at_level("INFO"), pytest.raises(ValueError, match="数据源未返回"):
         integrity_check.run_repair(env.repo, env.caps, report["id"])
@@ -430,7 +428,7 @@ def test_repair_rejects_linked_history_and_preserves_outside_file(env, table):
 
 @pytest.mark.parametrize("asset,symbol", [("etf", "510300.SH"), ("index", "000001.SH")])
 def test_etf_and_index_repairs_never_write_stock_data(env, monkeypatch, asset, symbol):
-    from app.tickflow.repository import daily_dirname
+    from app.data_providers.repository import daily_dirname
 
     stock_before = {p: p.read_bytes() for p in (env.root / "kline_daily").rglob("*.parquet")}
     for n in range(3):
@@ -439,7 +437,7 @@ def test_etf_and_index_repairs_never_write_stock_data(env, monkeypatch, asset, s
     pl.read_parquet(path).with_columns(pl.lit(-1.0).alias("close")).write_parquet(path)
     calls = []
 
-    def fetch(symbols, capset, **kwargs):
+    def fetch(symbols, **kwargs):
         calls.append((symbols, kwargs["asset_type"]))
         yield frame(BAD_DAY, (symbol,), (10.0,))
 

@@ -3,7 +3,7 @@ from datetime import date
 
 import polars as pl
 
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def _enriched_row(symbol: str, close: float, dt: date) -> dict:
@@ -120,6 +120,8 @@ def test_index_live_write_without_monitor_rules(monkeypatch) -> None:
     qs._app_state = SimpleNamespace(monitor_engine=_Engine())
     flush_calls: list[tuple[str, bool, list[str]]] = []
     monkeypatch.setattr(qs_module, "_persist_last_fetch", lambda ms: None)
+    # 固定为交易日: 否则周末运行本测试会被非交易日门控拦掉
+    monkeypatch.setattr("app.services.trading_day.is_trading_day", lambda *a, **k: True)
     monkeypatch.setattr(qs, "_update_volume_delta", lambda *a, **k: None)
     monkeypatch.setattr(qs, "_evaluate_monitors", lambda *a, **k: None)
     monkeypatch.setattr(qs, "_broadcast_quote_updated", lambda: None)
@@ -149,3 +151,68 @@ def test_index_live_write_without_monitor_rules(monkeypatch) -> None:
 
     assert repo.merge_calls == [("index", ["000001.SH"])]
     assert ("index", True, ["000001.SH"]) in flush_calls
+
+
+def test_holiday_snapshot_not_written_to_today(monkeypatch) -> None:
+    """休市日 (周末/节假日) 的实时快照不得写成当日分区。
+
+    快照协议只给 HHMMSS, provider 用「今日日期 + 该时刻」拼 quote_ts, 周末
+    服务端仍返回上一交易日收盘时刻 → quote_ts 落在今天, _build_daily 的当日
+    归属过滤放行。实测 2026-11-08(周日) 落下全市场 5572 只 + 指数 9 只,
+    指数页读最新两根 → 涨跌幅恒为 0。
+    """
+    from datetime import datetime, time as dt_time
+    from types import SimpleNamespace
+
+    from app.market_time import CN_TZ, cn_today
+    import app.services.quote_service as qs_module
+    from app.services.quote_service import QuoteService
+
+    class _Engine:
+        def has_asset_rules(self, asset_type: str) -> bool:
+            return False
+
+    class _Repo:
+        def __init__(self) -> None:
+            self.merge_calls: list[tuple[str, list[str]]] = []
+
+        def get_index_symbol_set(self) -> set:
+            return set()
+
+        def get_etf_instruments(self):
+            return pl.DataFrame()
+
+        def flush_live_daily(self, df) -> None:
+            raise AssertionError("休市日不应写股票日K")
+
+        def flush_live_daily_asset(self, asset_type: str, df) -> None:
+            raise AssertionError("休市日不应写 ETF 日K")
+
+        def merge_live_daily_asset(self, asset_type: str, df) -> None:
+            raise AssertionError("休市日不应写指数日K")
+
+    qs = QuoteService()
+    repo = _Repo()
+    qs._repo = repo
+    qs._app_state = SimpleNamespace(monitor_engine=_Engine())
+    monkeypatch.setattr(qs_module, "_persist_last_fetch", lambda ms: None)
+    monkeypatch.setattr("app.services.trading_day.is_trading_day", lambda *a, **k: False)
+    monkeypatch.setattr(qs, "_update_volume_delta", lambda *a, **k: None)
+    monkeypatch.setattr(qs, "_evaluate_monitors", lambda *a, **k: None)
+    monkeypatch.setattr(qs, "_broadcast_quote_updated", lambda: None)
+    monkeypatch.setattr(qs, "_flush_live_enriched", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("休市日不应写 enriched")
+    ))
+
+    ts = int(datetime.combine(cn_today(), dt_time(14, 0), tzinfo=CN_TZ).timestamp() * 1000)
+    row = {
+        "last_price": 3001.0, "open": 3000.0, "high": 3010.0, "low": 2990.0,
+        "volume": 1000, "amount": 10000.0, "timestamp": ts,
+    }
+    qs._process_full_market_records(
+        [{"symbol": "000001.SH", **row}, {"symbol": "600519.SH", **row}],
+        t0=0.0,
+        now_ts=0.0,
+    )
+
+    assert repo.merge_calls == []

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import date as _date
 from pathlib import Path
 
 import polars as pl
@@ -21,13 +22,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import settings
+from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.repository import KlineRepository
 from app.indicators.pipeline import filter_halt_days, run_pipeline
 from app.market_time import cn_today
-from app.services import index_sync, instrument_sync, kline_sync
+from app.services import index_sync, instrument_sync, kline_sync, watchlist
 from app.services import preferences as _prefs
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.pools import get_pool
-from app.tickflow.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def _prune_stale_price_partitions(
     """删除收盘价与官方日线不一致的 enriched 日期分区。
 
     实时 flush 写入的当日分区行数与 daily 相同, 但收盘价可能停留在收盘集合
-    竞价前的快照 (实测: TickFlow 实时端点收盘后仍长期返回旧价, 3392/5554 只
+    竞价前的快照 (实测: 快照端点收盘后仍长期返回旧价, 3392/5554 只
     股票当日收盘价与官方日线不符), #223 的行数校验识别不到。对最近若干交易日
     做值级比对: enriched.raw_close 与 daily.close 任一标的差超过半个最小报价
     单位即删分区, 由后续增量重算按官方日线全市场重建。
@@ -149,7 +149,7 @@ def _resolve_universe(capset: CapabilitySet, repo=None) -> list[str]:
     repo 传入时过滤自选里的指数 symbol (指数日K走独立 kline_index_* 存储,
     进股票池会污染 kline_daily/kline_minute)。ETF 刻意保留 (既有行为)。
     """
-    base: set[str] = set(get_pool("watchlist"))
+    base: set[str] = set(watchlist.symbols())
     inst_path = Path(settings.data_dir) / "instruments" / "instruments.parquet"
     if inst_path.exists():
         try:
@@ -222,10 +222,9 @@ def run_now(
 
     # Step 1: 日 K 同步
     #   override_start_date 传入 → 强制 batch 拉取 [override_start_date ~ today] (数据修正)
-    #   付费档 + 今天有数据 → 实时行情接口拉一次覆写（1请求全市场）
+    #   今天有数据 + 实时快照可用 → 快照拉一次覆写（1请求全市场）
     #   有历史数据 → batch K-line API 补齐缺口
     #   无任何数据 → batch K-line API 拉首次 1 年
-    from datetime import date as _date
     from datetime import datetime as _dt
     from datetime import timedelta as _td
     latest_daily = repo.latest_daily_date()
@@ -312,13 +311,10 @@ def run_now(
         today_exists
         and stale_day is None
         and capset.has(Cap.QUOTE_POOL)
-        and _prefs.get_daily_data_provider() == "tickflow"
     ):
-        # 付费档:今天有数据(QuoteService 已落盘)→ 实时行情覆写,确保最新。
-        # stale_day 非空时禁用本分支: "只刷今天"会让停机日的盘中快照永久留存,
-        # 降级到下方 batch 路径从坏日起重拉。
-        # free/none 档无 quote.pool 能力,即便今天已有数据(如从 expert 降级),
-        # 也降级到下方 batch 路径刷新,避免调用无权限的实时行情接口。
+        # 实时快照覆写:今天有数据(QuoteService 已落盘)→ 用全市场快照覆写当日
+        # 分区,确保最新。stale_day 非空时禁用本分支: "只刷今天"会让停机日的
+        # 盘中快照永久留存, 降级到下方 batch 路径从坏日起重拉。
         emit("sync_daily", 12, f"获取日K [{today} ~ {today}] 实时行情…")
         written_daily = kline_sync.sync_daily_by_quotes(repo)
         new_daily_days = 1
@@ -408,8 +404,10 @@ def run_now(
     #     (这两类分支不拉历史日K, 除权不能用日K范围, 只能兜底最近几日)
     written_adj = 0
     affected_symbols: list[str] = []
+    from app.data_providers import custom as custom_sources
     adj_provider = _prefs.get_adj_factor_provider()
-    can_sync_adj = capset.has(Cap.ADJ_FACTOR) or adj_provider != "tickflow"
+    can_sync_adj = capset.has(Cap.ADJ_FACTOR) or custom_sources.provider_has_dataset(
+        adj_provider, "adj_factor")
     if can_sync_adj:
         from datetime import datetime, timedelta
         adj_end = datetime.now()
@@ -549,9 +547,8 @@ def run_now(
 
     from app.data_providers import custom as custom_sources
     daily_provider = _prefs.get_daily_data_provider()
-    daily_allowed = capset.has(Cap.KLINE_DAILY_BATCH) or (
-        daily_provider != "tickflow" and custom_sources.provider_has_dataset(daily_provider, "daily")
-    )
+    daily_allowed = capset.has(Cap.KLINE_DAILY_BATCH) or custom_sources.provider_has_dataset(
+        daily_provider, "daily")
     if daily_allowed and (pull_index or pull_etf):
         _types = []
         if pull_index:
@@ -672,12 +669,12 @@ def run_now(
     minute_on = preferences.get_minute_sync_enabled()
     minute_days = preferences.get_minute_sync_days()
     written_minute = 0
-    # 门控口径与 api/kline._minute_allowed 一致: TickFlow 需 KLINE_MINUTE_BATCH
-    # 能力; 自定义源声明 minute 数据集即放行 (resolver 异常按降级 TickFlow 处理)。
-    _, minute_fallback, _minute_resolve_err = kline_sync._resolve_minute_provider(
+    # 门控口径与 api/kline._minute_allowed 一致: 生效分钟源必须可解析 (声明
+    # minute 数据集且可用), 否则本轮静默跳过。
+    _minute_provider, _minute_resolve_err = kline_sync._resolve_minute_provider(
         preferences.get_minute_data_provider()
     )
-    minute_allowed = (not minute_fallback) or capset.has(Cap.KLINE_MINUTE_BATCH)
+    minute_allowed = _minute_resolve_err is None
     if minute_on and minute_allowed:
         minute_start = today - _td(days=minute_days)
         emit("sync_minute", 90, f"获取分钟K [{minute_start} ~ {today}]…")
@@ -876,8 +873,10 @@ def run_adj_factor_sync(
     from datetime import datetime
 
     emit = on_progress or _noop
+    from app.data_providers import custom as custom_sources
     adj_provider = _prefs.get_adj_factor_provider()
-    if not (capset.has(Cap.ADJ_FACTOR) or adj_provider != "tickflow"):
+    if not (capset.has(Cap.ADJ_FACTOR)
+            or custom_sources.provider_has_dataset(adj_provider, "adj_factor")):
         return {
             "adj_factor_symbols": 0,
             "adj_written": 0,
@@ -1404,32 +1403,32 @@ def start_scheduler(repo: KlineRepository, capset: CapabilitySet) -> AsyncIOSche
         replace_existing=True,
     )
 
-    # 周期性能力重探: 付费 Key 中途过期/续费无需重启即可被发现。
+    # 周期性能力重算: 能力集 = 生效源声明 × 路由偏好(纯本地计算, 无网络探测)。
     # 只热更新 app.state.capabilities(API 端点、盘后管道 _pipeline_then_refresh 均读它);
-    # 档位变化记 WARNING, 让「Key 失效」在日志/前端可见, 不再静默按旧档位打 403 端点。
-    def _reprobe_capabilities():
-        from app.tickflow.policy import detect_capabilities, tier_label
+    # 能力数变化记 WARNING, 让「插件状态/路由变了」在日志里可见, 不再静默按旧能力集打 403。
+    def _recompute_capabilities():
+        from app.data_providers.capabilities import detect_capabilities
         app_state = _get_app_state()
         if app_state is None:
             return
         try:
             old = getattr(app_state, "capabilities", None)
             old_n = len(old.all()) if old else -1
-            new_capset = detect_capabilities(force=True)
+            new_capset = detect_capabilities()
             app_state.capabilities = new_capset
             new_n = len(new_capset.all())
             if old_n != new_n:
                 logger.warning(
-                    "能力集变化: %d → %d capabilities (档位=%s)。Key 过期/续费或端点波动, "
-                    "已热更新 app.state.capabilities。", old_n, new_n, tier_label(),
+                    "能力集变化: %d → %d capabilities。插件状态或路由偏好已变, "
+                    "已热更新 app.state.capabilities。", old_n, new_n,
                 )
         except Exception as e:  # noqa: BLE001
-            logger.warning("周期能力重探失败(保留现有能力集): %s", e)
+            logger.warning("周期能力重算失败(保留现有能力集): %s", e)
 
     scheduler.add_job(
-        _reprobe_capabilities,
+        _recompute_capabilities,
         trigger=IntervalTrigger(minutes=60),
-        id="reprobe_capabilities",
+        id="recompute_capabilities",
         misfire_grace_time=600,
         replace_existing=True,
     )

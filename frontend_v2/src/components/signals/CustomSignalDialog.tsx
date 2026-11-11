@@ -127,8 +127,8 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
                 <h3 className="text-sm font-semibold text-foreground">{editing ? '编辑自定义信号' : '新建自定义信号'}</h3>
                 <p className="mt-1 text-[11px] text-muted">标识保存后不可修改，如需更换请新建。自定义信号保存为 csg_* 列。</p>
               </div>
-              <button onClick={onClose} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-elevated hover:text-foreground">
-                <X className="h-4 w-4" />
+              <button onClick={onClose} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-elevated hover:text-foreground">
+                <X className="h-[16px] w-[16px]" />
               </button>
             </div>
 
@@ -141,16 +141,16 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
                     disabled={editing}
                     onChange={e => setDraft(d => ({ ...d, id: e.target.value.replace(/[^a-z0-9_]/g, '') }))}
                     placeholder="如 low_touches_ma5"
-                    className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs font-mono text-foreground disabled:opacity-60"
+                    className="ctl ctl-lg ctl-input w-full px-3.5 font-mono disabled:opacity-60 bg-base"
                   />
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-[11px] text-muted">信号名称</span>
-                  <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="如 跌至MA5" className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+                  <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="如 跌至MA5" className="ctl ctl-lg ctl-input w-full px-3.5 bg-base" />
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-[11px] text-muted">类型</span>
-                  <select value={draft.kind} onChange={e => setDraft(d => ({ ...d, kind: e.target.value as CustomSignal['kind'] }))} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground">
+                  <select value={draft.kind} onChange={e => setDraft(d => ({ ...d, kind: e.target.value as CustomSignal['kind'] }))} className="ctl ctl-lg ctl-select w-full">
                     <option value="entry">入场</option>
                     <option value="exit">出场</option>
                     <option value="both">出入通用</option>
@@ -168,7 +168,7 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
                       onClick={() => setAiOpen(o => !o)}
                       className={`inline-flex items-center gap-1 text-[11px] cursor-pointer transition-colors ${aiOpen ? 'text-amber-400' : 'text-amber-400/80 hover:text-amber-400'}`}
                     >
-                      <Sparkles className="h-3 w-3" />AI 生成条件
+                      <Sparkles className="h-[12px] w-[12px]" />AI 生成条件
                     </button>
                   }
                 />
@@ -197,7 +197,7 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
                           <button
                             onClick={generateByAI}
                             disabled={aiLoading}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-amber-500/90 text-white text-xs font-medium disabled:opacity-50 cursor-pointer"
+                            className="ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 px-2.5 bg-warning/90 disabled:opacity-50"
                           >
                             {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                             {aiLoading ? '生成中…' : '生成条件'}
@@ -216,8 +216,8 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
             </div>
 
             <div className="flex justify-end gap-2 border-t border-border/50 px-5 py-4">
-              <button onClick={onClose} className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs">取消</button>
-              <button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-btn bg-amber-500/90 text-white text-xs font-medium disabled:opacity-50">
+              <button onClick={onClose} className="ctl ctl-md ctl-ghost px-2.5 bg-elevated">取消</button>
+              <button onClick={() => save.mutate()} disabled={save.isPending} className="ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 px-2.5 bg-warning/90 disabled:opacity-50">
                 <Save className="h-3.5 w-3.5" />保存
               </button>
             </div>

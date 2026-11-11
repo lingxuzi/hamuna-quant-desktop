@@ -57,12 +57,12 @@ export function DataIntegrityPanel({ hasCap, isRunning, job, defaultAssets, onSt
           ))}
           <select aria-label="自检范围" value={days} disabled={pending}
             onChange={e => { setDays(Number(e.target.value)); setConfirm(false) }}
-            className="rounded-btn border border-border bg-surface px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40">
+            className="ctl ctl-md ctl-select">
             {[7, 30, 90, 365].map(n => <option key={n} value={n}>最近 {n === 365 ? '一年' : `${n} 天`}</option>)}
           </select>
         </div>
         <button onClick={() => scan.mutate()} disabled={pending || !assets.length}
-          className="inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent/40">
+          className="ctl ctl-sm ctl-btn pri inline-flex items-center gap-1.5 px-1.5 hover:bg-accent/90 disabled:opacity-40 focus:ring-2 focus:ring-accent/40">
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5" />}
           {pending ? '任务进行中…' : '开始自检'}
         </button>
@@ -81,7 +81,7 @@ export function DataIntegrityPanel({ hasCap, isRunning, job, defaultAssets, onSt
       {report && <div className="overflow-hidden rounded-card border border-border">
         <div className="flex flex-wrap items-center justify-between gap-2 bg-elevated/40 px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium">
-            {report.status === 'clean' ? <CheckCircle2 className="h-4 w-4 text-bear" /> : <AlertTriangle className="h-4 w-4 text-warning" />}
+            {report.status === 'clean' ? <CheckCircle2 className="h-[16px] w-[16px] text-bear" /> : <AlertTriangle className="h-[16px] w-[16px] text-warning" />}
             {report.status === 'clean' ? '已有日K未发现问题' : report.status === 'empty' ? '暂无可检查的历史日K' : `发现 ${report.issues.length} 个待处理分区`}
           </div>
           <span className="text-[11px] text-muted">{report.start_date} 至 {report.end_date}</span>
@@ -111,14 +111,14 @@ export function DataIntegrityPanel({ hasCap, isRunning, job, defaultAssets, onSt
               </td>
             </tr>)}</tbody>
           </table>
-          {report.issues.length > limit && <button className="w-full py-2 text-xs text-accent" onClick={() => setLimit(n => n + 50)}>继续显示问题（已显示 {limit} / {report.issues.length}）</button>}
+          {report.issues.length > limit && <button className="ctl ctl-sm ctl-ghost w-full" onClick={() => setLimit(n => n + 50)}>继续显示问题（已显示 {limit} / {report.issues.length}）</button>}
         </div>}
         <div className="space-y-2 border-t border-border px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-[11px] text-muted">自检于 {new Date(report.checked_at).toLocaleString('zh-CN')}{report.repairable_count > 0 ? ` · 可自动修补 ${report.repairable_count} 个` : ''}</span>
             {report.repairable_count > 0 && <button disabled={!canRepair} onClick={() => setConfirm(true)}
-              className="inline-flex items-center gap-1.5 rounded-btn border border-accent/30 px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent/40">
-              <Wrench className="h-3 w-3" />修补已确认问题
+              className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 border-accent/30 px-2.5 hover:bg-accent/10 disabled:opacity-40 focus:ring-2 focus:ring-accent/40">
+              <Wrench className="h-[12px] w-[12px]" />修补已确认问题
             </button>}
           </div>
           {!matches && <p className="text-xs text-warning">检查范围已变化，请重新自检后再修补。</p>}
@@ -128,8 +128,8 @@ export function DataIntegrityPanel({ hasCap, isRunning, job, defaultAssets, onSt
           {confirm && <div className="rounded-btn border border-accent/25 bg-accent/5 p-3 space-y-3">
             <p className="text-xs leading-relaxed text-secondary">按异常股票和日期回补日K；无法定位个股时，仅回补对应整日。原文件先备份，日K校验通过后，使用完整历史重算受影响股票从异常日起的指标，并更新依赖结果。已有回测需重新运行验证。</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirm(false)} className="px-3 py-1.5 text-xs text-secondary">取消</button>
-              <button onClick={() => repair.mutate()} disabled={!canRepair} className="rounded-btn bg-accent px-3 py-1.5 text-xs text-white disabled:opacity-40">确认修补并复检</button>
+              <button onClick={() => setConfirm(false)} className="ctl ctl-md ctl-ghost px-2.5">取消</button>
+              <button onClick={() => repair.mutate()} disabled={!canRepair} className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-40">确认修补并复检</button>
             </div>
           </div>}
         </div>

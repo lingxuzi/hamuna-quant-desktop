@@ -736,7 +736,7 @@ async def strategy_stream(
         # 分钟K精确回测: Pro+ 门控 + 数据范围检查
         if minute_fill:
             capset = request.app.state.capabilities
-            from app.tickflow.capabilities import Cap
+            from app.data_providers.capabilities import Cap
             if not capset.has(Cap.KLINE_MINUTE_BATCH):
                 _discard_unstarted_job(job)
                 yield f"event: error\ndata: {json.dumps({'message': '分钟K精确回测需要 Pro+ 权限 (kline.minute.batch)'}, ensure_ascii=False)}\n\n"

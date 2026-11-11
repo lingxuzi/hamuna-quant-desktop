@@ -327,9 +327,6 @@ def _backup_secrets(data_dir: Path) -> dict[str, Any]:
     from app.services.ext_data import ext_api_key_field, get_ext_api_key
 
     payload = secrets_store.load()
-    tickflow_key = secrets_store.get_tickflow_key()
-    if tickflow_key:
-        payload["tickflow_api_key"] = tickflow_key
     ai_key = secrets_store.get_ai_key()
     if ai_key:
         payload["ai_api_key"] = ai_key
@@ -582,7 +579,7 @@ def _validate_payload(entry: _Entry, payload: bytes) -> None:
 
 def _write_bytes_atomic(target: Path, payload: bytes) -> None:
     """二进制原子写: tmp + replace, 与 fs_utils.atomic_write_text 同语义。"""
-    from app.tickflow.repository import replace_with_retry
+    from app.data_providers.repository import replace_with_retry
 
     tmp = target.with_name(target.name + ".tmp")
     tmp.write_bytes(payload)

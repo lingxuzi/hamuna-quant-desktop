@@ -49,7 +49,7 @@ P0–P3 已全部实现并通过验证（后端 98 项因子相关测试 + 全�
 - **因子层**回答"此刻全市场谁排前面"（截面排序）；**战法层**回答"何时进、买几只、多重仓、何时出、怎么止损"。
 - 两线只通过**评分配置**结合：`{"scoring": {"cf_hotmom": 0.6, ...}}`。因子不会"变成"策略，因子给策略供货。
 - 【现状】桥已存在：`backend/app/strategy/scoring.py:13` `VIRTUAL_SCORING_DEPENDENCIES`（35 个虚拟因子依赖声明）、`scoring_value_expr`（按名取值表达式）、`mining.py:342` 挖掘候选产物本身就是 `scoring = dict(zip(factor_names, weights))`。
-- 【现状】研究线已分裂在两处：因子检验是 `/backtest?tab=factor`，挖掘是独立页 `/mining`（`frontend/src/router.tsx:126-127`）。本方案将研究线收拢。
+- 【现状】研究线已分裂在两处：因子检验是 `/backtest?tab=factor`，挖掘是独立页 `/mining`（`frontend_v2/src/router.tsx:126-127`）。本方案将研究线收拢。
 
 ### 1.2 各能力现状对照
 

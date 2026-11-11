@@ -9,7 +9,7 @@ import datetime as _dt
 import polars as pl
 import pytest
 
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 # 钉死的北京日期, 不随跑测试那天的 date.today() 漂移
 _BJ = _dt.date(2026, 3, 2)

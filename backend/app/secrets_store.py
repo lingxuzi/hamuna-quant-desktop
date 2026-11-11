@@ -90,14 +90,6 @@ def clear(*keys: str) -> dict:
     return current
 
 
-def get_tickflow_key() -> str:
-    """取当前 TickFlow Key:secrets.json 优先,否则 .env。"""
-    val = load().get("tickflow_api_key")
-    if val:
-        return val
-    from app.config import settings
-    return settings.tickflow_api_key or ""
-
 
 def get_ai_key() -> str:
     """取当前 AI Key:secrets.json 优先,否则 .env。"""
@@ -162,7 +154,7 @@ def set_email_smtp_password(password: str) -> str:
 def get_env_backed_secret(field: str, env_name: str) -> str:
     """取环境变量后备的密钥(插件 API Key 等):secrets.json 优先,否则环境变量。
 
-    与 get_tickflow_key 同优先级语义:UI 写入 secrets.json 后即覆盖 .env。
+    secrets.json 优先: UI 写入 secrets.json 后即覆盖环境变量后备值。
     """
     val = load().get(field)
     if val:

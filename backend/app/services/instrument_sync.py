@@ -1,9 +1,8 @@
 """标的维表同步服务。
 
-盘前 9:10 调用 tf.exchanges.get_instruments("SH"/"SZ"/"BJ", type="stock")
-获取全量标的元数据，flatten ext 字段，写入 instruments.parquet。
-
-Starter+ 盘后可用 quotes.get(universes) 顺便补充 name。
+维表跟随日K数据源: 生效源实现 get_instruments 时直接用它拉全量标的元数据,
+flatten ext 字段写入 instruments.parquet; 生效源不提供维表时回退默认源
+(内置 easytdx) —— 二者天然耦合, 没有独立偏好项。
 """
 from __future__ import annotations
 
@@ -14,12 +13,8 @@ import polars as pl
 
 from app.market_time import cn_today
 from app.services.fs_utils import atomic_write_parquet
-from app.tickflow import client as tf_client
-from app.tickflow.client import get_client
 
 logger = logging.getLogger(__name__)
-
-_EXCHANGES = ["SH", "SZ", "BJ"]
 
 
 def _flatten_instruments(items: list[dict], *, current_limits: bool = True) -> list[dict]:
@@ -46,33 +41,35 @@ def _flatten_instruments(items: list[dict], *, current_limits: bool = True) -> l
 
 
 def fetch_instruments_via_provider(asset_type: str = "stock") -> list[dict] | None:
-    """若当前日K数据源不是 tickflow 且该 provider 提供 get_instruments, 用它拉标的维表。
+    """用生效日K源 (或其默认源) 拉标的维表。
 
-    返回 flatten 行列表; 未命中(仍应走 tickflow)时返回 None。
-    标的维表跟随日K数据源(二者天然耦合, 无独立偏好项)。
+    标的维表跟随日K数据源(二者天然耦合, 无独立偏好项)。生效源不实现
+    get_instruments 时 (如 fuyao) 回退默认源 (内置 easytdx)。
 
+    返回 flatten 行列表; 所有候选源都拿不到维表时返回 None。
     asset_type: stock=A股维表, index/etf=指数/ETF 维表 (index_sync 复用)。
     """
+    from app.data_providers import custom as custom_sources
+    from app.data_providers.capabilities import default_provider_for
     from app.services import preferences
 
-    provider_name = preferences.get_daily_data_provider()
-    if provider_name == "tickflow":
-        return None
-    from app.data_providers import custom as custom_sources
-
-    if not custom_sources.is_custom_provider(provider_name):
-        return None
-    provider = custom_sources.get_provider(provider_name)
-    if not hasattr(provider, "get_instruments"):
-        return None
-    try:
-        items = provider.get_instruments(asset_type) or []
-    except Exception as e:  # noqa: BLE001
-        logger.warning("provider %s get_instruments(%s) 失败: %s", provider_name, asset_type, e)
-        return None
-    rows = _flatten_instruments(items)
-    logger.info("instruments via %s: %d %s", provider_name, len(rows), asset_type)
-    return rows
+    effective = preferences.get_daily_data_provider()
+    for provider_name in (effective, default_provider_for("daily")):
+        if not provider_name or not custom_sources.is_custom_provider(provider_name):
+            continue
+        provider = custom_sources.get_provider(provider_name)
+        if not hasattr(provider, "get_instruments"):
+            continue
+        try:
+            items = provider.get_instruments(asset_type) or []
+        except Exception as e:  # noqa: BLE001
+            logger.warning("provider %s get_instruments(%s) 失败: %s", provider_name, asset_type, e)
+            continue
+        rows = _flatten_instruments(items)
+        logger.info("instruments via %s: %d %s", provider_name, len(rows), asset_type)
+        return rows
+    logger.warning("维表源不可用 (%s/%s), 本轮跳过标的维表同步", effective, asset_type)
+    return None
 
 
 def sync_instruments(data_dir: Path) -> int:
@@ -80,21 +77,7 @@ def sync_instruments(data_dir: Path) -> int:
 
     返回写入的行数。
     """
-    all_rows = fetch_instruments_via_provider("stock")
-    if all_rows is None:
-        # 未命中非 tickflow provider → 走 tickflow 直连
-        tf = get_client()
-        # 免费接口的限价来自历史行情，不能盖上同步日期当作当日权威价。
-        current_limits = tf_client.current_mode() == "api_key"
-        all_rows = []
-        for ex in _EXCHANGES:
-            try:
-                items = tf.exchanges.get_instruments(ex, instrument_type="stock")
-                if items:
-                    all_rows.extend(_flatten_instruments(items, current_limits=current_limits))
-                    logger.info("instruments %s: %d stocks", ex, len(items))
-            except Exception as e:
-                logger.warning("get_instruments(%s) failed: %s", ex, e)
+    all_rows = fetch_instruments_via_provider("stock") or []
 
     if not all_rows:
         return 0

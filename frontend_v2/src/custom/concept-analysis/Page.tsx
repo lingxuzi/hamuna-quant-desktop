@@ -1,8 +1,7 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import {
-  Activity,
   Crown,
   Layers3,
   RefreshCw,
@@ -17,6 +16,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { AnalysisConfigDialog, PresetFetchState, type AnalysisFieldConfig } from '@/components/analysis-shared'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { toNavItems, type NavItem } from '@/lib/listNav'
+import { keyboardActivate } from '@/lib/a11y'
 import { RpsRotationDialog } from '@/components/RpsRotationDialog'
 import { api, type MarketSnapshotRow } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
@@ -34,6 +34,20 @@ const MAX_RENDERED_STOCKS = 160
 
 /** 内置概念预设 id — 本页的数据来源与「未获取」引导按钮都锚定它 */
 const PRESET_CONCEPT_ID = 'ext_gn_ths'
+
+/** 榜单口径 (design/v2/17-concept.html):
+ *  宽泛标签 (成分 ≥300 只: 融资融券 / 沪深股通 / 国企改革 …) 跟的是大盘,
+ *  放进榜单只会占满前几名 —— 单独一档, 不与中小概念混排。 */
+const WIDE_CONCEPT_MIN = 300
+/** 涨幅榜只收 10–99 只成分的中小概念 */
+const MID_SMALL_MIN = 10
+const MID_SMALL_MAX = 99
+/** 跌幅榜只收成分 ≥30 只的概念 (太小的概念均涨幅噪声大) */
+const DROP_POOL_MIN = 30
+/** 榜单行数 */
+const UP_RANK_ROWS = 14
+const DROP_RANK_ROWS = 8
+const WIDE_DIRECTION_ROWS = 6
 
 type SortMode = 'heat' | 'avgPct' | 'leader' | 'amount' | 'down'
 
@@ -123,6 +137,12 @@ function num(v: unknown): number | null {
 
 function avg(values: number[]) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
+}
+
+/** 成交额 → 亿元 (设计稿榜单列「成交额(亿)」) */
+function fmtYi(v: number | null | undefined) {
+  if (v == null || !Number.isFinite(v)) return '—'
+  return (v / 1e8).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
 }
 
 function median(values: number[]) {
@@ -315,15 +335,50 @@ export function ConceptAnalysis() {
   const selected = filteredStats.find(s => s.key === selectedKey) ?? filteredStats[0] ?? null
   const leading = useMemo(() => [...stats].sort(statSort('heat')).slice(0, 10), [stats])
   const falling = useMemo(() => [...stats].sort(statSort('down')).slice(0, 10), [stats])
-  const activeConcept = useMemo(() => [...stats].sort(statSort('amount'))[0] ?? null, [stats])
-  const conceptBreadth = useMemo(() => {
-    const priced = stats.filter(s => s.avgPct != null)
-    return {
-      up: priced.filter(s => (s.avgPct ?? 0) > 0).length,
-      down: priced.filter(s => (s.avgPct ?? 0) < 0).length,
-      flat: priced.filter(s => s.avgPct === 0).length,
-    }
+
+  // ---- 榜单口径 (设计稿 17: 宽泛标签另置, 中小概念上榜) ----
+  const wideStats = useMemo(() => stats.filter(s => s.count >= WIDE_CONCEPT_MIN), [stats])
+  const midSmallStats = useMemo(
+    () => stats.filter(s => s.count >= MID_SMALL_MIN && s.count <= MID_SMALL_MAX),
+    [stats],
+  )
+  const upRank = useMemo(
+    () => [...midSmallStats]
+      .sort((a, b) => (b.avgPct ?? -Infinity) - (a.avgPct ?? -Infinity))
+      .slice(0, UP_RANK_ROWS),
+    [midSmallStats],
+  )
+  const dropPool = useMemo(
+    () => stats.filter(s => s.count >= DROP_POOL_MIN && s.count < WIDE_CONCEPT_MIN),
+    [stats],
+  )
+  const dropRank = useMemo(
+    () => [...dropPool]
+      .sort((a, b) => (a.avgPct ?? Infinity) - (b.avgPct ?? Infinity))
+      .slice(-DROP_RANK_ROWS),
+    [dropPool],
+  )
+  const countDistribution = useMemo(() => {
+    const buckets = [
+      { label: '30–99', min: 30, max: 99 },
+      { label: '100–299', min: 100, max: 299 },
+      { label: '≥300 只', min: 300, max: Infinity },
+      { label: '10–29', min: 10, max: 29 },
+      { label: '<10 只', min: 0, max: 9 },
+    ]
+    return buckets.map(b => ({
+      label: b.label,
+      count: stats.filter(s => s.count >= b.min && s.count <= b.max).length,
+    }))
   }, [stats])
+  const wideDirection = useMemo(
+    () => [...wideStats]
+      .sort((a, b) => (a.avgPct ?? Infinity) - (b.avgPct ?? Infinity))
+      .slice(0, WIDE_DIRECTION_ROWS),
+    [wideStats],
+  )
+  const wideUpCount = wideStats.filter(s => (s.avgPct ?? 0) > 0).length
+  const weakestConcept = dropRank[dropRank.length - 1] ?? null
 
   const totalSymbols = useMemo(() => {
     const set = new Set<string>()
@@ -338,19 +393,19 @@ export function ConceptAnalysis() {
   }
 
   if (configsQuery.isLoading) {
-    return <div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-muted" /></div>
+    return <div className="flex h-full items-center justify-center"><RefreshCw className="h-[20px] w-[20px] animate-spin text-muted" /></div>
   }
 
   if (!activeConfig) {
-    // 极端情况: 无任何概念配置。仍提供一键获取内置概念数据入口
+    // 极端情况:无任何概念配置.仍提供一键获取内置概念数据入口
     return (
       <>
         <div className="flex h-full flex-col">
           <PageHeader seal="概"
             title="概念板块"
             right={
-              <button onClick={() => setShowConfig(true)} className="p-1.5 text-muted hover:bg-surface hover:text-accent" title="配置数据源">
-                <Settings2 className="h-4 w-4" />
+              <button onClick={() => setShowConfig(true)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-surface hover:text-accent" title="配置数据源">
+                <Settings2 className="h-[16px] w-[16px]" />
               </button>
             }
           />
@@ -373,13 +428,22 @@ export function ConceptAnalysis() {
     <>
       <PageHeader seal="概"
         title="概念板块"
-        subtitle={`${marketQuery.data?.as_of ?? rowsQuery.data?.date ?? '最新'} · ${stats.length} 个概念 · ${totalSymbols} 只标的`}
+        subtitle="SECTOR · CONCEPT"
+        titleExtra={
+          <>
+            <span className="tb-chip">{stats.length} 个概念</span>
+            <span className="tb-chip">中小概念上榜</span>
+            <span className="tb-chip warn">宽泛标签 {wideUpCount}/{wideStats.length} 上涨</span>
+            <span className="tb-note">{marketQuery.data?.as_of ?? rowsQuery.data?.date ?? '最新'} · {totalSymbols} 只标的</span>
+          </>
+        }
         right={
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowConfig(true)} className="ctl ctl-md ctl-btn">配置数据源</button>
             {/* RPS 轮动: 打开涨幅轮动矩阵对话框 */}
             <button
               onClick={() => setShowRps(true)}
-              className="inline-flex items-center gap-1 rounded-btn border border-amber-400/40 bg-amber-400/15 px-2.5 py-1.5 text-[11px] text-amber-400 font-medium transition-colors hover:bg-amber-400/25 hover:border-amber-400/60"
+              className="ctl ctl-md ctl-btn inline-flex items-center gap-1 border-amber-400/40 bg-amber-400/15 px-2.5 text-amber-400 hover:bg-amber-400/25 hover:border-amber-400/60"
               title="概念涨幅轮动矩阵"
             >
               <Repeat className="h-3.5 w-3.5" />涨幅RPS轮动分析
@@ -387,23 +451,51 @@ export function ConceptAnalysis() {
             <button
               onClick={() => { rowsQuery.refetch(); marketQuery.refetch() }}
               disabled={rowsQuery.isFetching || marketQuery.isFetching}
-              className="p-1.5 text-muted hover:bg-surface disabled:opacity-50"
+              className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-surface disabled:opacity-50"
               title="刷新"
             >
-              <RefreshCw className={cn('h-4 w-4', (rowsQuery.isFetching || marketQuery.isFetching) && 'animate-spin')} />
-            </button>
-            <button onClick={() => setShowConfig(true)} className="p-1.5 text-muted hover:bg-surface hover:text-accent" title="配置数据源">
-              <Settings2 className="h-4 w-4" />
+              <RefreshCw className={cn('h-[16px] w-[16px]', (rowsQuery.isFetching || marketQuery.isFetching) && 'animate-spin')} />
             </button>
           </div>
         }
       />
 
-      <div className="min-h-full px-6 py-5">
-        <div className="mx-auto max-w-[1440px] space-y-5">
-          <SectorRotationCard kind="concept" />
+      <div className="min-h-full">
+        <div className="space-y-5">
+          {stats.length > 0 && (
+            <>
+              <ConceptBand
+                total={stats.length}
+                topFive={upRank.slice(0, 5)}
+                wideUp={wideUpCount}
+                wideTotal={wideStats.length}
+                weakest={weakestConcept}
+              />
 
-          <HeroPanel leading={leading[0]} falling={falling[0]} activeConcept={activeConcept} conceptBreadth={conceptBreadth} />
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_1fr]">
+                <div className="space-y-5">
+                  <ConceptRankTable
+                    title={`中 小 概 念 涨 幅 榜 · ${MID_SMALL_MIN}–${MID_SMALL_MAX} 只成分`}
+                    rows={upRank}
+                    total={midSmallStats.length}
+                    onSelect={setSelectedKey}
+                  />
+                  <ConceptRankTable
+                    title={`跌 幅 榜 · 成分 ≥${DROP_POOL_MIN} 只的末 ${DROP_RANK_ROWS}`}
+                    rows={dropRank}
+                    total={dropPool.length}
+                    onSelect={setSelectedKey}
+                  />
+                </div>
+                <div className="space-y-5">
+                  <CountDistributionTable rows={countDistribution} />
+                  <WideDirectionTable rows={wideDirection} />
+                </div>
+              </div>
+            </>
+          )}
+
+          <SectorRotationCard kind="concept" />
 
           <MarketPulse
             leading={leading}
@@ -428,11 +520,11 @@ export function ConceptAnalysis() {
               <ConceptFocus stat={selected} activeSymbol={previewSymbol} onStockClick={handleStockClick} />
             </div>
           ) : rowsQuery.isLoading ? (
-            <div className="rounded-2xl border border-border bg-surface px-6 py-16 text-center text-sm text-muted">正在计算概念强度...</div>
+            <div className="border-t border-border-strong py-16 text-center text-sm text-muted">正在计算概念强度...</div>
           ) : needsConceptFetch ? (
             <PresetFetchState
               title="未获取概念数据"
-              hint="内置概念数据源已就绪,点击下方按钮从同花顺获取概念分类数据"
+              hint="内置概念数据源已就绪，点击下方按钮从同花顺获取概念分类数据"
               isLoading={fetchMutation.isPending}
               error={fetchMutation.error}
               onFetch={() => fetchMutation.mutate()}
@@ -464,62 +556,157 @@ export function ConceptAnalysis() {
   )
 }
 
-function HeroPanel({
-  leading,
-  falling,
-  activeConcept,
-  conceptBreadth,
+/** 顶部读数带 (设计稿 17 .b4h): 概念总数 / 前五概念 / 宽泛标签上涨 / 最弱概念 */
+function ConceptBand({
+  total,
+  topFive,
+  wideUp,
+  wideTotal,
+  weakest,
 }: {
-  leading?: ConceptStat
-  falling?: ConceptStat
-  activeConcept?: ConceptStat | null
-  conceptBreadth: { up: number; down: number; flat: number }
+  total: number
+  topFive: ConceptStat[]
+  wideUp: number
+  wideTotal: number
+  weakest: ConceptStat | null
 }) {
+  const lead = topFive[0]
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-      <HeroMetric icon={TrendingUp} label="最强主线" value={leading?.key ?? '—'} hint={leading?.avgPct != null ? <span className={priceColorClass(leading.avgPct)}>{fmtPct(leading.avgPct)}</span> : '等待行情'} tone="up" />
-      <HeroMetric icon={TrendingDown} label="最大风险" value={falling?.key ?? '—'} hint={falling?.avgPct != null ? <span className={priceColorClass(falling.avgPct)}>{fmtPct(falling.avgPct)}</span> : '等待行情'} tone="down" />
-      <HeroMetric
-        icon={Activity}
-        label="涨跌板块"
-        value={<><span className="text-bull">{conceptBreadth.up}</span><span className="mx-1 text-muted">/</span><span className="text-bear">{conceptBreadth.down}</span></>}
-        hint={<><span className="text-bull">上涨</span><span className="mx-1 text-muted">/</span><span className="text-bear">下跌</span>{conceptBreadth.flat ? <span className="text-muted"> · 平 {conceptBreadth.flat}</span> : null}</>}
-        tone="blue"
-      />
-      <HeroMetric icon={Activity} label="资金活跃" value={activeConcept?.key ?? '—'} hint={activeConcept ? fmtBigNum(activeConcept.totalAmount) : '等待行情'} tone="blue" />
-      <HeroMetric icon={Crown} label="龙头算法" value="6 因子" hint="强势 + 承接 + 容量" tone="gold" />
+    <div className="band grid grid-cols-2 md:grid-cols-4">
+      <div>
+        <span className="k">概 念 总 数</span>
+        <span className="v">{total}</span>
+        <small>同花顺概念 · 一只股票可属多个</small>
+      </div>
+      <div>
+        <span className="k">前 五 概 念</span>
+        <span className="v line-clamp-2 !text-[15px] !font-sans">{topFive.map(s => s.key).join(' · ')}</span>
+        <small>{lead?.avgPct != null ? `${fmtPct(lead.avgPct)} 起，逐级递减` : '—'}</small>
+      </div>
+      <div>
+        <span className="k">宽 泛 标 签 上 涨</span>
+        <span className="v">{wideUp} / {wideTotal}</span>
+        <small>成分 ≥{WIDE_CONCEPT_MIN} 只的概念（融资融券 / 沪深股通口径）</small>
+      </div>
+      <div>
+        <span className="k">最 弱 概 念</span>
+        <span className={cn('v truncate', weakest ? 'text-bear' : 'text-muted')}>{weakest?.key ?? '—'}</span>
+        <small>{weakest ? `${fmtPct(weakest.avgPct)} · ${weakest.count} 只成分` : '—'}</small>
+      </div>
     </div>
   )
 }
 
-function HeroMetric({ icon: Icon, label, value, hint, tone }: {
-  icon: typeof TrendingUp
-  label: string
-  value: ReactNode
-  hint: ReactNode
-  tone: 'up' | 'down' | 'gold' | 'blue'
+/** 概念榜单表 (设计稿 17 .b4t): 概念/均涨幅/中位/成分/上涨占比/成交额(亿) */
+function ConceptRankTable({ title, rows, total, onSelect }: {
+  title: string
+  rows: ConceptStat[]
+  total: number
+  onSelect: (key: string) => void
 }) {
-  const toneClass = {
-    up: 'text-bull bg-bull/10',
-    down: 'text-bear bg-bear/10',
-    gold: 'text-amber-300 bg-amber-400/10',
-    blue: 'text-accent bg-accent/10',
-  }[tone]
-  const valueClass = {
-    up: 'text-bull',
-    down: 'text-bear',
-    gold: 'text-amber-300',
-    blue: 'text-foreground',
-  }[tone]
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2">
-      <div className="flex items-center justify-between text-[11px] text-muted">
-        <span>{label}</span>
-        <span className={cn('rounded-md p-1', toneClass)}><Icon className="h-3.5 w-3.5" /></span>
+    <section>
+      <div className="sec-h !mt-0">
+        {title}
+        <span className="sp" />
+        <span className="note">共 {total} 个</span>
       </div>
-      <div className={cn('mt-1 truncate text-sm font-semibold', valueClass)}>{value}</div>
-      <div className="mt-0.5 truncate text-[11px] text-muted">{hint}</div>
-    </div>
+      <table className="dt">
+        <colgroup>
+          <col />
+          <col style={{ width: 66 }} />
+          <col style={{ width: 66 }} />
+          <col style={{ width: 44 }} />
+          <col style={{ width: 52 }} />
+          <col style={{ width: 64 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">概念</th>
+            <th scope="col">均涨幅</th>
+            <th scope="col">中位</th>
+            <th scope="col">成分</th>
+            <th scope="col">上涨占比</th>
+            <th scope="col">成交额(亿)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={6} className="py-6 text-center text-muted">暂无数据</td></tr>
+          ) : rows.map((s, i) => (
+            <tr key={s.key} onClick={() => onSelect(s.key)} className="cursor-pointer" title={`展开 ${s.key} 成分股`} {...keyboardActivate(() => onSelect(s.key))}>
+              <td>
+                <span className="mr-1.5 inline-block w-4 font-mono text-[9px] text-muted">{String(i + 1).padStart(2, '0')}</span>
+                {s.key}
+              </td>
+              <td className={priceColorClass(s.avgPct)}>{fmtPct(s.avgPct)}</td>
+              <td>{fmtPct(s.medianPct)}</td>
+              <td>{s.count}</td>
+              <td>{(s.upRate * 100).toFixed(0)}%</td>
+              <td>{fmtYi(s.totalAmount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+/** 成分家数分布 (设计稿 17 右栏) */
+function CountDistributionTable({ rows }: { rows: Array<{ label: string; count: number }> }) {
+  const max = Math.max(1, ...rows.map(r => r.count))
+  return (
+    <section>
+      <div className="sec-h !mt-0">成 分 家 数 分 布</div>
+      <table className="dt">
+        <colgroup>
+          <col />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 120 }} />
+        </colgroup>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.label}>
+              <td>{r.label}</td>
+              <td>{r.count}</td>
+              <td>
+                <span
+                  className="inline-block h-[6px] align-middle bg-accent/55"
+                  style={{ width: `${(r.count / max) * 45}px` }}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+/** 宽泛标签里的真实方向 (设计稿 17 右栏): 成分 ≥300 只的概念, 跟的是大盘 */
+function WideDirectionTable({ rows }: { rows: ConceptStat[] }) {
+  return (
+    <section>
+      <div className="sec-h">宽 泛 标 签 里 的 真 实 方 向</div>
+      <table className="dt">
+        <colgroup>
+          <col />
+          <col style={{ width: 58 }} />
+          <col style={{ width: 58 }} />
+        </colgroup>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={3} className="py-6 text-center text-muted">暂无宽泛标签</td></tr>
+          ) : rows.map(s => (
+            <tr key={s.key}>
+              <td>{s.key}</td>
+              <td className={priceColorClass(s.avgPct)}>{fmtPct(s.avgPct)}</td>
+              <td>{s.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   )
 }
 
@@ -565,17 +752,16 @@ function PulseList({
 }) {
   const toneText = mode === 'up' ? 'text-bull' : 'text-bear'
   const toneBorder = mode === 'up' ? 'border-bull/20' : 'border-bear/20'
-  const toneBg = mode === 'up' ? 'bg-bull/10' : 'bg-bear/10'
   const toneHover = mode === 'up' ? 'hover:border-bull/35' : 'hover:border-bear/35'
 
   return (
-    <div className={cn('rounded-xl border bg-base/35 p-2', toneBorder)}>
-      <div className="mb-1.5 flex items-center justify-between px-1">
-        <div className={cn('flex items-center gap-1.5 text-xs font-medium', toneText)}>
-          {mode === 'up' ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+    <div className="border-t border-rule-strong pt-2">
+      <div className="mb-1 flex items-center justify-between">
+        <div className={cn('figcap flex items-center gap-1.5', toneText)}>
+          {mode === 'up' ? <TrendingUp className="h-[12px] w-[12px]" /> : <TrendingDown className="h-[12px] w-[12px]" />}
           {title}
         </div>
-        <span className="rounded-full bg-elevated/60 px-2 py-0.5 text-[10px] text-muted">Top 10</span>
+        <span className="font-mono text-[9px] text-muted">Top 10</span>
       </div>
       <div className="space-y-1">
         {items.map((item, idx) => {
@@ -586,18 +772,17 @@ function PulseList({
           const downPct = item.count > 0 ? (item.downCount / item.count) * 100 : 0
           const flatPct = Math.max(0, 100 - upPct - downPct)
           return (
-            <button
+            <div
               key={item.key}
-              onClick={() => onSelect(item.key)}
               className={cn(
-                'block w-full rounded-lg border border-transparent bg-surface/45 px-2 py-1.5 text-left transition-colors',
-                active ? cn('bg-accent/[0.08]', toneBorder) : cn('hover:bg-elevated/35', toneHover),
+                'block w-full border-b border-border px-0 py-2 text-left transition-colors',
+                active ? cn('bg-accent/[0.06]', toneBorder) : cn('hover:bg-elevated/25', toneHover),
               )}
             >
               <div className="grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(16rem,1.1fr)] md:items-center">
-                <div className="min-w-0">
+                <button type="button" onClick={() => onSelect(item.key)} className="min-w-0 text-left">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-mono text-[10px]', idx < 3 ? cn(toneBg, toneText) : 'bg-elevated/70 text-muted')}>{idx + 1}</span>
+                    <span className="w-5 shrink-0 font-mono text-[9px] text-muted">{String(idx + 1).padStart(2, '0')}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-xs font-medium text-foreground">{item.key}</span>
@@ -617,22 +802,22 @@ function PulseList({
                       <div className="h-full bg-bear/70" style={{ width: `${downPct}%` }} />
                     </div>
                   </div>
-                </div>
+                </button>
                 <div className="grid min-w-0 grid-cols-3 gap-1">
                   {Array.from({ length: 3 }).map((_, i) => {
                     const stock = leaders[i]
                     return stock ? (
-                      <span key={stock.symbol} title={stock.name || stock.symbol} onClick={e => { e.stopPropagation(); onStockClick(stock.symbol, stock.name || undefined, toNavItems(sortedStocks.slice(0, MAX_RENDERED_STOCKS))) }} className={cn('flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] cursor-pointer hover:brightness-125', i === 0 ? 'bg-amber-300/10 text-foreground' : 'bg-elevated/60 text-secondary', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
+                      <button type="button" key={stock.symbol} title={stock.name || stock.symbol} onClick={() => onStockClick(stock.symbol, stock.name || undefined, toNavItems(sortedStocks.slice(0, MAX_RENDERED_STOCKS)))} className={cn('ctl ctl-sm ctl-ghost flex min-w-0 items-center gap-1 px-1.5 hover:brightness-125', i === 0 ? 'bg-amber-300/10 text-foreground' : 'bg-elevated/60 text-secondary', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
                         <span className="flex min-w-0 items-center gap-1">
                           <span className="min-w-0 truncate font-medium">{stock.name || stock.symbol}</span>
                         </span>
                         <span className={cn('shrink-0 font-mono', priceColorClass(stock.change_pct))}>{stock.change_pct != null ? fmtPct(stock.change_pct) : '—'}</span>
-                      </span>
+                      </button>
                     ) : <span key={i} className="rounded-md bg-elevated/30 px-1.5 py-0.5 text-[10px] text-muted/40">—</span>
                   })}
                 </div>
               </div>
-            </button>
+            </div>
           )
         })}
       </div>
@@ -658,7 +843,7 @@ function ConceptRail({
   onSelect: (v: string) => void
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-surface p-2.5">
+    <section className="border-t border-border-strong pt-4">
       <div className="px-1 pb-2.5">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">概念矩阵</h3>
@@ -666,13 +851,13 @@ function ConceptRail({
         </div>
         <div className="mt-2 relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-          <input value={search} onChange={e => onSearch(e.target.value)} placeholder="搜索概念" className="h-8 w-full rounded-lg border border-border bg-base pl-8 pr-3 text-xs text-foreground outline-none focus:border-accent/50" />
+          <input value={search} onChange={e => onSearch(e.target.value)} placeholder="搜索概念" className="ctl ctl-md ctl-input w-full pl-8 pr-3 focus:border-accent/50" />
         </div>
         <div className="mt-2 grid grid-cols-5 overflow-hidden rounded-lg border border-border text-[10px]">
           {([
             ['heat', '强度'], ['avgPct', '涨幅'], ['leader', '龙头'], ['amount', '成交'], ['down', '跌幅'],
           ] as [SortMode, string][]).map(([key, label]) => (
-            <button key={key} onClick={() => onSort(key)} className={cn('py-1.5 transition-colors', sortMode === key ? 'bg-accent/15 text-accent' : 'bg-base text-muted hover:text-foreground')}>{label}</button>
+            <button key={key} onClick={() => onSort(key)} className={cn('ctl ctl-md ctl-ghost', sortMode === key ? 'bg-accent/15 text-accent' : 'bg-base text-muted hover:text-foreground')}>{label}</button>
           ))}
         </div>
       </div>
@@ -752,7 +937,7 @@ function ConceptFocus({ stat, onStockClick, activeSymbol }: { stat: ConceptStat 
           </thead>
           <tbody className="divide-y divide-border/70">
             {stocks.map((s, idx) => (
-              <tr key={`${s.symbol}-${idx}`} className={cn('cursor-pointer', s.symbol === activeSymbol ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-elevated/30')} onClick={() => onStockClick(s.symbol, s.name || undefined, focusNav)}>
+              <tr key={`${s.symbol}-${idx}`} className={cn('cursor-pointer', s.symbol === activeSymbol ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-elevated/30')} onClick={() => onStockClick(s.symbol, s.name || undefined, focusNav)} {...keyboardActivate(() => onStockClick(s.symbol, s.name || undefined, focusNav))}>
                 <td className="px-4 py-2 font-mono text-muted">{idx + 1}</td>
                 <td className="px-4 py-2">
                   <div className="font-medium text-foreground">{s.name || '—'}</div>
@@ -793,7 +978,7 @@ function LeaderStage({ stocks, onStockClick, activeSymbol }: { stocks: EnrichedS
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {stocks.map((stock, idx) => (
-          <div key={stock.symbol} onClick={() => onStockClick(stock.symbol, stock.name || undefined)} className={cn('rounded-lg border p-3 cursor-pointer hover:brightness-110 transition-all', idx === 0 ? 'border-amber-400/25 bg-amber-400/[0.06]' : 'border-border/60 bg-base/35', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
+          <div key={stock.symbol} role="button" onClick={() => onStockClick(stock.symbol, stock.name || undefined)} className={cn('rounded-lg border p-3 cursor-pointer hover:brightness-110 transition-all', idx === 0 ? 'border-amber-400/25 bg-amber-400/[0.06]' : 'border-border/60 bg-base/35', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')} {...keyboardActivate(() => onStockClick(stock.symbol, stock.name || undefined))}>
             <div className="flex items-center justify-between gap-2">
               <span className={cn('text-[10px] font-medium', idx === 0 ? 'text-amber-300' : 'text-muted')}>{idx === 0 ? '主龙头' : `辅龙 ${idx}`}</span>
               <span className="font-mono text-[11px] text-amber-300">{stock.leaderScore.toFixed(0)}</span>

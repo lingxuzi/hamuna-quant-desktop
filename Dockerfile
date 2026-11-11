@@ -20,9 +20,9 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then npm config set registry "$NPM_REGISTRY";
     npm install -g pnpm@9
 # 让 pnpm 走镜像源安装依赖
 RUN if [ "$USE_CN_MIRROR" = "1" ]; then pnpm config set registry "$NPM_REGISTRY"; fi
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+COPY frontend_v2/package.json frontend_v2/pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile || pnpm install
-COPY frontend/ ./
+COPY frontend_v2/ ./
 RUN pnpm build
 
 # === Stage 1c: Codex CLI ===
@@ -93,9 +93,10 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
 # 三个关键路径, 确保 static / tiers / data 都指向容器内正确位置。
 COPY backend/app ./app
 COPY tiers.yaml /app/tiers.yaml
-# 版本号运行时兜底 (issue #513): 非冻结路径 _load_version() 读
-# /app/frontend/package.json, 缺文件会静默回退 _FALLBACK_VERSION 显示旧版本。
-COPY frontend/package.json /app/frontend/package.json
+# 版本号运行时兜底 (issue #513): 容器里 backend/app 被 COPY 到 /app/app,
+# _load_version() 的 parents[2] 因此落在 "/", 版本文件必须放 /frontend_v2/package.json
+# 才读得到 —— 放 /app/ 下读不到, 会静默回退 _FALLBACK_VERSION 显示旧版本。
+COPY frontend_v2/package.json /frontend_v2/package.json
 ENV STATIC_DIR=/app/static \
     TIERS_YAML=/app/tiers.yaml \
     DATA_DIR=/app/data \
@@ -106,9 +107,9 @@ COPY --from=frontend-builder /build/dist ./static
 
 # 升级保护清单: 全量程序文件 sha256 基线 (二次开发升级对比用)。
 # 必须在 app/ 与 static/ 都落位之后生成; .venv/data 等由脚本排除规则剔除。
-# 版本号唯一权威 = frontend/package.json (与 app/__init__._load_version 同源)。
+# 版本号唯一权威 = frontend_v2/package.json (与 app/__init__._load_version 同源)。
 COPY scripts/generate_manifest.py /tmp/generate_manifest.py
-COPY frontend/package.json /tmp/package.json
+COPY frontend_v2/package.json /tmp/package.json
 RUN APP_VER=$(python3 -c "import json;print(json.load(open('/tmp/package.json'))['version'])") && \
     python3 /tmp/generate_manifest.py --root /app --output /app/app/upgrade_manifest.json --version "$APP_VER"
 

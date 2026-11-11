@@ -25,7 +25,7 @@ def cache_benchmark(root: Path) -> dict:
     import polars as pl
 
     from app.backtest.engine import BacktestEngine
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     days = [date(2026, 1, 1) + timedelta(days=i) for i in range(168)]
     days = [d for d in days if d.weekday() < 5]

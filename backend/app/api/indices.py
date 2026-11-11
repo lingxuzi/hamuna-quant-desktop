@@ -11,9 +11,9 @@ import polars as pl
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.indicators.pipeline import compute_enriched
-from app.market_time import cn_today
+from app.market_time import cn_now, cn_today
 from app.services import index_sync, kline_sync, preferences, trading_day  # noqa: F401
-from app.tickflow.capabilities import Cap
+from app.data_providers.capabilities import Cap
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def get_index_daily(
     try:
         raw = kline_sync.sync_daily_batch([symbol], count=days + 150)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"TickFlow fetch failed: {e}") from e
+        raise HTTPException(status_code=502, detail=f"指数行情拉取失败: {e}") from e
     if raw.is_empty():
         return {"symbol": symbol, "name": info.get("name"), "index_info": info, "rows": [], "source": "none"}
 
@@ -92,10 +92,18 @@ def get_index_minute(
     info = _index_info(repo, symbol)
     today = cn_today()
     day = trade_date or today
-    if trade_date is None and trading_day.is_trading_day() is False:
-        daily = repo.get_index_daily(symbol, today - timedelta(days=366), today, columns=["date"])
-        if not daily.is_empty():
-            day = daily["date"].max() or today
+    if trade_date is None:
+        # 确认休市 → 回退最近本地指数交易日; 交易日但**未开盘** (9:30 前当日
+        # 分钟数据不可能存在, 如凌晨访问) → 同样回退, 否则分时图空白。
+        # 收盘后不回退: 当天分钟数据已在服务端, 抓取正常返回。
+        now_cn = cn_now()
+        before_open = now_cn.hour < 9 or (now_cn.hour == 9 and now_cn.minute < 30)
+        if trading_day.is_trading_day() is False or before_open:
+            daily = repo.get_index_daily(symbol, today - timedelta(days=366), today, columns=["date"])
+            if not daily.is_empty():
+                latest = daily["date"].max() or today
+                if latest < today:
+                    day = latest
     if day > today:
         return {
             "symbol": symbol,

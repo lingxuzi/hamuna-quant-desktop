@@ -1,7 +1,7 @@
 """运行时页面插件存储 — data/ext_pages/{id}/ 目录式持久化。
 
 页面插件是前端扩展的打包产物(单文件 ES 模块): 上传后由前端在启动引导窗口
-动态 import 挂载(见 frontend/src/extensions/runtime.ts)。后端只负责存储、
+动态 import 挂载(见 frontend_v2/src/extensions/runtime.ts)。后端只负责存储、
 元数据与分发, 不解析 JS 内容 —— 清单契约(能否 import、apiVersion、路由
 冲突)由前端注册表校验, 校验结果经 manifest 接口回填到 page.json。
 """

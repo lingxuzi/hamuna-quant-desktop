@@ -10,7 +10,7 @@ import { toast } from '@/components/Toast'
 import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
 import type { FrontendExtension, FrontendSlotContextMap } from '@/extensions/types'
 
-const button = 'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn border border-border px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9'
+const button = 'ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 text-secondary transition-colors hover:bg-elevated hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50'
 
 export function PackageInstaller(_context: FrontendSlotContextMap['settings.data-sources.toolbar']) {
   return <Link to="/settings?tab=import&kind=source"
@@ -113,7 +113,7 @@ export function PackageActions({ plugin, refresh }: FrontendSlotContextMap['sett
   }
   return <div className="space-y-4 text-xs leading-6">
     {plugin.pending_remove ? <div className="flex items-start gap-3 rounded-btn border border-warning/20 bg-warning/5 p-4">
-      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+      <Clock3 className="mt-0.5 h-[16px] w-[16px] shrink-0 text-warning" aria-hidden="true" />
       <div className="space-y-1">
         <p className="font-medium text-foreground">卸载已安排</p>
         <p className="text-secondary">插件已停止接收新请求，重启主程序后删除插件文件。</p>
@@ -136,19 +136,19 @@ export function PackageActions({ plugin, refresh }: FrontendSlotContextMap['sett
     {error && !confirm && <p role="alert" className="break-words text-danger">{error}</p>}
     {routing && <RoutingDialog plugin={plugin} onClose={() => setRouting(false)} onSaved={() => { refresh(); setRouting(false) }} />}
     {confirm && <Modal onClose={() => { if (!busy) setConfirm(null) }} labelledBy="source-package-confirm-title" closeOnBackdrop={!busy}
-      panelClassName="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto leaf-cell shadow-xl">
+      panelClassName="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-surface border border-border shadow-xl">
       <div className="space-y-4 p-5 text-sm text-foreground sm:p-6">
         <h3 id="source-package-confirm-title" className="text-lg font-semibold">{confirm === 'remove' ? '卸载 ' + plugin.display_name : '回退 ' + plugin.display_name}</h3>
         {confirm === 'remove' ? <>
           <p className="text-sm leading-6 text-secondary">确认后停止使用此插件，插件文件在下次重启主程序时删除。已保存的 API Key 保留。</p>
-          {matrix.isFetching && <p role="status" className="flex items-center gap-2 text-xs text-secondary"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />正在检查受影响的能力…</p>}
+          {matrix.isFetching && <p role="status" className="flex items-center gap-2 text-xs text-secondary"><Loader2 className="h-[16px] w-[16px] animate-spin" aria-hidden="true" />正在检查受影响的能力…</p>}
           {matrix.isError && <div role="alert" className="space-y-2 text-xs text-danger"><p>无法读取当前能力分配，请重试后再卸载。</p><button type="button" className={button} disabled={matrix.isFetching} onClick={() => void matrix.refetch()}>重新读取能力</button></div>}
           {matrix.isSuccess && !matrix.isFetching && (references.length ? <div className="space-y-3">
             <p className="text-xs leading-6 text-secondary">以下能力会一并恢复默认来源，无需提前逐项切换。</p>
             <dl className="divide-y divide-border border-y border-border">
               {references.map(cap => <div key={cap.id} className="flex items-center justify-between gap-3 py-2.5 text-xs">
                 <dt className="min-w-0 break-words">{cap.label}</dt>
-                <dd className="flex shrink-0 items-center gap-2 text-secondary"><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />{[...cap.candidates, ...cap.pending].find(candidate => candidate.name === cap.default)?.display || (cap.default === 'tickflow' ? 'TickFlow' : cap.default)}</dd>
+                <dd className="flex shrink-0 items-center gap-2 text-secondary"><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />{[...cap.candidates, ...cap.pending].find(candidate => candidate.name === cap.default)?.display || cap.default || '默认来源'}</dd>
               </div>)}
             </dl>
             {missingDefault && <p className="text-xs leading-6 text-amber-800 dark:text-amber-300">部分默认来源当前不可用，相应能力将暂停取数。可在数据源设置中配置或选择其他来源。</p>}

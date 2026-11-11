@@ -1,8 +1,7 @@
 """指数 / ETF 数据同步服务。
 
-标的列表优先用免费的 exchanges.get_instruments(type=index/etf) 拉取
-(None/Free 档均可用,无需 quote.pool 权限);付费档可额外用
-quotes.get_by_universes 作为补充来源。日K统一走 klines.batch。
+标的维表与日K都跟随日K数据源: 生效源实现 get_instruments / 提供 index·etf
+日K 时直接用它; 源不服务该资产类型时回退默认源 (内置 easytdx)。
 """
 from __future__ import annotations
 
@@ -15,101 +14,27 @@ import polars as pl
 
 from app.indicators.pipeline import compute_enriched
 from app.services import kline_sync, preferences
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.client import get_client
-from app.tickflow.rate_limits import chunked, min_batch, resolve_limit, sleep_between_batches
-from app.tickflow.repository import KlineRepository
+from app.data_providers.capabilities import CapabilitySet
+from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
-
-# exchanges.get_instruments 查询的交易所(沪深京)
-_EXCHANGES = ["SH", "SZ", "BJ"]
-
-
-def _quotes_to_index_instruments(resp) -> pl.DataFrame:
-    """将 TickFlow quotes 响应(get_by_universes)规范为指数 instruments。
-
-    付费档(Starter+)的补充来源,免费档用不到。
-    """
-    if resp is None:
-        return pl.DataFrame()
-
-    if isinstance(resp, pl.DataFrame):
-        df = resp
-    elif hasattr(resp, "columns"):
-        df = pl.from_pandas(resp.reset_index() if hasattr(resp, "reset_index") else resp)
-    else:
-        rows: list[dict] = []
-        for q in resp or []:
-            item = q if isinstance(q, dict) else {}
-            ext = item.get("ext") or {}
-            symbol = item.get("symbol")
-            if not symbol:
-                continue
-            rows.append({
-                "symbol": str(symbol),
-                "name": ext.get("name") or item.get("name") or str(symbol),
-            })
-        df = pl.DataFrame(rows)
-
-    if df.is_empty() or "symbol" not in df.columns:
-        return pl.DataFrame()
-
-    rename = {"ts_code": "symbol"}
-    df = df.rename({k: v for k, v in rename.items() if k in df.columns})
-
-    if "name" not in df.columns:
-        if "ext" in df.columns:
-            df = df.with_columns(pl.col("symbol").cast(pl.Utf8).alias("name"))
-        else:
-            df = df.with_columns(pl.col("symbol").cast(pl.Utf8).alias("name"))
-
-    result = df.select([
-        pl.col("symbol").cast(pl.Utf8),
-        pl.col("name").cast(pl.Utf8),
-    ]).with_columns([
-        pl.col("symbol").str.split(".").list.first().alias("code"),
-        pl.lit("index").alias("asset_type"),
-    ])
-    return result.unique(subset=["symbol"], keep="last").sort("symbol")
-
 
 def _fetch_instruments_by_type(instrument_type: str, asset_type_label: str) -> pl.DataFrame:
     """拉取指定类型的标的列表 (指数 / ETF)。
 
-    先走当前日K源的自定义 provider (自带维表, 本地直连秒回); 没有再走
-    TickFlow 免费通道 exchanges.get_instruments — 无 key 时该接口会连超时重试
-    (30s×3/交易所), 纯自定义源部署必须避开。
+    维表跟随日K数据源 (生效源 → 默认源), 源不提供维表时本轮为空。
 
     instrument_type: 'index' / 'etf'
     asset_type_label: 写入 instruments 表的 asset_type 标记('index' / 'etf')
     """
     from app.services import instrument_sync
 
-    provider_rows = instrument_sync.fetch_instruments_via_provider(instrument_type)
-    if provider_rows:
-        rows = [
-            {"symbol": str(r.get("symbol")), "name": r.get("name") or str(r.get("symbol"))}
-            for r in provider_rows
-            if r.get("symbol")
-        ]
-    else:
-        tf = get_client()
-        rows = []
-        for ex in _EXCHANGES:
-            try:
-                items = tf.exchanges.get_instruments(ex, instrument_type=instrument_type)
-                for it in items or []:
-                    item = it if isinstance(it, dict) else {}
-                    symbol = item.get("symbol")
-                    if not symbol:
-                        continue
-                    rows.append({
-                        "symbol": str(symbol),
-                        "name": item.get("name") or str(symbol),
-                    })
-            except Exception as e:  # noqa: BLE001
-                logger.warning("get_instruments(%s, type=%s) failed: %s", ex, instrument_type, e)
+    provider_rows = instrument_sync.fetch_instruments_via_provider(instrument_type) or []
+    rows = [
+        {"symbol": str(r.get("symbol")), "name": r.get("name") or str(r.get("symbol"))}
+        for r in provider_rows
+        if r.get("symbol")
+    ]
 
     if not rows:
         return pl.DataFrame()
@@ -138,7 +63,7 @@ def sync_index_instruments(
     index_parts: list[pl.DataFrame] = []
     etf_parts: list[pl.DataFrame] = []
 
-    # 1) 免费通道:按开关分别拉 index / etf
+    # 按开关分别拉 index / etf
     if pull_index:
         index_df = _fetch_instruments_by_type("index", "index")
         if not index_df.is_empty():
@@ -147,30 +72,6 @@ def sync_index_instruments(
         etf_df = _fetch_instruments_by_type("etf", "etf")
         if not etf_df.is_empty():
             etf_parts.append(etf_df)
-
-    # 2) 付费补充:Starter+ 用 get_by_universes 补指数(仅当开启指数拉取)
-    if pull_index:
-        capset = None
-        try:
-            from app.tickflow import policy
-            capset = policy.detect_capabilities(force=False)
-        except Exception:  # noqa: BLE001
-            pass
-        if capset is not None and capset.has(Cap.QUOTE_POOL):
-            tf = get_client()
-            for kwargs in (
-                {"universes": ["CN_Index"]},
-                {"universes": ["CN_Index"], "as_dataframe": False},
-            ):
-                try:
-                    resp = tf.quotes.get_by_universes(**kwargs)
-                    if resp is not None and len(resp) > 0:
-                        sup = _quotes_to_index_instruments(resp)
-                        if not sup.is_empty():
-                            index_parts.append(sup)
-                        break
-                except Exception as e:  # noqa: BLE001
-                    logger.debug("CN_Index universe supplement failed: %s", e)
 
     total = 0
     if index_parts:
@@ -205,7 +106,7 @@ def sync_etf_instruments(repo: KlineRepository) -> int:
 def _iter_custom_daily_frames(provider, symbols, asset_type, start_time, end_time, on_chunk_done):
     """自定义源日K帧迭代器: iter_daily 流式优先, 仅实现 get_daily 的源包装为单帧。
 
-    asset_type 按内部契约传 "index"/"etf"; 只服务股票的源 (fuyao/tdxquant/amber
+    asset_type 按内部契约传 "index"/"etf"; 只服务股票的源 (fuyao/amber
     对 asset_type≠stock 一律空手而归) 由此自然表达「不支持」, 由调用方回退。"""
     yield from kline_sync.iter_custom_daily_frames(
         provider, symbols, asset_type=asset_type, start_time=start_time,
@@ -224,45 +125,45 @@ def _sync_custom_daily(
     on_chunk_done: Callable[[int, int], None] | None,
     persist_frame: Callable[[pl.DataFrame], int],
 ) -> int:
-    """日K源为自定义 provider 时接管指数/ETF 日K同步 (#502)。
+    """指数/ETF 日K同步: 生效日K源优先, 源不服务该资产类型时回退默认源。
 
-    与个股 sync_and_persist_daily_batch 同一路由语义, 路由判定在 TickFlow 能力
-    检查之前 —— 纯自定义源部署 (未配置 TickFlow) 也能同步指数/ETF。
+    取数链 = [生效日K源, 默认日K源 (内置 easytdx)]。只服务股票的源 (如 fuyao)
+    对 index/etf 一律空手而归, 由链上下一跳接管 —— 插件契约本就如此。
 
-    返回 -1 表示「本次不由自定义源接管」, 调用方继续 TickFlow 原路径:
-    - 日K源是 tickflow, 或该源未声明 daily 数据集;
-    - 声明了但对该资产类型空手而归 —— 插件契约本就如此 (tdxquant 注释:
-      "asset_type 仅接受 stock, 其余空手而归(上层回退)"), 告警后回退,
-      与修复前行为一致, 不静默吞掉。
-
+    返回 -1 表示「本轮没拿到任何数据」, 调用方按空结果处理。
     persist_frame 接收一帧原始日K并完成 append_*_daily + enriched 落盘,
-    返回行数 —— 指数/ETF 各自复用与 TickFlow 路径相同的落盘逻辑, 不另起一套。
+    返回行数 —— 指数/ETF 各自复用同一套落盘逻辑, 不另起一套。
     """
-    provider_name = preferences.get_daily_data_provider()
-    if provider_name == "tickflow":
-        return -1
     from app.data_providers import custom as custom_sources
-    if not custom_sources.provider_has_dataset(provider_name, "daily"):
+    from app.data_providers.capabilities import default_provider_for
+
+    chain: list[tuple[str, object]] = []
+    for name in (preferences.get_daily_data_provider(), default_provider_for("daily")):
+        if not name or any(n == name for n, _ in chain):
+            continue
+        if custom_sources.provider_has_dataset(name, "daily"):
+            chain.append((name, custom_sources.get_provider(name)))
+    if not chain:
         return -1
 
-    provider = custom_sources.get_provider(provider_name)
-    total_rows = 0
-    for raw in _iter_custom_daily_frames(
-        provider, symbols, asset_type, start_time, end_time, on_chunk_done,
-    ):
-        if raw is None or raw.is_empty():
-            continue
-        total_rows += persist_frame(raw)
-        logger.info("%s daily synced (custom %s): +%d rows", asset_label, provider_name, raw.height)
-        del raw
-        gc.collect()
-    if total_rows > 0:
-        repo.refresh_index_views()
-        return total_rows
-    logger.warning(
-        "自定义源 %s 未返回%s日K数据 (源仅服务股票时属预期), 本轮回退 TickFlow",
-        provider_name, asset_label,
-    )
+    for provider_name, provider in chain:
+        total_rows = 0
+        for raw in _iter_custom_daily_frames(
+            provider, symbols, asset_type, start_time, end_time, on_chunk_done,
+        ):
+            if raw is None or raw.is_empty():
+                continue
+            total_rows += persist_frame(raw)
+            logger.info("%s daily synced (%s): +%d rows", asset_label, provider_name, raw.height)
+            del raw
+            gc.collect()
+        if total_rows > 0:
+            repo.refresh_index_views()
+            return total_rows
+        logger.warning(
+            "源 %s 未返回%s日K数据 (源仅服务股票时属预期), 回退下一源",
+            provider_name, asset_label,
+        )
     return -1
 
 
@@ -306,46 +207,19 @@ def sync_and_persist_index_daily(
         del enriched
         return raw.height
 
-    # 自定义日K源优先接管指数日K (#502): 路由判定在 TickFlow 能力检查之前,
-    # 纯自定义源部署 (未配置 TickFlow) 也能同步; 空手而归时回退下方 TickFlow 路径。
-    custom_rows = _sync_custom_daily(
+    # 指数/ETF 日K走独立路由 (生效源 → 默认源); 个股的 sync_daily_batch 固定
+    # asset_type=stock, 不能复用。
+    rows = _sync_custom_daily(
         repo, symbols,
         asset_type="index", asset_label="指数",
         start_time=start_time, end_time=end_time,
         on_chunk_done=on_chunk_done,
         persist_frame=_persist_index_frame,
     )
-    if custom_rows >= 0:
-        return custom_rows
-
-    if not capset.has(Cap.KLINE_DAILY_BATCH):
+    if rows < 0:
         kline_sync._log_cap_unavailable("daily", "指数/ETF 日K同步")
         return 0
-    limit = resolve_limit(capset, Cap.KLINE_DAILY_BATCH)
-    batch_size = min_batch(preferences.get_index_daily_batch_size(), limit)
-
-    total_rows = 0
-    chunks = chunked(symbols, batch_size)
-    for i, chunk in enumerate(chunks):
-        sleep_between_batches(i, limit.rpm)
-        raw = kline_sync.sync_daily_batch(
-            chunk,
-            count=count,
-            batch_size=None,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        if raw.is_empty():
-            continue
-
-        total_rows += _persist_index_frame(raw)
-        logger.info("index/etf daily synced: %d/%d chunks, +%d rows", i + 1, len(chunks), raw.height)
-        if on_chunk_done:
-            on_chunk_done(i + 1, len(chunks))
-        del raw
-        gc.collect()
-    repo.refresh_index_views()
-    return total_rows
+    return rows
 
 
 def _load_etf_factors(repo: KlineRepository) -> pl.DataFrame:
@@ -468,42 +342,15 @@ def sync_and_persist_etf_daily(
         del enriched, local, hist
         return raw.height
 
-    # 自定义日K源优先接管 ETF 日K (#502), 语义与上方指数分支一致
-    custom_rows = _sync_custom_daily(
+    # ETF 日K走独立路由, 语义与上方指数分支一致
+    rows = _sync_custom_daily(
         repo, symbols,
         asset_type="etf", asset_label="ETF",
         start_time=start_time, end_time=end_time,
         on_chunk_done=on_chunk_done,
         persist_frame=_persist_etf_frame,
     )
-    if custom_rows >= 0:
-        return custom_rows
-
-    if not capset.has(Cap.KLINE_DAILY_BATCH):
+    if rows < 0:
         kline_sync._log_cap_unavailable("daily", "ETF 日K同步")
         return 0
-    limit = resolve_limit(capset, Cap.KLINE_DAILY_BATCH)
-    batch_size = min_batch(preferences.get_index_daily_batch_size(), limit)
-
-    total_rows = 0
-    chunks = chunked(symbols, batch_size)
-    for i, chunk in enumerate(chunks):
-        sleep_between_batches(i, limit.rpm)
-        raw = kline_sync.sync_daily_batch(
-            chunk,
-            count=count,
-            batch_size=None,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        if raw.is_empty():
-            continue
-
-        total_rows += _persist_etf_frame(raw)
-        logger.info("etf daily synced: %d/%d chunks, +%d rows", i + 1, len(chunks), raw.height)
-        if on_chunk_done:
-            on_chunk_done(i + 1, len(chunks))
-        del raw
-        gc.collect()
-    repo.refresh_index_views()
-    return total_rows
+    return rows

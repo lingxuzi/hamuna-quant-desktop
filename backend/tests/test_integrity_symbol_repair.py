@@ -97,7 +97,7 @@ def _offline_env(tmp_path, monkeypatch):
     from app.config import settings as app_settings
     from app.jobs import daily_pipeline
     from app.services import index_sync, instrument_sync, kline_sync
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     monkeypatch.setattr(app_settings, "data_dir", tmp_path)
     monkeypatch.setattr(instrument_sync, "sync_instruments", lambda data_dir: 0)
@@ -183,7 +183,7 @@ def test_etf_repair_fills_missing_days_before_latest_enriched(
 ):
     """ETF 指标缓存较新时, 指定历史修复起点仍须真正传给 ETF 日线同步。"""
     from app.services import index_sync, preferences
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
 
     today = date(2026, 10, 30)
     missing = [date(2026, 10, 28), date(2026, 10, 29)]

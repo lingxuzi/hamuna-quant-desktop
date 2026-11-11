@@ -14,7 +14,7 @@ from pathlib import Path
 
 import polars as pl
 
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def _frame(symbols: list[str], dt: date = date(2026, 9, 7)) -> pl.DataFrame:

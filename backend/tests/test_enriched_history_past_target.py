@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 from app.services.screener import ScreenerService
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 LOOKBACK = 20
 

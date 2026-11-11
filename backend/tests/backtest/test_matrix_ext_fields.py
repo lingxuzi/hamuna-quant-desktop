@@ -20,7 +20,7 @@ from app.backtest.engine import BacktestEngine
 from app.factors.ext_factors import (
     numeric_timeseries_ext_columns,
 )
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 SYMS = ["600001.SH", "600002.SH"]
 DATES = [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7), date(2026, 1, 8)]

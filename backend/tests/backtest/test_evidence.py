@@ -23,7 +23,7 @@ def service_factory(tmp_path, monkeypatch):
     from app.backtest.strategy import StrategyBacktestService
     from app.config import settings
     from app.strategy.engine import StrategyEngine
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
     from tests.signal_seeds import install_pipeline_caches
 
     monkeypatch.setattr(settings, "data_dir", tmp_path)

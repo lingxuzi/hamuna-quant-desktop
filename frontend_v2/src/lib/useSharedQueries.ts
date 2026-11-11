@@ -5,8 +5,23 @@
  * 只有管线进度等非 SSE 数据才用 refetchInterval。
  */
 import { useQuery } from '@tanstack/react-query'
-import { api } from './api'
+import { api, type DataStatus } from './api'
 import { QK } from './queryKeys'
+
+// ===== 数据状态判读 (纯函数, 首页与启动闸门共用) =====
+
+/** 兼容旧后端的预热标志; 同步/自动修复也会使统计暂不可用。 */
+export function isDataStatusPending(ds?: DataStatus): boolean {
+  return ds?.stats_pending === true || ds?.indicators_ready === false
+}
+
+/** 无本地数据判定: enriched/daily 交易日均为 0 才算无数据。
+ *  预热/同步/修复期间的 null 是未知态, 必须等真实统计就绪再判。 */
+export function resolveHasNoData(ds?: DataStatus): boolean {
+  if (!ds) return false
+  if (isDataStatusPending(ds)) return false
+  return (ds.enriched?.trading_days ?? 0) === 0 && (ds.daily?.trading_days ?? 0) === 0
+}
 
 // ===== 全局共享 =====
 
@@ -20,8 +35,8 @@ export function useCapabilities() {
 
 /** 能力路由矩阵 — 设置页与各页能力门控共用。
 
- * 区别于 useCapabilities 的 TickFlow 套餐视角: 矩阵按「生效源当前能否提供」
- * 判定 (usable), 路由到可用插件时同样可用。路由偏好 / 档位探测 / 插件装卸
+ * 区别于 useCapabilities 的运行时能力集: 矩阵按「生效源当前能否提供」
+ * 判定 (usable), 路由到可用插件时同样可用。路由偏好 / 插件装卸
  * 变化时由设置页失效, 各页共享同一缓存自动刷新。
  */
 export function useCapabilityMatrix() {

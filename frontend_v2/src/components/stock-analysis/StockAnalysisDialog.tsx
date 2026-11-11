@@ -73,7 +73,7 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
     if (!content) return
     const success = await copyText(content)
     if (!success) {
-      toast('复制失败,请手动选择文本', 'error')
+      toast('复制失败，请手动选择文本', 'error')
       return
     }
     setCopied(true)
@@ -102,7 +102,7 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
           {/* 头部 —— 蓝色主题 */}
           <div className="relative px-5 py-3.5 border-b border-border/50 bg-gradient-to-r from-accent/[0.07] to-transparent">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/[0.12] border border-accent/30 shrink-0">
+              <div className="flex h-[36px] w-[36px] items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/[0.12] border border-accent/30 shrink-0">
                 {isHistory
                   ? <History className="h-4.5 w-4.5 text-accent" />
                   : <LineChart className="h-4.5 w-4.5 text-accent" />}
@@ -136,19 +136,19 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
                 {content && !isWorking && (
                   <button onClick={handleCopy} title="复制全文"
                     className="p-1.5 rounded-lg hover:bg-elevated text-muted hover:text-foreground transition-colors">
-                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    {copied ? <Check className="h-[16px] w-[16px] text-emerald-400" /> : <Copy className="h-[16px] w-[16px]" />}
                   </button>
                 )}
                 {!isHistory && isWorking && (
-                  <button onClick={minimizeDialog} title="最小化为气泡,后台继续生成"
-                    className="p-1.5 rounded-lg hover:bg-elevated text-muted hover:text-foreground transition-colors">
-                    <Minimize2 className="h-4 w-4" />
+                  <button onClick={minimizeDialog} title="最小化为气泡，后台继续生成"
+                    className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated text-muted hover:text-foreground">
+                    <Minimize2 className="h-[16px] w-[16px]" />
                   </button>
                 )}
                 {(!isWorking || isHistory) && (
                   <button onClick={closeDialog} title="关闭"
-                    className="p-1.5 rounded-lg hover:bg-elevated text-muted hover:text-foreground transition-colors">
-                    <X className="h-4 w-4" />
+                    className="ctl ctl-sm ctl-ghost ctl-icon hover:bg-elevated text-muted hover:text-foreground">
+                    <X className="h-[16px] w-[16px]" />
                   </button>
                 )}
               </div>
@@ -160,31 +160,31 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
             {phase === 'loading' && !content && (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <div className="relative">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent/20 to-accent/[0.12] border border-accent/30 flex items-center justify-center">
+                  <div className="h-[40px] w-[40px] rounded-full bg-gradient-to-br from-accent/20 to-accent/[0.12] border border-accent/30 flex items-center justify-center">
                     <LineChart className="h-4.5 w-4.5 text-accent animate-pulse" />
                   </div>
-                  <Loader2 className="absolute -inset-1 h-12 w-12 text-accent/40 animate-spin" style={{ animationDuration: '3s' }} />
+                  <Loader2 className="absolute -inset-1 h-[48px] w-[48px] text-accent/40 animate-spin" style={{ animationDuration: '3s' }} />
                 </div>
                 <div className="text-xs text-secondary">AI 正在分析行情与关键价位…</div>
-                <div className="text-[10px] text-muted">读取日 K / 技术指标 / 压力支撑 / 财务,生成四维分析</div>
+                <div className="text-[10px] text-muted">读取日 K / 技术指标 / 压力支撑 / 财务，生成四维分析</div>
               </div>
             )}
 
             {phase === 'error' && (
               <div className="flex flex-col items-center justify-center py-14 gap-3">
-                <div className="h-11 w-11 rounded-full bg-danger/10 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-danger" />
+                <div className="h-[44px] w-[44px] rounded-full bg-danger/10 flex items-center justify-center">
+                  <AlertTriangle className="h-[20px] w-[20px] text-danger" />
                 </div>
                 <div className="text-sm font-medium text-foreground">分析失败</div>
                 <div className="text-xs text-secondary text-center max-w-md px-4">{error}</div>
                 {error.includes('AI') && (
                   <button onClick={() => { window.location.href = `${import.meta.env.BASE_URL}settings?tab=ai` }}
-                    className="mt-1 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-elevated border border-border text-xs text-secondary hover:text-foreground transition-colors">
+                    className="ctl ctl-md ctl-btn mt-1 inline-flex items-center gap-1.5 px-2.5 hover:text-foreground bg-elevated">
                     <Settings2 className="h-3.5 w-3.5" /> 去配置 AI
                   </button>
                 )}
                 <button onClick={handleStartNew}
-                  className="mt-1 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-accent/15 border border-accent/30 text-xs text-accent hover:bg-accent/20 transition-colors">
+                  className="ctl ctl-md ctl-btn soft mt-1 inline-flex items-center gap-1.5 px-2.5 border-accent/30 hover:bg-accent/20 bg-accent/15">
                   <RefreshCw className="h-3.5 w-3.5" /> 重试
                 </button>
               </div>
@@ -204,7 +204,7 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
           <div className="border-t border-border/50 bg-surface/60 px-5 py-3">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 text-[10px] text-muted shrink-0">
-                <Wand2 className="h-3 w-3" />
+                <Wand2 className="h-[12px] w-[12px]" />
                 <span className="hidden sm:inline">关注重点</span>
               </div>
               <input
@@ -213,16 +213,16 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
                 onChange={e => setFocus(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && (phase === 'done' || phase === 'error' || isHistory)) handleStartNew() }}
                 disabled={isWorking}
-                placeholder={isHistory ? '修改关注重点,回车重新生成' : (phase === 'done' ? '如:重点看能否突破压力位…回车重新分析' : '可留空,留空则全面分析')}
+                placeholder={isHistory ? '修改关注重点，回车重新生成' : (phase === 'done' ? '如：重点看能否突破压力位…回车重新分析' : '可留空，留空则全面分析')}
                 className={cn(
-                  'flex-1 h-8 px-3 rounded-lg bg-base ring-1 ring-border/30 text-xs text-foreground placeholder:text-muted/40',
+                  'ctl ctl-md ctl-input flex-1 px-2.5 ring-1 ring-border/30 placeholder:text-muted/40',
                   'focus:outline-none focus:ring-2 focus:ring-sky-400/30 transition-shadow disabled:opacity-50',
                 )}
               />
               {isHistory ? (
                 <button
                   onClick={handleStartNew}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-accent/20 to-accent/[0.12] border border-accent/30 text-xs font-medium text-accent hover:from-accent/30 hover:to-accent/20 transition-all shrink-0"
+                  className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 bg-gradient-to-r from-accent/20 to-accent/[0.12] border-accent/30 hover:from-accent/30 hover:to-accent/20 transition-all shrink-0"
                   title="以此关注点重新生成新报告"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />重新生成
@@ -231,7 +231,7 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
                 <button
                   onClick={handleStartNew}
                   disabled={isWorking}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-accent/20 to-accent/[0.12] border border-accent/30 text-xs font-medium text-accent hover:from-accent/30 hover:to-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0"
+                  className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 bg-gradient-to-r from-accent/20 to-accent/[0.12] border-accent/30 hover:from-accent/30 hover:to-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0"
                   title={focus.trim() ? '按关注重点重新分析' : '重新分析'}
                 >
                   {isWorking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : phase === 'done' ? <RefreshCw className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
@@ -241,8 +241,8 @@ export function StockAnalysisDialog({ task, mode, minimized }: Props) {
             </div>
             <p className="mt-1.5 text-[10px] text-muted/50 leading-relaxed">
               {isHistory
-                ? '历史报告为静态记录;修改关注重点后将作为新任务重新生成。报告仅供参考,不构成投资建议。'
-                : '报告由项目已配置的 AI 模型基于本地行情与财务数据生成;消息面维度暂依据价量异动推断。报告仅供参考,不构成投资建议。'}
+                ? '历史报告为静态记录；修改关注重点后将作为新任务重新生成。报告仅供参考，不构成投资建议。'
+                : '报告由项目已配置的 AI 模型基于本地行情与财务数据生成；消息面维度暂依据价量异动推断。报告仅供参考，不构成投资建议。'}
             </p>
           </div>
         </motion.div>

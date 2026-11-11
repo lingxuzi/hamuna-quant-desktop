@@ -155,7 +155,7 @@ export function SettingsExtPagesPanel() {
 
   return (
     <div className="max-w-6xl space-y-6">
-      <section className="leaf-cell">
+      <section className="border-t border-border-strong pt-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="text-[11px] uppercase tracking-[0.2em] text-accent/80">扩展页面</div>
@@ -168,14 +168,14 @@ export function SettingsExtPagesPanel() {
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
               onClick={() => { resetForm(); setTemplate('url'); setShowForm(true) }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-btn border border-border px-3 py-1.5 text-xs font-medium text-secondary hover:border-accent/60 hover:text-accent transition-colors"
+              className="ctl ctl-md ctl-btn inline-flex items-center justify-center gap-1.5 px-2.5 hover:border-accent/60 hover:text-accent"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               新建 URL 页
             </button>
             <button
               onClick={() => { resetForm(); setShowForm(true) }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-btn bg-accent/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent transition-colors"
+              className="ctl ctl-md ctl-btn soft inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent bg-accent/90"
             >
               <Plus className="h-3.5 w-3.5" />
               新建页面
@@ -185,14 +185,14 @@ export function SettingsExtPagesPanel() {
       </section>
 
       {showForm && (
-        <section className="leaf-cell space-y-4">
+        <section className="border-t border-border-strong pt-6 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-medium text-foreground">{editingMenu ? '编辑扩展页面' : '新建扩展页面'}</h3>
               <p className="mt-1 text-[11px] text-muted">菜单标识保存后不可在此处直接修改，如需更换标识请新建页面。</p>
             </div>
-            <button onClick={() => { setShowForm(false); setError('') }} className="rounded p-1 text-muted hover:bg-elevated hover:text-foreground">
-              <X className="h-4 w-4" />
+            <button onClick={() => { setShowForm(false); setError('') }} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-elevated hover:text-foreground">
+              <X className="h-[16px] w-[16px]" />
             </button>
           </div>
 
@@ -204,12 +204,12 @@ export function SettingsExtPagesPanel() {
                 disabled={!!editingMenu}
                 onChange={e => setId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
                 placeholder="如 concept_hot"
-                className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground disabled:opacity-60"
+                className="ctl ctl-lg ctl-input w-full px-3.5 disabled:opacity-60 bg-base"
               />
             </label>
             <label className="space-y-1.5">
               <span className="text-[11px] text-muted">菜单名称</span>
-              <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground" />
+              <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" className="ctl ctl-lg ctl-input w-full px-3.5 bg-base" />
             </label>
             {template === 'url' ? (
               <label className="space-y-1.5">
@@ -218,7 +218,7 @@ export function SettingsExtPagesPanel() {
                   value={embedUrl}
                   onChange={e => setEmbedUrl(e.target.value)}
                   placeholder="https://example.com/page"
-                  className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground"
+                  className="ctl ctl-lg ctl-input w-full px-3.5 bg-base"
                 />
                 <span className="block text-[10px] text-muted/70">仅 http(s)、≤500 字符，不支持嵌入本站；部分站点可拒绝被嵌入</span>
               </label>
@@ -234,7 +234,7 @@ export function SettingsExtPagesPanel() {
                     setRankField('')
                     setSelectedColumns(cfg?.fields.filter(f => !['symbol', 'code'].includes(f.name)).slice(0, 6).map(f => f.name) ?? [])
                   }}
-                  className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground"
+                  className="ctl ctl-lg ctl-select w-full"
                 >
                   {configs.map(cfg => <option key={cfg.id} value={cfg.id}>{cfg.label}</option>)}
                 </select>
@@ -245,7 +245,7 @@ export function SettingsExtPagesPanel() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="space-y-1.5">
               <span className="text-[11px] text-muted">模板</span>
-              <select value={template} onChange={e => setTemplate(e.target.value as any)} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground">
+              <select value={template} onChange={e => setTemplate(e.target.value as any)} className="ctl ctl-lg ctl-select w-full">
                 <option value="dimension_rank">维度热度榜</option>
                 <option value="ranking">指标排名榜</option>
                 <option value="table">明细表</option>
@@ -254,14 +254,14 @@ export function SettingsExtPagesPanel() {
             </label>
             <label className="space-y-1.5">
               <span className="text-[11px] text-muted">分组字段</span>
-              <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground disabled:opacity-50">
+              <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="ctl ctl-lg ctl-select w-full">
                 <option value="">请选择</option>
                 {fields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
               </select>
             </label>
             <label className="space-y-1.5">
               <span className="text-[11px] text-muted">排名字段</span>
-              <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="h-9 w-full rounded-btn border border-border bg-base px-3 text-xs text-foreground disabled:opacity-50">
+              <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="ctl ctl-lg ctl-select w-full">
                 <option value="">请选择</option>
                 {numericFields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
               </select>
@@ -278,7 +278,7 @@ export function SettingsExtPagesPanel() {
                     <button
                       key={f.name}
                       onClick={() => setSelectedColumns(cols => active ? cols.filter(c => c !== f.name) : [...cols, f.name])}
-                      className={`rounded-full border px-3 py-1 text-[11px] transition-colors ${active ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-elevated/40 text-secondary hover:bg-elevated'}`}
+                      className={`ctl ctl-sm ctl-btn rounded-full px-1.5 ${active ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-elevated/40 text-secondary hover:bg-elevated'}`}
                     >
                       {f.label || f.name}
                     </button>
@@ -291,17 +291,17 @@ export function SettingsExtPagesPanel() {
           {error && <div className="rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</div>}
 
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setShowForm(false); setError('') }} className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs">取消</button>
-            <button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium disabled:opacity-50">
+            <button onClick={() => { setShowForm(false); setError('') }} className="ctl ctl-md ctl-ghost px-2.5 bg-elevated">取消</button>
+            <button onClick={() => save.mutate()} disabled={save.isPending} className="ctl ctl-md ctl-btn soft inline-flex items-center gap-1.5 px-2.5 disabled:opacity-50 bg-accent/90">
               <Save className="h-3.5 w-3.5" />保存
             </button>
           </div>
         </section>
       )}
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 xl:grid-cols-3">
         {menuItems.map(menu => (
-          <div key={menu.id} className="leaf-cell">
+          <div key={menu.id} className="bg-surface p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -312,11 +312,11 @@ export function SettingsExtPagesPanel() {
                 <p className="mt-1 text-[11px] text-muted font-mono">{menu.id}</p>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => editMenu(menu)} className="p-1 rounded text-muted hover:text-accent hover:bg-accent/10" title="编辑">
+                <button onClick={() => editMenu(menu)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent hover:bg-accent/10" title="编辑">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 {!menu.builtin && (
-                  <button onClick={() => del.mutate(menu.id)} disabled={del.isPending} className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10" title="删除">
+                  <button onClick={() => del.mutate(menu.id)} disabled={del.isPending} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10" title="删除">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -342,14 +342,14 @@ export function SettingsExtPagesPanel() {
         ))}
         {menus.isLoading &&
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={`sk-${i}`} className="leaf-cell space-y-3">
+            <div key={`sk-${i}`} className="bg-surface p-4 space-y-3">
               <Skeleton w="w-1/2" h="h-4" />
               <Skeleton w="w-1/3" h="h-3" />
               <Skeleton h="h-8" rounded="rounded-btn" />
             </div>
           ))}
         {!menus.isLoading && menuItems.length === 0 && (
-          <div className="leaf-cell text-center text-sm text-muted md:col-span-2 xl:col-span-3">暂无扩展页面，点击右上角新建。</div>
+          <div className="bg-surface text-center text-sm text-muted p-8 md:col-span-2 xl:col-span-3">暂无扩展页面，点击右上角新建。</div>
         )}
       </section>
     </div>

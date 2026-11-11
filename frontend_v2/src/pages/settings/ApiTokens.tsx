@@ -47,8 +47,8 @@ export function SettingsApiTokensPanel() {
   const tokens = (tokensQ.data?.tokens ?? []).filter(t => !t.revoked)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <section className="leaf-cell">
+    <div className="mx-auto max-w-3xl">
+      <section>
         <SectionHead
           kicker="凭据"
           title="API Token"
@@ -56,76 +56,84 @@ export function SettingsApiTokensPanel() {
           right={
             <button
               onClick={() => setCreating(v => !v)}
-              className="flex shrink-0 items-center gap-1 rounded-btn border border-border px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-accent/40 hover:text-accent"
+              className="ctl-btn ctl-sm shrink-0"
             >
-              <Plus className="h-3 w-3" /> 新建 Token
+              <Plus className="h-[12px] w-[12px]" /> 新建 Token
             </button>
           }
+          className="mb-4"
         />
 
         {/* 新建表单 */}
         {creating && (
-          <div className="mt-3 space-y-3 rounded-card border border-border/60 bg-base/60 p-3">
-            <div>
-              <label className="text-[11px] text-muted">名称 (用途备注)</label>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="如: 我的行情看板"
-                className="mt-1 w-full rounded-btn border border-border bg-base px-3 py-1.5 text-sm outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-[11px] text-muted">权限 (scope)</div>
-              {SCOPES.map(s => (
-                <label key={s.key} className="flex cursor-pointer items-start gap-2 rounded-btn px-2 py-1.5 hover:bg-elevated/50">
+          <div className="mt-4 border-t border-border-strong pt-1.5 space-y-3">
+            <div className="rowset">
+              <div className="r">
+                <div className="lab">
+                  <b>名称 (用途备注)</b>
+                </div>
+                <div className="ctl">
                   <input
-                    type="checkbox"
-                    checked={scopes.includes(s.key)}
-                    onChange={e => setScopes(prev => e.target.checked ? [...prev, s.key] : prev.filter(x => x !== s.key))}
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="如: 我的行情看板"
+                    className="ctl ctl-sm ctl-input min-w-0 px-1.5 focus:border-accent bg-base"
                   />
-                  <span className="min-w-0">
-                    <span className="text-xs text-foreground">
-                      {s.label}
-                      <span className="ml-1.5 font-mono text-[10px] text-accent/80">{s.key}</span>
-                      {s.default && <span className="ml-1 rounded bg-accent/10 px-1 text-[9px] text-accent">默认</span>}
-                    </span>
-                    <span className="block text-[10px] text-muted">{s.desc}</span>
-                  </span>
-                </label>
-              ))}
-              <div className="text-[10px] text-muted">
-                扩展表的结构配置/上传/拉取、数据同步、设置等管理接口永不开放给 Token (行数据写入走 write:ext)。调用方式: <span className="font-mono">Authorization: Bearer tsp_...</span>, 默认限流 120 次/分钟, 契约文档 <span className="font-mono text-accent/80">/api/openapi.json?tier=a</span>
+                </div>
               </div>
+            </div>
+            <div className="rowset">
+              {SCOPES.map(s => (
+                <div key={s.key} className="r">
+                  <div className="lab">
+                    <b>
+                      {s.label}
+                      <span className="ml-1.5 font-mono text-[10px] font-normal text-accent/80">{s.key}</span>
+                      {s.default && <span className="ml-1.5 font-mono text-[9px] font-normal text-ochre">默认</span>}
+                    </b>
+                    <small>{s.desc}</small>
+                  </div>
+                  <div className="ctl">
+                    <input
+                      type="checkbox"
+                      checked={scopes.includes(s.key)}
+                      onChange={e => setScopes(prev => e.target.checked ? [...prev, s.key] : prev.filter(x => x !== s.key))}
+                      className="h-3.5 w-3.5 shrink-0"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] text-muted">
+              扩展表的结构配置/上传/拉取、数据同步、设置等管理接口永不开放给 Token (行数据写入走 write:ext)。调用方式: <span className="font-mono">Authorization: Bearer tsp_...</span>, 默认限流 120 次/分钟, 契约文档 <span className="font-mono text-accent/80">/api/openapi.json?tier=a</span>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => name.trim() && scopes.length > 0 && createM.mutate()}
                 disabled={!name.trim() || scopes.length === 0 || createM.isPending}
-                className="rounded-btn bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity hover:bg-accent/90 disabled:opacity-50"
+                className="ctl-btn ctl-sm pri"
               >
                 {createM.isPending ? '创建中…' : '创建'}
               </button>
-              <button onClick={() => setCreating(false)} className="rounded-btn border border-border px-4 py-1.5 text-xs text-secondary transition-colors hover:text-foreground">取消</button>
+              <button onClick={() => setCreating(false)} className="ctl-btn ctl-sm">取消</button>
             </div>
-            {error && <div className="rounded-btn bg-danger/10 px-2 py-1.5 text-[11px] text-danger">{error}</div>}
+            {error && <div className="border-l-2 border-danger px-2 py-1 text-[11px] text-danger">{error}</div>}
           </div>
         )}
 
         {/* 明文一次性展示 */}
         {plaintext && (
-          <div className="mt-3 rounded-card border border-warning/40 bg-warning/10 p-3">
+          <div className="mt-4 border-y border-warning/40 py-3">
             <div className="text-xs font-medium text-warning">Token 已创建 — 明文只显示这一次, 请立即保存</div>
             <div className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-btn bg-base px-2 py-1.5 font-mono text-xs">{plaintext}</code>
+              <code className="min-w-0 flex-1 truncate bg-elevated px-2 py-1.5 font-mono text-xs">{plaintext}</code>
               <button
                 onClick={() => { navigator.clipboard?.writeText(plaintext); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-                className="flex shrink-0 items-center gap-1 rounded-btn border border-border px-2 py-1.5 text-[11px] text-secondary transition-colors hover:text-accent"
+                className="ctl-btn ctl-sm shrink-0"
               >
-                <Copy className="h-3 w-3" /> {copied ? '已复制' : '复制'}
+                <Copy className="h-[12px] w-[12px]" /> {copied ? '已复制' : '复制'}
               </button>
-              <button onClick={() => setPlaintext(null)} className="shrink-0 rounded-btn border border-border px-2 py-1.5 text-[11px] text-secondary hover:text-foreground">关闭</button>
+              <button onClick={() => setPlaintext(null)} className="ctl-btn ctl-sm shrink-0">关闭</button>
             </div>
           </div>
         )}
@@ -140,31 +148,33 @@ export function SettingsApiTokensPanel() {
               hint="创建一个, 外部程序即可按 scope 调用开放接口。"
             />
           ) : (
-            <div className="space-y-1.5">
+            <div className="rowset">
               {tokens.map(t => (
-                <div key={t.id} className="flex items-center gap-2 rounded-btn border border-border/60 bg-base/60 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-foreground">
+                <div key={t.id} className="r">
+                  <div className="lab min-w-0">
+                    <b>
                       {t.name}
-                      <span className="ml-1.5 font-mono text-[10px] text-muted">{t.id}</span>
-                    </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <span className="ml-1.5 font-mono text-[10px] font-normal text-muted">{t.id}</span>
+                    </b>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
                       {t.scopes.map(s => (
-                        <span key={s} className="rounded bg-accent/10 px-1.5 py-px font-mono text-[9px] text-accent">{s}</span>
+                        <span key={s} className="font-mono text-[9px] text-accent/90">{s}</span>
                       ))}
-                      <span className="ml-1 text-[9px] text-muted">
+                      <span className="text-[9px] text-muted">
                         创建 {t.created_at?.slice(0, 16).replace('T', ' ')}
                         {t.last_used_at ? ` · 最近使用 ${t.last_used_at.slice(11, 16)}` : ' · 未使用过'}
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => revokeM.mutate(t.id)}
-                    disabled={revokeM.isPending}
-                    className="shrink-0 rounded-btn border border-border px-2 py-1 text-[10px] text-muted transition-colors hover:border-danger/40 hover:text-danger"
-                  >
-                    吊销
-                  </button>
+                  <div className="ctl">
+                    <button
+                      onClick={() => revokeM.mutate(t.id)}
+                      disabled={revokeM.isPending}
+                      className="ctl-btn ctl-sm text-danger"
+                    >
+                      吊销
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

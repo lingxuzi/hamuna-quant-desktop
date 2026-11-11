@@ -16,7 +16,7 @@ import pytest
 
 from app.market_time import CN_TZ
 from app.strategy import paper, paper_auto
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 SYM = "600519.SH"
 ETF = "510300.SH"

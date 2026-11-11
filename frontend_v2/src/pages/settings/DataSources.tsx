@@ -14,14 +14,11 @@ import {
   FileWarning,
   KeyRound,
   Landmark,
-  ListChecks,
   Loader2,
-  Lock,
   Plus,
   Puzzle,
   Radio,
   RefreshCw,
-  Route,
   Save,
   Scale,
   Timer,
@@ -38,14 +35,17 @@ import {
   type ProviderField,
 } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
-import { useCapabilities, usePreferences } from '@/lib/useSharedQueries'
+import { usePreferences } from '@/lib/useSharedQueries'
 import { AnchorWrap } from '@/lib/useCardFlash'
-import { CAP_LABELS, TIER_RANK, tierRank, tierStyle, TierTag } from '@/lib/capability-labels'
 import { DEFAULT_ROUTING, buildProviderRouting } from '@/lib/provider-routing'
 import { toast } from '@/components/Toast'
 import { PluginMetadata } from '@/components/data/PluginMetadata'
 import { DataSourceEditor } from './DataSourceEditor'
-import { TickFlowKeySection, TierHelpPopover, useInvalidateTierRelated } from './Keys'
+
+/** 内置源名 (唯一内置源, 展示归「内置」组) */
+const BUILTIN = 'easytdx'
+/** 内置源展示名 (后端 display_name 带库名括注, 界面只留中文名) */
+const BUILTIN_LABEL = '通达信直连'
 
 const DATASET_LABEL: Record<string, string> = {
   realtime: '实时',
@@ -57,7 +57,7 @@ const DATASET_LABEL: Record<string, string> = {
   full_minute: '全量分钟',
 }
 
-/** 能力图标 (纯展示; 能力清单本身由后端注册表驱动) */
+/** 能力图标 (纯展示;能力清单本身由后端注册表驱动) */
 const CAP_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   realtime: Radio,
   daily: CandlestickIcon,
@@ -67,70 +67,34 @@ const CAP_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   financial: Landmark,
 }
 
-/** TickFlow 档位要求文本: none → 全档位, 其余 → starter+ 形式 */
-function tierReqText(tier: string): string {
-  return tier === 'none' ? '全档位' : `${tier}+`
-}
-
-/** TickFlow 档位要求徽标: 按所需档位配色, 当前档位不足时琥珀描边提示。
- *  仅用于 TickFlow 详情的档位介绍表 (能力卡上不展示档位信息)。 */
-function TierReqChip({ tier, currentLabel }: { tier: string; currentLabel?: string }) {
-  const text = tierReqText(tier)
-  const req = TIER_RANK[tier] ?? -1
-  const unmet = currentLabel != null && tierRank(currentLabel) < req
-  const t = tierStyle(tier)
-  return (
-    <span
-      title={unmet
-        ? `TickFlow 该能力需 ${text} — 当前档位 ${currentLabel}`
-        : `TickFlow 该能力需 ${text}`}
-      className={`inline-flex h-[15px] shrink-0 items-center gap-1 rounded px-1.5 text-[9px] font-bold font-mono leading-none ${unmet ? 'ring-1 ring-warning/60' : ''}`}
-      style={t.tagBg}
-    >
-      <span className="h-1 w-1 rounded-full shrink-0" style={t.dotStyle} />
-      <span className="capitalize" style={t.labelTextStyle}>{text}</span>
-    </span>
-  )
-}
-
-/** TickFlow「已适配全档位」标识: Expert 三色渐变(全档位体系里最醒目的身份色) */
-function AllTiersBadge({ size = 'text-[10px]' }: { size?: string }) {
-  const t = tierStyle('expert')
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-medium leading-none"
-      style={t.tagBg}
-      title="无 Key 到 Expert 各订阅档位均有可用能力 — 日K全档位可用, 除权/分钟/财务等高级能力按订阅档位解锁"
-    >
-      <span className={size} style={t.labelTextStyle}>✦ 已适配全档位</span>
-    </span>
-  )
-}
-
-/** 提供方标签样式: 当前项高亮(accent), 其余弱化可点; 未就绪源禁用置灰 */
-function tagCls(active: boolean, disabled = false, interactive = true) {
-  const base = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors select-none'
-  if (disabled) return `${base} bg-elevated/40 text-muted/50 cursor-not-allowed`
-  if (!interactive) return `${base} cursor-default ${active ? 'bg-accent/15 text-accent font-medium' : 'bg-elevated/60 text-muted/70'}`
-  return `${base} cursor-pointer disabled:opacity-50 ${
-    active
-      ? 'bg-accent/15 text-accent font-medium'
-      : 'bg-elevated/60 text-muted/70 hover:bg-accent/15 hover:text-accent'
-  }`
+/** 展示名清洗: 去掉后端 display_name 尾部的库名括注 (「通达信直连 (easy-tdx-plus)」→「通达信直连」) */
+function displayName(raw: string): string {
+  return raw.replace(/\s*\(.*\)$/, '')
 }
 
 /** 源名 → 展示名 (特殊值 + 候选/待就绪表查找, 找不到回退原始名) */
 function displayOfName(matrix: CapabilityMatrix | undefined, name: string): string {
-  if (name === 'tickflow') return 'TickFlow'
+  if (name === BUILTIN) return BUILTIN_LABEL
   if (name === 'same_as_daily') return '跟随日K'
   for (const cap of matrix?.capabilities ?? []) {
     const hit = cap.candidates.find(c => c.name === name) ?? cap.pending.find(c => c.name === name)
-    if (hit) return hit.display
+    if (hit) return displayName(hit.display)
   }
   return name
 }
 
-/** 乐观更新: 把一组偏好字段变更应用到矩阵缓存 (每能力独立路由, current 即生效) */
+/** 源的运行形态 (设计稿 .src 的「运行」行) */
+function runtimeLabel(item: DataSourceItem, plugin?: PluginDataSourceItem): string {
+  if (item.name === BUILTIN) return '本地直连'
+  if (plugin) {
+    if (plugin.runtime === 'python') return 'Python 进程'
+    if (plugin.runtime === 'node') return 'Node 进程'
+    return plugin.api_key_env ? 'HTTP 接口' : '随进程内置'
+  }
+  return 'HTTP 接口'
+}
+
+/** 乐观更新:把一组偏好字段变更应用到矩阵缓存 (每能力独立路由, current 即生效) */
 function patchMatrix(
   matrix: CapabilityMatrix,
   changes: Partial<Record<ProviderField, string>>,
@@ -148,64 +112,51 @@ function patchMatrix(
   return { ...matrix, capabilities: caps }
 }
 
-/** 单个能力卡: 当前生效提供方 + 候选切换标签。
+/** 能力路由行 (设计稿 .cap 行式, 非卡片): 能力 ← 生效源 / 候选 / 可用。
  *  candidates 只含当前可提供该能力的源; 未就绪源 (pending) 置灰提示;
- *  生效源无法提供该能力 (usable=False, 无论档位不足还是源未就绪) 时显示琥珀警示。 */
-function CapabilityCard({ cap, pendingKey, onSelect }: {
+ *  生效源无法提供该能力 (usable=False) 时显示琥珀警示。 */
+function CapabilityRow({ cap, pendingKey, onSelect }: {
   cap: CapabilityRoute
   pendingKey: string | null
   onSelect: (field: ProviderField, provider: string) => void
 }) {
-  const Icon = CAP_ICON[cap.id] ?? Database
   const busy = (provider: string) => pendingKey === `${cap.field}:${provider}`
-  // 能力中立判定: usable=False 即当前路由的源供不了 (TickFlow 档位不足或插件未就绪同待遇)
+  // 能力中立判定:usable=False 即当前路由的源供不了 (源未就绪同待遇)
   const unmet = !cap.usable
-  const chipsEmpty = cap.candidates.length === 0 && cap.pending.length === 0
+  // field=null → 不可路由能力 (无偏好字段): 渲染为静态标签, 保持高亮但不可点
+  const routable = cap.field != null
+  const isDefault = cap.current === cap.default
   return (
-    <div className="rounded-lg border border-border/50 bg-elevated/20 px-3 py-2.5 flex flex-col transition-colors hover:border-border">
-      <div className="flex items-center gap-1.5">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/10">
-          <Icon className="h-3 w-3 text-accent" />
-        </span>
-        <div className="text-xs font-medium text-foreground truncate">{cap.label}</div>
-      </div>
-      {cap.desc && <div className="mt-1 text-[10px] text-muted/70 truncate">{cap.desc}</div>}
+    <div className="cap" title={cap.desc}>
+      <b>{cap.label}</b>
 
       {/* 当前生效提供方 */}
-      <div className="mt-2 flex items-center gap-1.5 min-w-0">
-        <span className="text-[9px] font-medium uppercase tracking-wider text-muted/50 shrink-0">当前</span>
+      <div className="cur">
         {unmet ? (
           <span
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-warning truncate"
-            title={`「${cap.label}」当前路由的源无法提供该能力 — 可切换下方可用源, 或在数据源区接入其他源`}
+            className="inline-flex items-center gap-1 text-warning"
+            title={`「${cap.label}」当前路由的源无法提供该能力 — 可切换右侧可用源, 或在数据源区接入其他源`}
           >
-            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <AlertTriangle className="h-[12px] w-[12px] shrink-0" />
             能力不可用
           </span>
         ) : (
           <>
-            <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-            <span className="text-[11px] font-medium text-foreground truncate">{cap.effective_display}</span>
+            <span>{displayName(cap.effective_display)}</span>
+            {isDefault && <i>默认</i>}
           </>
         )}
       </div>
 
-      {/* 候选标签: 点谁该能力就由谁提供 */}
-      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50 min-h-[26px] items-center">
+      {/* 候选: 点谁该能力就由谁提供 */}
+      <div className="cands">
         {cap.candidates.map(c => {
           const active = cap.current === c.name
-          // field=null → 不可路由能力 (仅 TickFlow 提供): 渲染为非交互标签,
-          // 保持激活高亮但不可点击 (用 button+disabled 会被 opacity-50 冲淡成灰色)
-          const routable = cap.field != null
           if (!routable) {
             return (
-              <span
-                key={c.name}
-                title={`「${cap.label}」仅 ${c.display} 提供 (不可路由)`}
-                className={tagCls(active, false, false)}
-              >
-                {c.display}
-              </span>
+              <u key={c.name} className={active ? 'ok' : undefined} title={`「${cap.label}」仅 ${displayName(c.display)} 提供 (不可路由)`}>
+                {displayName(c.display)}
+              </u>
             )
           }
           return (
@@ -214,31 +165,24 @@ function CapabilityCard({ cap, pendingKey, onSelect }: {
               type="button"
               disabled={pendingKey != null}
               onClick={() => cap.field != null && onSelect(cap.field, c.name)}
-              title={`「${cap.label}」由 ${c.display} 提供`}
-              className={tagCls(active)}
+              title={`「${cap.label}」由 ${displayName(c.display)} 提供`}
+              className={active ? 'on' : 'ok'}
             >
               {busy(c.name) && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-              {c.display}
+              {displayName(c.display)}
             </button>
           )
         })}
         {/* 未就绪源: 声明了该能力但依赖/Key 未配好, 置灰并说明原因 */}
         {cap.pending.map(c => (
-          <span
-            key={c.name}
-            title={c.note || c.status || '该源当前不可用'}
-            className={tagCls(false, true)}
-          >
-            <AlertCircle className="h-2.5 w-2.5" />
-            {c.display}
-          </span>
+          <u key={c.name} title={c.note || c.status || '该源当前不可用'}>{c.display}</u>
         ))}
-        {chipsEmpty && (
-          <span className="text-[10px] text-muted/50">
-            暂无可用提供方
-          </span>
+        {cap.candidates.length === 0 && cap.pending.length === 0 && (
+          <span className="hint">暂无可用提供方</span>
         )}
       </div>
+
+      {unmet ? <span className="no">不可用</span> : <span className="ok">可用</span>}
     </div>
   )
 }
@@ -256,7 +200,7 @@ function CapabilityRoutingSection() {
     qc.invalidateQueries({ queryKey: QK.quoteStatus })
   }
 
-  /** 切换前先把变更写进矩阵/偏好缓存, 界面零延迟响应; 失败回滚 */
+  /** 切换前先把变更写进矩阵/偏好缓存, 界面零延迟响应;失败回滚 */
   const applyOptimistic = (changes: Partial<Record<ProviderField, string>>) => {
     const prevMatrix = qc.getQueryData<CapabilityMatrix>(QK.capabilityMatrix)
     const prevPrefs = qc.getQueryData<Preferences>(QK.preferences)
@@ -286,7 +230,7 @@ function CapabilityRoutingSection() {
     },
     onError: (e: Error, _v, ctx) => {
       rollback(ctx)
-      toast(`路由切换失败: ${e.message}`, 'error')
+      toast(`路由切换失败：${e.message}`, 'error')
     },
     onSettled: () => {
       setPendingKey(null)
@@ -304,7 +248,7 @@ function CapabilityRoutingSection() {
     onSuccess: () => toast('能力路由已恢复默认', 'success'),
     onError: (e: Error, _v, ctx) => {
       rollback(ctx)
-      toast(`恢复失败: ${e.message}`, 'error')
+      toast(`恢复失败：${e.message}`, 'error')
     },
     onSettled: invalidateRouting,
   })
@@ -313,34 +257,28 @@ function CapabilityRoutingSection() {
   const anyCustom = list.some(c => c.current !== c.default)
 
   return (
-    <section className="leaf-cell">
-      <div className="flex items-center justify-between mb-1 gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Route className="h-4 w-4 text-secondary shrink-0" />
-          <h2 className="text-sm font-medium text-foreground">能力路由</h2>
-          <span className="text-[10px] text-muted/60 shrink-0">{list.length} 个能力</span>
-        </div>
+    <section>
+      <div className="sec-h">
+        <span>能力路由</span>
+        <span className="note">{list.length} 个能力 · 每个能力独立选择提供方，点标签即刻生效</span>
+        <span className="sp" />
         {anyCustom && (
           <button
             onClick={() => resetMut.mutate()}
             disabled={resetMut.isPending}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-btn text-xs text-muted hover:text-foreground hover:bg-elevated transition-colors disabled:opacity-50 shrink-0"
+            className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1.5 px-1.5 hover:text-foreground hover:bg-elevated disabled:opacity-50 shrink-0"
           >
-            <RefreshCw className={`h-3 w-3 ${resetMut.isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-[12px] w-[12px] ${resetMut.isPending ? 'animate-spin' : ''}`} />
             恢复默认
           </button>
         )}
       </div>
-      <p className="text-[11px] text-muted mb-4">
-        每个能力独立选择提供方 — 点标签即刻生效。选项只列出当前可提供该能力的源
-        (各源按自身可用性过滤, 详见下方数据源介绍); 未就绪的源置灰提示。
-      </p>
 
       {matrix.isError ? (
-        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-danger/20 bg-danger/5">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-btn border border-danger/20 bg-danger/5">
           <div className="flex items-center gap-2 text-xs text-danger min-w-0">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">能力矩阵加载失败: {(matrix.error as Error)?.message || '未知错误'}</span>
+            <span className="truncate">能力矩阵加载失败：{(matrix.error as Error)?.message || '未知错误'}</span>
           </div>
           <button
             onClick={() => matrix.refetch()}
@@ -350,19 +288,19 @@ function CapabilityRoutingSection() {
           </button>
         </div>
       ) : matrix.isLoading || list.length === 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <div>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-[120px] rounded-lg border border-border/50 bg-elevated/20 animate-pulse" />
+            <div key={i} className="h-9 border-b border-border/40 bg-elevated/20 animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <div>
           {list.map(cap => (
-            <CapabilityCard
+            <CapabilityRow
               key={cap.id}
               cap={cap}
               pendingKey={pendingKey}
-              onSelect={(field, provider) => routeMut.mutate({ field, provider })}
+              onSelect={(field: ProviderField, provider: string) => routeMut.mutate({ field, provider })}
             />
           ))}
         </div>
@@ -396,7 +334,7 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
         setTimeout(() => setSaved(false), 2000)
       }
     },
-    onError: (e: Error) => toast(`保存失败: ${e.message}`, 'error'),
+    onError: (e: Error) => toast(`保存失败：${e.message}`, 'error'),
   })
 
   const clear = useMutation({
@@ -407,12 +345,12 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
         toast(
           data.plugin_available
             ? '已清除界面配置的 Key(.env 中的同名变量仍然生效)'
-            : 'Key 已清除,插件不再可用',
+            : 'Key 已清除，插件不再可用',
           'success',
         )
       }
     },
-    onError: (e: Error) => toast(`清除失败: ${e.message}`, 'error'),
+    onError: (e: Error) => toast(`清除失败：${e.message}`, 'error'),
   })
 
   return (
@@ -435,7 +373,7 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
           <div className="text-[11px] leading-relaxed text-warning/90">
             <span className="font-medium">该数据源按积分计费。</span>
             {plugin.billing_note
-              || '各能力取数均消耗积分;拉取越频繁、范围越大,消耗越高,具体以商城「积分明细」为准。'}
+              || '各能力取数均消耗积分；拉取越频繁、范围越大，消耗越高，具体以商城「积分明细」为准。'}
           </div>
         </div>
       )}
@@ -446,9 +384,9 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
           <div className="mt-1 flex items-center gap-2 min-w-0">
             {plugin.available ? (
               <>
-                <CheckCircle2 className="h-4 w-4 text-bear shrink-0" />
+                <CheckCircle2 className="h-[16px] w-[16px] text-bear shrink-0" />
                 <span className="text-sm font-medium shrink-0">已配置</span>
-                {/* 生效 Key 脱敏串 (secrets.json 优先, .env 兜底) — 常驻显示, 与 TickFlow Key 一致 */}
+                {/* 生效 Key 脱敏串 (secrets.json 优先, .env 兜底) — 常驻显示, 便于确认当前生效的是哪一把 */}
                 {plugin.api_key_masked && (
                   <span className="font-mono text-xs text-secondary truncate" title={plugin.api_key_masked}>
                     {plugin.api_key_masked}
@@ -457,7 +395,7 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
               </>
             ) : (
               <>
-                <AlertCircle className="h-4 w-4 text-muted shrink-0" />
+                <AlertCircle className="h-[16px] w-[16px] text-muted shrink-0" />
                 <span className="text-sm font-medium text-muted shrink-0">未配置</span>
                 <span className="text-xs text-muted/70 truncate" title={plugin.status}>{plugin.status}</span>
               </>
@@ -468,9 +406,9 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
           <button
             onClick={() => clear.mutate()}
             disabled={clear.isPending}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-btn bg-elevated text-secondary hover:text-danger text-xs transition-colors duration-150 ease-smooth disabled:opacity-50 shrink-0"
+            className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1.5 px-1.5 hover:text-danger duration-150 ease-smooth disabled:opacity-50 shrink-0 bg-elevated"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-[12px] w-[12px]" />
             清除
           </button>
         )}
@@ -489,24 +427,24 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
             value={keyInput}
             onChange={(e) => { setKeyInput(e.target.value); if (saved) setSaved(false) }}
             autoComplete="off"
-            className="w-full px-3 py-2 pr-9 rounded-input bg-base border border-border text-sm font-mono focus:outline-none focus:border-accent transition-colors duration-150 ease-smooth"
+            className="ctl ctl-md ctl-input w-full px-2.5 pr-9 font-mono focus:border-accent duration-150 ease-smooth bg-base"
           />
           <button
             type="button"
             onClick={() => setRevealing((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors duration-150 ease-smooth"
+            className="ctl ctl-md ctl-ghost absolute right-1.5 top-1/2 inline-flex h-ctl-md w-[24px] px-0 -translate-y-1/2 items-center justify-center text-muted hover:text-foreground duration-150 ease-smooth"
             tabIndex={-1}
             aria-label={revealing ? '隐藏' : '显示'}
           >
-            {revealing ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {revealing ? <EyeOff className="h-[16px] w-[16px]" /> : <Eye className="h-[16px] w-[16px]" />}
           </button>
         </div>
         <button
           type="submit"
           disabled={save.isPending || (!keyInput.trim() && !saved)}
-          className="w-full h-9 rounded-xl bg-accent text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-40 transition-all"
+          className="ctl ctl-lg ctl-btn pri w-full font-semibold flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-40 transition-all"
         >
-          {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+          {save.isPending ? <Loader2 className="h-[16px] w-[16px] animate-spin" /> : saved ? <Check className="h-[16px] w-[16px]" /> : <Save className="h-[16px] w-[16px]" />}
           {save.isPending ? '验证中...' : saved ? '已保存' : '保存并检测'}
         </button>
       </form>
@@ -514,25 +452,24 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
       {/* 无效 Key —— 先探后存: 探测失败时不存储 */}
       {save.data && !save.data.ok && (
         <div className="mt-3 text-xs text-danger flex items-center gap-1.5">
-          <AlertCircle className="h-3 w-3 shrink-0" />
-          {save.data.error || 'Key 无效,未保存'}
+          <AlertCircle className="h-[12px] w-[12px] shrink-0" />
+          {save.data.error || 'Key 无效，未保存'}
         </div>
       )}
       {save.isError && (
         <div className="mt-3 text-xs text-danger">
-          保存失败:{String((save.error as Error).message)}
+          保存失败：{String((save.error as Error).message)}
         </div>
       )}
     </div>
   )
 }
 
-/** 能力芯片: 三态 — 服务中(高亮+勾) / 已适配(灰) / 档位锁定(锁, 仅 TickFlow)。
+/** 能力芯片:两态 — 服务中(高亮+勾) / 已适配(灰)。
  *  paid (插件 billing="points"): 每个芯片尾标注「积分」角标 — 该能力按积分计费。 */
-function CapabilityChips({ caps, servingSet, isTickFlow, paid = false }: {
+function CapabilityChips({ caps, servingSet, paid = false }: {
   caps: CapabilityRoute[]
   servingSet: Set<string>
-  isTickFlow: boolean
   paid?: boolean
 }) {
   if (caps.length === 0) return <span className="text-[10px] text-muted/40">未声明能力</span>
@@ -540,26 +477,19 @@ function CapabilityChips({ caps, servingSet, isTickFlow, paid = false }: {
     <div className="flex flex-wrap gap-1">
       {caps.map(cap => {
         const servingNow = servingSet.has(cap.id)
-        const locked = isTickFlow && !cap.tf_available
         const cls = servingNow
           ? 'bg-accent/15 text-accent'
-          : locked
-            ? 'bg-warning/8 text-warning/70'
-            : 'bg-elevated/60 text-muted/70'
+          : 'bg-elevated/60 text-muted/70'
         const title = servingNow
           ? `正在提供「${cap.label}」${paid ? ' · 积分计费' : ''}`
-          : locked
-            ? `TickFlow 需 ${tierReqText(cap.tf_tier)} · 当前档位未解锁`
-            : `已适配「${cap.label}」${paid ? ' · 积分计费' : ''}`
+          : `已适配「${cap.label}」${paid ? ' · 积分计费' : ''}`
         return (
           <span
             key={cap.id}
             title={title}
             className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] leading-none ${cls}`}
           >
-            {servingNow
-              ? <Check className="h-2.5 w-2.5" />
-              : locked ? <Lock className="h-2.5 w-2.5" /> : null}
+            {servingNow && <Check className="h-2.5 w-2.5" />}
             {DATASET_LABEL[cap.id] || cap.id}
             {paid && (
               <span className="ml-0.5 rounded bg-warning/15 px-1 py-px text-[9px] font-medium leading-none text-warning">积分</span>
@@ -576,14 +506,16 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
   const prefs = usePreferences()
   const sources = useQuery({ queryKey: QK.dataSources, queryFn: api.dataSources })
   const matrix = useQuery({ queryKey: QK.capabilityMatrix, queryFn: api.capabilityMatrix })
-  const [selected, setSelected] = useState<string>('tickflow') // 当前在下方配置的源 name
+  const [selected, setSelected] = useState<string>(BUILTIN) // 当前在下方配置的源 name
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const builtin: DataSourceItem[] = sources.data?.builtin ?? []
-  const pluginList: PluginDataSourceItem[] = sources.data?.plugins ?? []
+  const allPlugins: PluginDataSourceItem[] = sources.data?.plugins ?? []
+  // 内置源同时带插件清单 (装依赖用), 展示归「内置」组, 不在插件组里重复
+  const pluginList = allPlugins.filter(p => p.name !== BUILTIN)
   const customList: DataSourceItem[] = sources.data?.custom ?? []
   const errors = sources.data?.errors ?? []
-  const activeName = prefs.data?.daily_data_provider || 'tickflow'
+  const activeName = prefs.data?.daily_data_provider || BUILTIN
 
   const pluginItems: DataSourceItem[] = pluginList.map(p => ({
     name: p.name, display_name: p.display_name, datasets: p.datasets,
@@ -597,18 +529,18 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
 
   const selectedCustom = customList.find(s => s.name === selected)
 
-  // ===== 各能力当前的有效提供方 (除权 same_as_daily = 跟随日K) =====
-  // 用于能力芯片"服务中"态与详情卡标识: 路由切换在上方能力路由区, 这里只读展示
-  const dailyPref = prefs.data?.daily_data_provider || 'tickflow'
-  const adjPref = prefs.data?.adj_factor_provider || 'same_as_daily'
+  // ===== 各能力当前的有效提供方 (除权兼容旧值 same_as_daily = 跟随日K) =====
+  // 用于能力芯片"服务中"态与详情卡标识:路由切换在上方能力路由区, 这里只读展示
+  const dailyPref = prefs.data?.daily_data_provider || DEFAULT_ROUTING.daily_data_provider
+  const adjPref = prefs.data?.adj_factor_provider || DEFAULT_ROUTING.adj_factor_provider
   const effProvider: Record<string, string> = {
     daily: dailyPref,
     adj_factor: adjPref === 'same_as_daily' ? dailyPref : adjPref,
-    minute: prefs.data?.minute_data_provider || 'tickflow',
-    full_minute: prefs.data?.full_minute_data_provider || 'tickflow',
-    realtime: prefs.data?.realtime_data_provider || 'tickflow',
-    depth5: prefs.data?.depth5_data_provider || 'tickflow',
-    financial: prefs.data?.financial_data_provider || 'tickflow',
+    minute: prefs.data?.minute_data_provider || DEFAULT_ROUTING.minute_data_provider,
+    full_minute: prefs.data?.full_minute_data_provider || DEFAULT_ROUTING.full_minute_data_provider,
+    realtime: prefs.data?.realtime_data_provider || DEFAULT_ROUTING.realtime_data_provider,
+    depth5: prefs.data?.depth5_data_provider || DEFAULT_ROUTING.depth5_data_provider,
+    financial: prefs.data?.financial_data_provider || DEFAULT_ROUTING.financial_data_provider,
   }
   const servingDatasets = (name: string) =>
     Object.entries(effProvider).filter(([, v]) => v === name).map(([k]) => k)
@@ -616,7 +548,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
 
   const matrixCaps = matrix.data?.capabilities ?? []
 
-  // 数据源集合/插件可用性/档位变化都会改变能力候选集 → 统一连带失效
+  // 数据源集合/插件可用性变化都会改变能力候选集 → 统一连带失效
   const invalidateSources = () => {
     qc.invalidateQueries({ queryKey: QK.dataSources })
     qc.invalidateQueries({ queryKey: QK.capabilityMatrix })
@@ -637,18 +569,15 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
     mutationFn: (name: string) => api.deleteDataSource(name),
     onSuccess: () => {
       invalidateSources()
-      setSelected('tickflow')
+      setSelected(BUILTIN)
       setConfirmDelete(null)
       toast('数据源已删除', 'success')
     },
   })
 
   const switchProvider = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: (name: string) => {
       // 一键套用: 该源适配了哪些数据集就接管哪些, 其余回默认
-      if (name === 'tickflow') {
-        return api.updateDataProviders(DEFAULT_ROUTING)
-      }
       return api.updateDataProviders(
         buildProviderRouting(
           name,
@@ -659,10 +588,10 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
     },
     onSuccess: (_d, name) => {
       invalidateSources()
-      const display = allItems.find(s => s.name === name)?.display_name || name
+      const display = displayName(allItems.find(s => s.name === name)?.display_name || name)
       toast(`已让「${display}」接管其适配的能力`, 'success')
     },
-    onError: (e: Error) => toast(`切换失败: ${e.message}`, 'error'),
+    onError: (e: Error) => toast(`切换失败：${e.message}`, 'error'),
   })
 
   const editExisting = useMutation({
@@ -680,7 +609,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
         toast(data.install_message || '安装失败', 'error')
       }
     },
-    onError: (e: Error) => toast(`安装失败: ${e.message}`, 'error'),
+    onError: (e: Error) => toast(`安装失败：${e.message}`, 'error'),
   })
 
   const uninstallMut = useMutation({
@@ -693,38 +622,69 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
         toast(data.uninstall_message || '卸载失败', 'error')
       }
     },
-    onError: (e: Error) => toast(`卸载失败: ${e.message}`, 'error'),
+    onError: (e: Error) => toast(`卸载失败：${e.message}`, 'error'),
   })
 
-  // 插件 name → 状态 (供卡片渲染时判断 available/installing 等)
-  const pluginMap = new Map(pluginList.map(p => [p.name, p]))
+  // 插件 name → 状态 (供卡片渲染时判断 available/installing 等; 含内置源的清单)
+  const pluginMap = new Map(allPlugins.map(p => [p.name, p]))
+
+  // ===== 读数带三格 (设计稿 .readout) =====
+  // 「已接通」= 源自身健康可用 (内置源恒可用); 未接入的插件不计入。
+  const connectedSources = allItems.filter(s => pluginMap.get(s.name)?.available !== false)
+  const usableCaps = matrixCaps.filter(c => c.usable).length
+  const pendingSources = Array.from(
+    new Map(
+      matrixCaps.flatMap(c => c.pending).map(p => [p.name, p]),
+    ).values(),
+  )
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="max-w-5xl">
+      <h2 className="text-[16px] font-medium text-foreground">数据源</h2>
+      <p className="mb-3.5 mt-1 max-w-[64ch] text-[11px] leading-7 text-secondary">
+        七项能力各自选一个数据源。路由按能力生效，换源只影响该能力，其他能力保持不动。
+      </p>
+
+      {/* ===== 现状速览: 三格读数带 ===== */}
+      <div className="readout">
+        <div>
+          <span className="k">已 接 通 数 据 源</span>
+          <span className="v">{connectedSources.length}</span>
+          <small>{connectedSources.map(s => displayName(s.display_name)).join(' · ') || '无'}</small>
+        </div>
+        <div>
+          <span className="k">可 用 能 力</span>
+          <span className="v">{usableCaps} / {matrixCaps.length}</span>
+          <small>{usableCaps === matrixCaps.length ? '全部已分配到可用源' : '部分能力未就绪'}</small>
+        </div>
+        <div className={pendingSources.length ? 'down' : undefined}>
+          <span className="k">待 接 入</span>
+          <span className="v">{pendingSources.length}</span>
+          <small>
+            {pendingSources.length
+              ? pendingSources.map(p => `${p.name} · ${p.status?.split('(')[0] ?? '待接入'}`).join(' · ')
+              : '无'}
+          </small>
+        </div>
+      </div>
+
       {/* ===== 上区: 能力路由 (能力为主视图, 点标签切换提供方) ===== */}
       <CapabilityRoutingSection />
 
       {/* ===== 下区: 数据源 (源为主视图, 配置/接入) ===== */}
       <AnchorWrap highlight={highlight} anchor="data-sources">
-      <section className="leaf-cell">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Database className="h-4 w-4 text-secondary shrink-0" />
-            <h2 className="shrink-0 text-sm font-medium text-foreground">数据源</h2>
-            <span
-              className="text-[10px] text-muted/40 font-mono truncate hidden lg:inline max-w-[480px]"
-              title={sources.data?.config_dir}
-            >
-              {sources.data?.config_dir}
-            </span>
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+      <section>
+        <div className="sec-h">
+          <span>数据源</span>
+          <span className="note">已注册的 {allItems.length} 个提供方</span>
+          <span className="sp" />
+          <div className="flex shrink-0 items-center gap-2">
             <ExtensionSlot name="settings.data-sources.toolbar" context={{ refresh: invalidateSources, selectSource: setSelected }} compact />
             <button
               type="button"
               onClick={() => reload.mutate()}
               disabled={reload.isPending}
-              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-btn border border-border/70 bg-surface px-3 text-xs font-medium text-secondary transition-colors hover:border-border hover:bg-elevated hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50"
+              className="ctl ctl-md ctl-btn inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap border-border/70 bg-surface px-2.5 hover:border-border hover:bg-elevated hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50"
             >
               <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${reload.isPending ? 'animate-spin' : ''}`} />
               重新加载
@@ -737,7 +697,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
           <Puzzle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
           <div className="min-w-0 break-words text-[11px] leading-relaxed text-secondary">
             <span className="text-secondary">数据源已插件化</span>
-            ,接入自有行情?把文档发给 AI 即可自动接入:
+            ,接入自有行情?把文档发给 AI 即可自动接入：
             <span className="mx-0.5 rounded bg-elevated/70 px-1 py-px font-mono text-[10px] text-secondary">docs/custom-data-source.md</span>
             (自有 HTTP 接口) ·
             <span className="mx-0.5 rounded bg-elevated/70 px-1 py-px font-mono text-[10px] text-secondary">docs/plugin-development.md</span>
@@ -745,86 +705,93 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
           </div>
         </div>
 
-        {/* 数据源卡片 - 横向网格 (配置入口) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        {/* 数据源网格 - 1px 发丝线格 (设计稿 .srcs): 每格自报 提供/运行/操作 */}
+        <div className="srcs grid grid-cols-1 lg:grid-cols-2">
           {allItems.map(item => {
             const servingSet = servingSetOf(item.name)
-            const isTf = item.name === 'tickflow'
-            if (isTf) {
-              // 名义路由到 tickflow 但当前档位提供不了的能力 → 按锁定态展示, 不算服务中
-              for (const c of matrixCaps) {
-                if (!c.tf_available) servingSet.delete(c.id)
-              }
-            }
+            const isBuiltin = item.name === BUILTIN
             const servingCount = servingSet.size
             const isSelected = selected === item.name
             const plugin = pluginMap.get(item.name)
             const pluginUnavailable = plugin && !plugin.available
+            const dimmed = !!pluginUnavailable && !plugin?.api_key_env && plugin?.origin !== 'external'
             const installing = installMut.isPending && installMut.variables === item.name
             const uninstalling = uninstallMut.isPending && uninstallMut.variables === item.name
             const declared = new Set(item.datasets)
-            // TickFlow 展示注册表全量能力 (含档位锁定态); 其余源按声明过滤
-            const chipCaps = isTf
-              ? matrixCaps
-              : matrixCaps.filter(c => declared.has(c.id))
+            // 各源按自身声明的数据集展示能力 (内置源不声明财务等未接入能力)
+            const chipCaps = matrixCaps.filter(c => declared.has(c.id))
             return (
               <div
                 key={item.name}
                 onClick={() => {
-                  // 外部插件始终可打开管理详情；内置插件沿用 Key 配置入口。
+                  // 外部插件始终可打开管理详情;内置插件沿用 Key 配置入口。
                   if (pluginUnavailable && !plugin?.api_key_env && plugin?.origin !== 'external') return
                   setSelected(item.name)
-                  // 只有用户自定义源 (YAML) 才进编辑器; tickflow 和插件不可编辑
+                  // 只有用户自定义源 (YAML) 才进编辑器; 内置源和插件不可编辑
                   if (customNames.has(item.name)) {
                     editExisting.mutate(item.name)
                   }
                 }}
-                className={`relative text-left rounded-lg border px-3.5 py-3 transition-all ${
-                  pluginUnavailable && !plugin?.api_key_env && plugin?.origin !== 'external'
-                    ? 'border-border/40 bg-elevated/10 opacity-70'
-                    : isSelected
-                      ? 'border-accent/50 bg-accent/5 ring-1 ring-accent/20 cursor-pointer'
-                      : 'border-border/60 bg-elevated/20 hover:bg-elevated/40 cursor-pointer'
-                }`}
+                data-selected={!dimmed && isSelected ? '' : undefined}
+                className={`src cursor-pointer transition-colors ${dimmed ? 'is-unavailable' : ''}`}
               >
-                {/* 名称行: 服务点 + 名称 + 档位/第三方标识 */}
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      pluginUnavailable ? 'bg-muted/30' : servingCount > 0 ? 'bg-accent' : 'bg-transparent border border-muted/40'
-                    }`}
-                  />
-                  <span className={`text-sm truncate flex-1 ${servingCount > 0 ? 'font-medium text-foreground' : 'text-secondary'}`}>
-                    {item.display_name}
+                {/* 名称行: 服务点 + 名称 + 内置/第三方标识 + 连通状态 */}
+                <div className="hd">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        pluginUnavailable ? 'bg-muted/30' : servingCount > 0 ? 'bg-accent' : 'bg-transparent border border-muted/40'
+                      }`}
+                    />
+                    <b className="truncate">{displayName(item.display_name)}</b>
+                    {!customNames.has(item.name) && !isBuiltin && <span className="st">第三方</span>}
                   </span>
-                  {isTf && matrix.data?.tickflow_tier && (
-                    <TierTag label={matrix.data.tickflow_tier} />
-                  )}
-                  {!customNames.has(item.name) && (
-                    <span className="shrink-0 rounded bg-warning/15 px-1 py-0.5 text-[9px] font-medium leading-none text-warning">第三方</span>
-                  )}
+                  {/* 设计稿 27: 内置源就绪时恒为「内置」; 连通看源自身健康(available), 未路由能力不算失联;
+                      插件缺 Key 时如实说「缺少 API Key」, 不用笼统的「未就绪」 */}
+                  <span className={`st ${pluginUnavailable ? 'no' : (isBuiltin || plugin || servingCount > 0) ? 'ok' : ''}`}>
+                    {pluginUnavailable
+                      ? (plugin?.api_key_env ? '缺少 API Key' : '未就绪')
+                      : isBuiltin
+                        ? '内置'
+                        : plugin
+                          ? '已连通'
+                          : servingCount > 0
+                            ? '已连通'
+                            : '未启用'}
+                  </span>
                 </div>
 
-                {/* 能力芯片: 服务中 / 已适配 / 档位锁定 / 积分计费角标 */}
-                <div className="mt-2">
-                  <CapabilityChips caps={chipCaps} servingSet={servingSet} isTickFlow={isTf} paid={plugin?.billing === 'points'} />
+                {/* 提供的能力: 服务中 / 已适配 / 积分计费角标 */}
+                <div className="meta">
+                  <span>提供</span>
+                  <em>
+                    <CapabilityChips caps={chipCaps} servingSet={servingSet} paid={plugin?.billing === 'points'} />
+                  </em>
+                </div>
+
+                {/* 运行形态 */}
+                <div className="meta">
+                  <span>运行</span>
+                  <em>{runtimeLabel(item, plugin)}</em>
                 </div>
 
                 {/* 底部: 状态提示 + 操作 */}
-                <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between gap-2 min-h-[22px]">
-                  <span className="text-[10px] text-muted/50 truncate min-w-0">
+                <div className="ft">
+                  <span className="min-w-0 truncate text-[10px] text-muted/50">
                     {servingCount > 0
                       ? `服务中 ${servingCount} 项能力`
                       : pluginUnavailable
                         ? (plugin?.runtime === 'none' && plugin?.api_key_env
                             ? '点击配置 Key'
-                            : (plugin?.install_hint || plugin?.status || ''))
+                            : isBuiltin
+                              ? '缺少依赖，点「安装」补齐'
+                              : (plugin?.install_hint || plugin?.status || ''))
                         : ''}
                   </span>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="ml-auto flex shrink-0 items-center gap-1">
                     {pluginUnavailable ? (
                       // 安装/卸载按钮只对"纯依赖型"插件(runtime≠none 且无 api_key_env)显示;
-                      // 带 Key 配置的插件不可用时, 卡片本身可点击进详情配 Key(如 TdxQuant 依赖已内置)。
+                      // 带 Key 配置的插件不可用时, 卡片本身可点击进详情配 Key(如 fuyao 缺 Key 时)。
                       plugin?.origin !== 'external' && plugin?.runtime !== 'none' && !plugin?.api_key_env && (
                         installing ? (
                           <span className="inline-flex items-center gap-1 text-[10px] text-accent">
@@ -834,7 +801,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
                           <button
                             onClick={(e) => { e.stopPropagation(); installMut.mutate(item.name) }}
                             disabled={installMut.isPending}
-                            className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+                            className="ctl ctl-sm ctl-btn pri px-1.5 disabled:opacity-50"
                           >
                             安装
                           </button>
@@ -845,18 +812,19 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
                         <button
                           onClick={(e) => { e.stopPropagation(); switchProvider.mutate(item.name) }}
                           disabled={switchProvider.isPending}
-                          className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+                          className="ctl ctl-sm ctl-btn pri px-1.5 disabled:opacity-50"
                         >
                           套用
                         </button>
-                        {plugin && plugin?.origin !== 'external' && plugin?.runtime !== 'none' && !plugin?.api_key_env && (
+                        {/* 内置源是应用自带的行情底座, 不提供卸载入口 */}
+                        {plugin && !isBuiltin && plugin?.origin !== 'external' && plugin?.runtime !== 'none' && !plugin?.api_key_env && (
                           uninstalling ? (
                             <RefreshCw className="h-2.5 w-2.5 animate-spin text-muted" />
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); uninstallMut.mutate(item.name) }}
                               disabled={uninstallMut.isPending}
-                              className="text-[10px] text-muted/50 hover:text-danger transition-colors disabled:opacity-40"
+                              className="ctl ctl-sm ctl-ghost inline-flex items-center px-1.5 text-muted/60 hover:text-danger disabled:opacity-40"
                               title="卸载依赖"
                             >
                               卸载
@@ -871,19 +839,20 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
             )
           })}
 
-          {/* 新增数据源卡片 */}
-          <button
-            onClick={() => setSelected('__new__')}
-            className={`rounded-lg border border-dashed px-3.5 py-3 transition-all flex items-center justify-center gap-1.5 text-sm ${
-              selected === '__new__'
-                ? 'border-accent/50 bg-accent/5 text-accent'
-                : 'border-border/50 text-muted hover:text-foreground hover:border-border hover:bg-elevated/30'
-            }`}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新增数据源
-          </button>
         </div>
+
+        {/* 新增数据源: 独立在网格之外, 不占发丝线格 */}
+        <button
+          onClick={() => setSelected('__new__')}
+          className={`ctl ctl-sm ctl-btn mt-2 w-full border-dashed px-1.5 flex items-center justify-center gap-1.5 ${
+            selected === '__new__'
+              ? 'border-accent/50 bg-accent/5 text-accent'
+              : 'border-border/50 text-muted hover:text-foreground hover:border-border hover:bg-elevated/30'
+          }`}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          新增数据源
+        </button>
 
         {/* 错误提示 */}
         {errors.length > 0 && (
@@ -900,7 +869,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
         )}
 
         <div className="mt-3 flex items-center gap-3 text-[10px] text-muted/50 flex-wrap">
-          <span>芯片: 高亮=服务中 · 灰=已适配 · <Lock className="inline h-2.5 w-2.5" />=需更高档位</span>
+          <span>芯片：高亮=服务中 · 灰=已适配</span>
           <span className="text-muted/30">·</span>
           <span>单击卡片查看介绍与配置, 点「套用」让该源接管其适配的全部能力</span>
         </div>
@@ -912,22 +881,29 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
       <AnimatePresence mode="wait">
         <motion.div
           key={selected}
+          className="mt-4"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.15 }}
         >
-          {selected === 'tickflow' ? (
-            <TickFlowDetail active={servingDatasets('tickflow').length > 0} matrix={matrix.data} />
+          {selected === BUILTIN ? (
+            <BuiltinDetail
+              item={builtin.find(b => b.name === BUILTIN)}
+              plugin={pluginMap.get(BUILTIN)}
+              active={servingDatasets(BUILTIN).length > 0}
+              matrixCaps={matrixCaps}
+              servingSet={servingSetOf(BUILTIN)}
+            />
           ) : selected === '__new__' || customNames.has(selected) ? (
             selected === '__new__' ? (
               <DataSourceEditor
                 key={selected}
                 initial={null}
                 existingName={undefined}
-                onCancel={() => setSelected('tickflow')}
+                onCancel={() => setSelected(BUILTIN)}
                 onSaved={() => {
                   invalidateSources()
-                  setSelected('tickflow')
+                  setSelected(BUILTIN)
                 }}
                 activeName={activeName}
                 onActivate={(name) => switchProvider.mutate(name)}
@@ -937,7 +913,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
                 key={selected}
                 initial={null}
                 existingName={selected}
-                onCancel={() => setSelected('tickflow')}
+                onCancel={() => setSelected(BUILTIN)}
                 onSaved={() => {
                   invalidateSources()
                   // 强制清除该源的详情缓存, 下次编辑重新拉取最新配置
@@ -970,19 +946,19 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
           <div className="relative w-[90vw] max-w-[380px] rounded-card border border-border bg-base p-6">
             <h3 className="text-sm font-medium text-foreground mb-2">删除数据源</h3>
             <p className="text-xs text-secondary mb-5">
-              确认删除「{customList.find(s => s.name === confirmDelete)?.display_name || confirmDelete}」? 该数据源的配置文件将被移除,此操作不可撤销。
+              确认删除「{customList.find(s => s.name === confirmDelete)?.display_name || confirmDelete}」? 该数据源的配置文件将被移除，此操作不可撤销。
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors"
+                className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 bg-elevated"
               >
                 取消
               </button>
               <button
                 onClick={() => remove.mutate(confirmDelete)}
                 disabled={remove.isPending}
-                className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:opacity-50"
+                className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger/25 disabled:opacity-50 bg-danger/15"
               >
                 {remove.isPending ? '删除中...' : '确认删除'}
               </button>
@@ -990,6 +966,48 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** 能力适配表: 全部能力 × 某源的适配状态 (服务中 / 已适配 / —) */
+function CapabilityTable({ matrixCaps, declared, servingSet, available = true, paid = false }: {
+  matrixCaps: CapabilityRoute[]
+  declared: Set<string>
+  servingSet: Set<string>
+  available?: boolean
+  paid?: boolean
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-elevated/20 divide-y divide-border/50">
+      {matrixCaps.map(cap => {
+        const Icon = CAP_ICON[cap.id] ?? Database
+        const serving = servingSet.has(cap.id)
+        const declaredCap = declared.has(cap.id)
+        return (
+          <div key={cap.id} className="flex items-center gap-2.5 px-3 py-1.5">
+            <Icon className="h-3.5 w-3.5 text-secondary shrink-0" />
+            <div className="flex-1 min-w-0 truncate">
+              <span className="text-xs text-foreground">{cap.label}</span>
+              {paid && declaredCap && (
+                <span className="ml-1.5 rounded bg-warning/15 px-1 py-px text-[9px] font-medium leading-none text-warning">积分</span>
+              )}
+              <span className="ml-1.5 text-[10px] text-muted/60">{cap.desc}</span>
+            </div>
+            {serving ? (
+              <span className="w-[56px] text-right text-[10px] text-bear inline-flex items-center justify-end gap-0.5 shrink-0">
+                <Check className="h-2.5 w-2.5" />服务中
+              </span>
+            ) : declaredCap ? (
+              <span className={`w-[56px] text-right text-[10px] shrink-0 ${available ? 'text-secondary' : 'text-warning/80'}`}>
+                {available ? '已适配' : '未就绪'}
+              </span>
+            ) : (
+              <span className="w-[56px] text-right text-[10px] text-muted/30 shrink-0">—</span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1004,15 +1022,15 @@ function PluginDetail({ plugin, isActive, matrixCaps, servingSet, refresh }: {
 }) {
   const declared = new Set(plugin.datasets)
   return (
-    <section className="leaf-cell">
+    <section className="mt-10 first:mt-0">
       {/* 介绍 */}
       <div className="flex items-start gap-4">
-        <div className="h-11 w-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-          <Zap className="h-5 w-5 text-accent" />
+        <div className="h-[44px] w-[44px] rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+          <Zap className="h-[20px] w-[20px] text-accent" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h3 className="text-[16px] leading-6 font-semibold text-foreground">{plugin.display_name}</h3>
+            <h3 className="text-[16px] leading-6 font-semibold text-foreground">{displayName(plugin.display_name)}</h3>
             <span className="text-[10px] text-muted/50 uppercase tracking-wider">插件 · {plugin.runtime}</span>
             <span className="rounded bg-warning/15 px-1 py-0.5 text-[9px] font-medium leading-none text-warning">第三方</span>
             {isActive && (
@@ -1021,12 +1039,11 @@ function PluginDetail({ plugin, isActive, matrixCaps, servingSet, refresh }: {
               </span>
             )}
           </div>
-          <PluginMetadata plugin={plugin} />
+          <PluginMetadata plugin={{ ...plugin, display_name: displayName(plugin.display_name) }} />
           <div className="mt-2">
             <CapabilityChips
               caps={matrixCaps.filter(c => declared.has(c.id))}
               servingSet={servingSet}
-              isTickFlow={false}
               paid={plugin.billing === 'points'}
             />
           </div>
@@ -1035,7 +1052,7 @@ function PluginDetail({ plugin, isActive, matrixCaps, servingSet, refresh }: {
 
       <ExtensionSlot name="settings.data-sources.detail-actions" context={{ plugin, refresh }} />
 
-      {/* 主体: 操作 + Key 配置 (左) | 能力适配表 (右), 布局对齐 TickFlow 详情 */}
+      {/* 主体: 操作 + Key 配置 (左) | 能力适配表 (右) */}
       <div className="mt-5 pt-5 border-t border-border grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-6 items-start">
         <div className="min-w-0">
           {/* 独立状态行仅用于无 Key 配置区的插件; 有 Key 区时「状态」行已展示, 避免重复 */}
@@ -1053,168 +1070,62 @@ function PluginDetail({ plugin, isActive, matrixCaps, servingSet, refresh }: {
           )}
         </div>
 
-        {/* 能力适配表: 全部能力 × 该源适配状态 (样式对齐 TickFlow 能力档位表) */}
+        {/* 能力适配表: 全部能力 × 该源适配状态 */}
         <div className="min-w-0">
-          <div className="rounded-lg border border-border/60 bg-elevated/20 divide-y divide-border/50">
-            {matrixCaps.map(cap => {
-              const Icon = CAP_ICON[cap.id] ?? Database
-              const serving = servingSet.has(cap.id)
-              const declaredCap = declared.has(cap.id)
-              return (
-                <div key={cap.id} className="flex items-center gap-2.5 px-3 py-1.5">
-                  <Icon className="h-3.5 w-3.5 text-secondary shrink-0" />
-                  <div className="flex-1 min-w-0 truncate">
-                    <span className="text-xs text-foreground">{cap.label}</span>
-                    {plugin.billing === 'points' && declaredCap && (
-                      <span className="ml-1.5 rounded bg-warning/15 px-1 py-px text-[9px] font-medium leading-none text-warning">积分</span>
-                    )}
-                    <span className="ml-1.5 text-[10px] text-muted/60">{cap.desc}</span>
-                  </div>
-                  {serving ? (
-                    <span className="w-[56px] text-right text-[10px] text-bear inline-flex items-center justify-end gap-0.5 shrink-0">
-                      <Check className="h-2.5 w-2.5" />服务中
-                    </span>
-                  ) : declaredCap ? (
-                    <span className={`w-[56px] text-right text-[10px] shrink-0 ${plugin.available ? 'text-secondary' : 'text-warning/80'}`}>
-                      {plugin.available ? '已适配' : '未就绪'}
-                    </span>
-                  ) : (
-                    <span className="w-[56px] text-right text-[10px] text-muted/30 shrink-0">—</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <CapabilityTable
+            matrixCaps={matrixCaps}
+            declared={declared}
+            servingSet={servingSet}
+            available={plugin.available}
+            paid={plugin.billing === 'points'}
+          />
         </div>
       </div>
     </section>
   )
 }
 
-/** TickFlow 详情: 介绍 + 能力档位表 + Key/可用功能左右两栏。
- *  检测档位集群 (档位徽章 + ? 说明 + 重新检测 + 可用功能悬停) 挂在 API Key 标题行右侧。 */
-function TickFlowDetail({ active, matrix }: { active: boolean; matrix?: CapabilityMatrix }) {
-  const caps = matrix?.capabilities ?? []
-  const tier = matrix?.tickflow_tier
-  const { data: tfCaps } = useCapabilities()
-  const capEntries = tfCaps ? Object.entries(tfCaps.capabilities) : []
-  const invalidate = useInvalidateTierRelated()
-  const redetect = useMutation({
-    mutationFn: () => api.redetectCapabilities(),
-    onSuccess: () => invalidate(),
-  })
-  // 检测档位集群: API Key 标题行右侧 (检测档位徽章 + 档位说明 + 重检测 + 可用功能悬停)
-  const tierCluster = tier ? (
-    <div className="flex items-center gap-1.5 shrink-0">
-      <span className="text-[10px] text-muted/80">检测档位</span>
-      <TierTag label={tier} />
-      <TierHelpPopover currentLabel={tfCaps?.label ?? tier} />
-      <button
-        type="button"
-        onClick={() => redetect.mutate()}
-        disabled={redetect.isPending}
-        title="根据 API Key 重新检测订阅档位"
-        className="inline-flex h-5 w-5 items-center justify-center rounded text-muted/60 hover:text-foreground hover:bg-elevated/70 transition-colors duration-150"
-      >
-        <RefreshCw className={`h-3 w-3 ${redetect.isPending ? 'animate-spin' : ''}`} />
-      </button>
-      {/* 可用功能: 收进悬停浮层, 不占版面 (能力清单 + 限频)。图标在标题行右侧, 浮层向左展开。
-          外层 top-full + pt-1.5: 间隙用内边距做, hover 区与图标无缝衔接 (mt 间隙会断 hover 链);
-          不设 pointer-events-none, 否则鼠标移不进浮层、列表无法滚动。 */}
-      <div className="relative group/caps shrink-0" aria-label="可用功能">
-        <span className="flex h-5 w-5 items-center justify-center rounded text-muted/60 transition-colors group-hover/caps:text-foreground">
-          <ListChecks className="h-3 w-3" />
-        </span>
-        <div className="invisible absolute right-0 top-full z-20 pt-1.5 opacity-0 transition-all duration-150 group-hover/caps:visible group-hover/caps:opacity-100">
-          <div className="w-64 rounded-md border border-border bg-surface py-2 pl-3 pr-3.5">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">可用功能</span>
-              <span className="text-[10px] font-mono text-muted">{capEntries.length} 项</span>
-            </div>
-            {capEntries.length > 0 ? (
-              <div className="max-h-56 space-y-1 overflow-y-auto border-t border-border/60 pt-1.5">
-                {capEntries.map(([cap, lim]) => (
-                  <div key={cap} className="flex min-w-0 items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-secondary">
-                      {CAP_LABELS[cap]?.name ?? cap}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted">
-                      {lim.rpm ? `${lim.rpm}/min` : lim.subscribe ? `${lim.subscribe} 订阅` : '—'}
-                      {lim.batch ? ` · ${lim.batch}/次` : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="border-t border-border/60 pt-1.5 text-[11px] text-muted">
-                暂无 — 配置 API Key 后自动检测
-              </div>
-            )}
-            <div className="mt-1.5 border-t border-border/60 pt-1.5 text-[10px] text-muted/70">
-              根据 API Key 自动检测
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : null
+/** 内置源详情: 介绍 + 能力清单 (内置源随应用分发, 无需 Key 与配置) */
+function BuiltinDetail({ item, plugin, active, matrixCaps, servingSet }: {
+  item?: DataSourceItem
+  plugin?: PluginDataSourceItem
+  active: boolean
+  matrixCaps: CapabilityRoute[]
+  servingSet: Set<string>
+}) {
+  const declared = new Set(item?.datasets ?? [])
   return (
-    <section className="leaf-cell">
+    <section className="mt-10 first:mt-0">
       {/* 介绍 */}
       <div className="flex items-start gap-4">
-        <div className="h-11 w-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-          <Database className="h-5 w-5 text-accent" />
+        <div className="h-[44px] w-[44px] rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+          <Database className="h-[20px] w-[20px] text-accent" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-[16px] leading-6 font-semibold text-foreground">TickFlow</h2>
-            <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">第三方</span>
-            <AllTiersBadge />
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h3 className="text-[16px] leading-6 font-semibold text-foreground">{BUILTIN_LABEL}</h3>
+            <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-secondary">内置</span>
             {active && (
               <span className="inline-flex items-center gap-1 text-[10px] text-accent bg-accent/10 px-2 py-1 rounded">
                 <Check className="h-2.5 w-2.5" /> 服务中
               </span>
             )}
           </div>
-          <p className="text-xs text-secondary mt-1.5 leading-relaxed">
-            默认数据源,每个能力所需订阅档位见下表 — 当前档位未解锁的能力不会出现在上方「能力路由」的选项里。
-            未单独设置的能力默认由 TickFlow 提供;也可在数据源区接入插件替换任意能力。
-          </p>
+          {plugin && <PluginMetadata plugin={{ ...plugin, display_name: displayName(plugin.display_name) }} />}
+          <div className="mt-2">
+            <CapabilityChips caps={matrixCaps.filter(c => declared.has(c.id))} servingSet={servingSet} />
+          </div>
         </div>
       </div>
 
-      {/* 主体: API Key 配置 (左) | 能力档位表 (右) */}
-      <div className="mt-5 pt-5 border-t border-border grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-6 items-start">
-        <div className="min-w-0">
-          <TickFlowKeySection right={tierCluster} />
-        </div>
-        <div className="min-w-0">
-          {/* 能力档位表: 各能力所需档位 + 当前档位可用性 */}
-          {caps.length > 0 && (
-            <div className="rounded-lg border border-border/60 bg-elevated/20 divide-y divide-border/50">
-              {caps.map(cap => {
-                const Icon = CAP_ICON[cap.id] ?? Database
-                return (
-                  <div key={cap.id} className="flex items-center gap-2.5 px-3 py-1.5">
-                    <Icon className="h-3.5 w-3.5 text-secondary shrink-0" />
-                    <div className="flex-1 min-w-0 truncate">
-                      <span className="text-xs text-foreground">{cap.label}</span>
-                      <span className="ml-1.5 text-[10px] text-muted/60">{cap.desc}</span>
-                    </div>
-                    <TierReqChip tier={cap.tf_tier} currentLabel={tier} />
-                    {cap.tf_available ? (
-                      <span className="w-[52px] text-right text-[10px] text-bear inline-flex items-center justify-end gap-0.5 shrink-0">
-                        <Check className="h-2.5 w-2.5" />可用
-                      </span>
-                    ) : (
-                      <span className="w-[52px] text-right text-[10px] text-warning/80 shrink-0">未解锁</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+      {/* 能力清单: 内置源无需配置, 只列它提供哪些能力 */}
+      <div className="mt-5 pt-5 border-t border-border">
+        <CapabilityTable
+          matrixCaps={matrixCaps}
+          declared={declared}
+          servingSet={servingSet}
+          available={plugin?.available ?? true}
+        />
       </div>
     </section>
   )

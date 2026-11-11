@@ -6,6 +6,7 @@ import { QK } from '@/lib/queryKeys'
 import { MissingCapChip } from '@/lib/capability-labels'
 import { MinuteGapPanel } from '@/components/data/MinuteGapPanel'
 import { Switch } from '@/components/Switch'
+import { useEscapeClose } from '@/lib/a11y'
 
 // hasCap: 分钟K能力当前是否可用 (路由矩阵判定, 生效源含插件/自定义源)
 export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: boolean; onJobStart?: (jobId: string) => void; onClose?: () => void }) {
@@ -63,6 +64,10 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
       setConfirmClear(false)
       qc.invalidateQueries({ queryKey: QK.dataStatus })
     },
+  })
+  // 清空中不允许 ESC 中断 (与点击遮罩的禁用条件一致)
+  useEscapeClose(confirmClear, () => {
+    if (!clearMutation.isPending) setConfirmClear(false)
   })
 
   // 手动获取 (两个独立按钮, 各自指定天数, 不影响自动同步偏好)
@@ -141,7 +146,7 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
               onClick={() => setDays(localDays - 1)}
               aria-label="减少自动同步天数"
               disabled={!hasMinuteCap || !enabled || localDays <= 1}
-              className="h-6 w-6 flex items-center justify-center rounded-l-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+              className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-l-btn hover:bg-border/50 disabled:opacity-30"
             >−</button>
             <div className={`h-6 w-8 flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums ${enabled ? 'text-foreground bg-base' : 'text-muted bg-elevated/50'}`}>
               {localDays}
@@ -150,7 +155,7 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
               onClick={() => setDays(localDays + 1)}
               aria-label="增加自动同步天数"
               disabled={!hasMinuteCap || !enabled || localDays >= 30}
-              className="h-6 w-6 flex items-center justify-center rounded-r-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+              className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-r-btn hover:bg-border/50 disabled:opacity-30"
             >+</button>
           </div>
           <span className="text-[10px] text-muted">天</span>
@@ -173,7 +178,7 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
               onClick={() => setSegment(localSegment - 5)}
               aria-label="减小分段大小"
               disabled={!hasMinuteCap || localSegment <= 5}
-              className="h-6 w-6 flex items-center justify-center rounded-l-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+              className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-l-btn hover:bg-border/50 disabled:opacity-30"
             >−</button>
             <div className="h-6 w-8 flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums bg-base text-foreground">
               {localSegment}
@@ -182,7 +187,7 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
               onClick={() => setSegment(localSegment + 5)}
               aria-label="增大分段大小"
               disabled={!hasMinuteCap || localSegment >= 30}
-              className="h-6 w-6 flex items-center justify-center rounded-r-btn bg-elevated border border-border text-secondary hover:bg-border/50 disabled:opacity-30 transition-colors text-xs"
+              className="ctl ctl-sm ctl-btn filled w-6 px-0 rounded-r-btn hover:bg-border/50 disabled:opacity-30"
             >+</button>
           </div>
           <span className="text-[10px] text-muted">交易日/段</span>
@@ -196,7 +201,7 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
       {/* 区块 B: 手动获取 (一次性操作, 独立于上方自动同步开关) */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Download className="h-3 w-3 text-secondary" />
+          <Download className="h-[12px] w-[12px] text-secondary" />
           <span className="text-[11px] text-secondary font-medium">手动获取</span>
           <span className="text-[10px] text-muted">不受自动同步开关影响</span>
         </div>
@@ -246,29 +251,29 @@ export function MinuteSyncConfig({ hasCap, onJobStart, onClose }: { hasCap: bool
         onClick={() => setConfirmClear(true)}
         disabled={clearMutation.isPending}
         title="清空分钟K数据"
-        className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-btn text-danger/80 text-[11px] font-medium hover:bg-danger/10 disabled:opacity-40 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60"
+        className="ctl ctl-md ctl-ghost inline-flex items-center justify-center gap-1.5 px-2.5 text-danger/80 hover:bg-danger/10 disabled:opacity-40 duration-150 focus-visible:ring-2 focus-visible:ring-danger/60"
       >
-        <Trash2 className="h-3 w-3" />
+        <Trash2 className="h-[12px] w-[12px]" />
         清空分钟K数据
       </button>
-      {onClose && <button onClick={onClose} className="rounded-btn border border-border bg-elevated px-4 py-1.5 text-xs text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">关闭</button>}
+      {onClose && <button onClick={onClose} className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 bg-elevated">关闭</button>}
       </div>
 
       {/* 清空确认弹窗 */}
       {confirmClear && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !clearMutation.isPending && setConfirmClear(false)} />
-          <div className="relative leaf-cell shadow-2xl mx-4 max-w-sm w-full space-y-4">
-            <div className="text-sm text-foreground text-center font-medium">确认清空分钟K数据？</div>
+          <div role="dialog" aria-modal="true" aria-labelledby="minute-clear-title" className="relative border border-border bg-surface shadow-2xl mx-4 max-w-sm w-full space-y-4">
+            <div id="minute-clear-title" className="text-sm text-foreground text-center font-medium">确认清空分钟K数据？</div>
             <div className="text-[11px] text-muted text-center leading-relaxed">
               此操作仅删除分钟K (kline_minute) 数据, <span className="text-foreground/80">不影响</span>日K、复权因子、指标等其他数据。清空后可重新获取。
             </div>
             <div className="flex items-center justify-center gap-3">
               <button onClick={() => setConfirmClear(false)} disabled={clearMutation.isPending}
-                className="px-4 py-1.5 rounded-btn bg-elevated text-secondary text-xs hover:bg-elevated/80 transition-colors duration-150">取消</button>
+                className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 duration-150 bg-elevated">取消</button>
               <button onClick={() => clearMutation.mutate()} disabled={clearMutation.isPending}
-                className="px-4 py-1.5 rounded-btn bg-danger/90 text-foreground text-xs font-medium hover:bg-danger disabled:opacity-40 transition-colors duration-150">
-                {clearMutation.isPending ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />清空中…</span> : '确认清空'}
+                className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger disabled:opacity-40 duration-150 bg-danger/90">
+                {clearMutation.isPending ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-[12px] w-[12px] animate-spin" />清空中…</span> : '确认清空'}
               </button>
             </div>
           </div>

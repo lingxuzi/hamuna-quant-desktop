@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import polars as pl
 
 from app.services import kline_sync
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 def _write_instruments(data_dir, symbols: list[str]) -> None:
@@ -42,12 +42,17 @@ class _Provider:
 
 
 def _route_provider(monkeypatch, provider):
-    monkeypatch.setattr(kline_sync.preferences, "get_daily_data_provider", lambda: "fuyao")
+    """把日K生效源路由到假 provider。
+
+    新契约: 日K 只走 provider 链 (生效源 → 内置默认源), 没有 TickFlow 档位;
+    生效源名由 preferences.get_data_provider("daily") 决定。
+    """
     from app.data_providers import custom
+    monkeypatch.setattr(kline_sync.preferences, "get_data_provider", lambda dataset: "fuyao")
     monkeypatch.setattr(
-        custom, "provider_has_dataset", lambda name, dataset: name == "fuyao" and dataset == "daily"
+        custom, "resolve_provider",
+        lambda name, dataset: (provider, name) if dataset == "daily" else (None, name),
     )
-    monkeypatch.setattr(custom, "get_provider", lambda name: provider)
 
 
 def test_normalize_maps_bare_via_instruments_and_dedups(tmp_path):
@@ -100,19 +105,11 @@ def test_sync_reports_zero_rows_in_caller_spelling(monkeypatch, tmp_path, caplog
     assert any("入库 0 行" in r.message for r in caplog.records)
 
 
-def test_sync_tickflow_path_normalizes_and_reports_zero(monkeypatch, tmp_path):
+def test_sync_daily_path_normalizes_and_reports_zero(monkeypatch, tmp_path):
     _write_instruments(tmp_path, ["600000.SH"])
     repo = KlineRepository(DataStore(tmp_path))
-    captured: dict = {}
-
-    def _fake_sync_daily_batch(symbols, **kwargs):
-        captured["symbols"] = list(symbols)
-        return pl.DataFrame()  # 上游 200 空 payload → 全部 0 行
-
-    monkeypatch.setattr(kline_sync, "sync_daily_batch", _fake_sync_daily_batch)
-    monkeypatch.setattr(
-        kline_sync.preferences, "get_daily_data_provider", lambda: "tickflow"
-    )
+    provider = _Provider([])   # 上游 200 空 payload → 全部 0 行
+    _route_provider(monkeypatch, provider)
     capset = SimpleNamespace(has=lambda cap: True, limits=lambda cap: None)
     zero: list[str] = []
 
@@ -124,7 +121,7 @@ def test_sync_tickflow_path_normalizes_and_reports_zero(monkeypatch, tmp_path):
 
     assert written == 0
     # 发往上游前已完成规范化: 600000 → 600000.SH
-    assert captured["symbols"] == ["600000.SH", "000001.SH"]
+    assert provider.requested_symbols == ["600000.SH", "000001.SH"]
     # 回报用调用方原始写法
     assert zero == ["600000", "000001.SH"]
 
@@ -134,12 +131,7 @@ def test_api_sync_batch_returns_zero_row_symbols(monkeypatch, tmp_path):
 
     _write_instruments(tmp_path, ["600000.SH"])
     repo = KlineRepository(DataStore(tmp_path))
-    monkeypatch.setattr(
-        kline_sync, "sync_daily_batch", lambda symbols, **kwargs: pl.DataFrame()
-    )
-    monkeypatch.setattr(
-        kline_sync.preferences, "get_daily_data_provider", lambda: "tickflow"
-    )
+    _route_provider(monkeypatch, _Provider([]))   # 上游空 payload → 0 行
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
         repo=repo, capabilities=SimpleNamespace(has=lambda cap: True, limits=lambda cap: None),
     )))

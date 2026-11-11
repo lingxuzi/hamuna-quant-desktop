@@ -1,6 +1,6 @@
 """前端构建产物的静态路由 — 根级文件不能被 SPA 兜底成 HTML。
 
-Docker/桌面安装包由 FastAPI 托管 frontend/dist。favicon.svg 等根级资源若被
+Docker/桌面安装包由 FastAPI 托管 frontend_v2/dist。favicon.svg 等根级资源若被
 SPA 兜底返回 index.html, 浏览器会因 MIME 不符丢弃图标, 页签显示默认占位图。
 """
 from __future__ import annotations

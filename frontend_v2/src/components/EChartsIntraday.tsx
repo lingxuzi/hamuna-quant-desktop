@@ -3,7 +3,7 @@ import * as echarts from 'echarts'
 import type { ECharts, EChartsOption } from 'echarts'
 import type { MinuteKlineRow, PriceLimitInfo } from '@/lib/api'
 import { computeIntradayAverage, formatMinuteTime, FULL_DAY_TIMES, summarizeMinutes, getLimitPrices, type DailySummary } from '@/lib/intraday-chart'
-import { useChartTheme, type ChartTheme } from '@/lib/theme'
+import { alpha, useChartTheme, type ChartTheme } from '@/lib/theme'
 import { pricePrecision } from '@/lib/format'
 
 type YMode = 'adaptive' | 'limit'
@@ -427,8 +427,8 @@ export function EChartsIntraday({
   const lastClose = data.length > 0 ? data[data.length - 1].close : null
   const lineIsUp = lastClose != null && prevClose != null ? lastClose > prevClose : true
   const lineIsFlat = lastClose != null && prevClose != null ? lastClose === prevClose : false
-  const lineColor = lineIsFlat ? '#A1A1AA' : lineIsUp ? '#C74040' : '#2D9B65'
-  const areaFill = lineIsFlat ? 'rgba(180,180,190,0.40)' : lineIsUp ? 'rgba(199,64,64,0.40)' : 'rgba(34,197,94,0.40)'
+  const lineColor = lineIsFlat ? ct.text : lineIsUp ? ct.bull : ct.bear
+  const areaFill = alpha(lineColor, 0.40)
 
   useEffect(() => {
     setInfoIdx(-1)
@@ -543,7 +543,7 @@ export function EChartsIntraday({
   const chg = d && prevClose != null ? d.close - prevClose : null
   const isUp = chg != null ? chg > 0 : true
   const isFlat = chg != null ? chg === 0 : false
-  const priceClr = isFlat ? '#A1A1AA' : isUp ? '#C74040' : '#2D9B65'
+  const priceClr = isFlat ? ct.text : isUp ? ct.bull : ct.bear
 
   return (
     <div className="w-full">
@@ -552,7 +552,7 @@ export function EChartsIntraday({
         <div className="inline-flex items-center rounded bg-elevated overflow-hidden">
           <button
             onClick={() => setYMode('adaptive')}
-            className={`px-2.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors ${
+            className={`ctl ctl-sm ctl-ghost px-1.5 font-mono ${
               yMode === 'adaptive'
                 ? 'bg-accent/20 text-accent'
                 : 'text-muted hover:text-secondary'
@@ -563,7 +563,7 @@ export function EChartsIntraday({
           <div className="w-px h-3 bg-border/40" />
           <button
             onClick={() => setYMode('limit')}
-            className={`px-2.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors ${
+            className={`ctl ctl-sm ctl-ghost px-1.5 font-mono ${
               yMode === 'limit'
                 ? 'bg-accent/20 text-accent'
                 : 'text-muted hover:text-secondary'

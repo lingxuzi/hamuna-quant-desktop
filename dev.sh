@@ -2,7 +2,8 @@
 # tickflow-stock-panel — 一键启动前后端
 #
 # 用法:
-#   ./dev.sh                          # 默认 backend:3018  frontend:3011
+#   ./dev.sh                          # 默认 backend:3018  frontend(v2):3012
+#   FRONTEND_APP=v1 ./dev.sh          # 起旧版前端 frontend(v1):3011
 #   BACKEND_PORT=8000 ./dev.sh        # 改后端端口
 #   FRONTEND_PORT=5173 ./dev.sh       # 改前端端口
 #
@@ -12,7 +13,22 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT/backend"
-FRONTEND_DIR="$ROOT/frontend"
+
+# 前端版本: v2 = frontend_v2 (新), v1 = frontend (旧)
+FRONTEND_APP="${FRONTEND_APP:-v2}"
+case "$FRONTEND_APP" in
+  v2) FRONTEND_DIR="$ROOT/frontend_v2"; FRONTEND_DEFAULT_PORT=3012 ;;
+  v1) FRONTEND_DIR="$ROOT/frontend";    FRONTEND_DEFAULT_PORT=3011 ;;
+  *)
+    echo "[dev] 未知 FRONTEND_APP: $FRONTEND_APP (可选 v1 / v2)" >&2
+    exit 1
+    ;;
+esac
+
+# 后端的 STATIC_DIR 决定三件事: 托管哪份 SPA、源码扩展根目录(frontend_root =
+# static_dir.parent)、esbuild 发现路径。必须与本次启动的前端同源 —— 否则 v2
+# 模式下「源码导入 / 从项目导入 / 删除源码扩展」会去编译 v1 的扩展源码。
+export STATIC_DIR="${STATIC_DIR:-$FRONTEND_DIR/dist}"
 
 # Read only the launcher-owned keys from .env. Do not source the whole file:
 # .env is data, not a shell script, and may contain values that are unsafe or
@@ -41,7 +57,7 @@ ENV_PORT="$(read_dotenv_value PORT)"
 BACKEND_HOST="${HOST:-${ENV_HOST:-0.0.0.0}}"
 # Keep BACKEND_PORT as a backwards-compatible explicit override.
 BACKEND_PORT="${BACKEND_PORT:-${PORT:-${ENV_PORT:-3018}}}"
-FRONTEND_PORT="${FRONTEND_PORT:-3011}"
+FRONTEND_PORT="${FRONTEND_PORT:-$FRONTEND_DEFAULT_PORT}"
 UVICORN_ENV_ARGS=()
 if [[ -f "$ROOT/.env" ]]; then
   UVICORN_ENV_ARGS=(--env-file "$ROOT/.env")
@@ -90,11 +106,23 @@ require_cmd() {
 require_cmd uv   "curl -LsSf https://astral.sh/uv/install.sh | sh"
 require_cmd pnpm "npm i -g pnpm   或   corepack enable && corepack prepare pnpm@9 --activate"
 
+# 查端口监听者 PID。Linux 优先 ss —— 容器 / 受限环境里 lsof 常会卡死
+# (无超时地无限等内核表), 而 ss 走 netlink, 几十毫秒返回。
+port_listeners() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    # || true: 无监听时 grep 无匹配返回 1, set -e + pipefail 会直接退出脚本
+    ss -Hltnp "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+  fi
+}
+
 # ===== 2. 端口占用检查 —— 占用就直接 kill =====
 free_port() {
   local name="$1" port="$2"
   local pids
-  pids=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  pids=$(port_listeners "$port")
   if [ -z "$pids" ]; then
     return 0
   fi
@@ -103,14 +131,14 @@ free_port() {
   echo "$pids" | xargs kill 2>/dev/null || true
   sleep 1
   # 还活着就 KILL
-  pids=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  pids=$(port_listeners "$port")
   if [ -n "$pids" ]; then
     warn "TERM 没杀掉,改用 KILL -9"
     echo "$pids" | xargs kill -9 2>/dev/null || true
     sleep 1
   fi
   # 再确认一次
-  pids=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  pids=$(port_listeners "$port")
   if [ -n "$pids" ]; then
     err "端口 $port 仍被占用 — kill 失败。请手动处理:lsof -i :$port"
     exit 1

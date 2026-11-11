@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { RefreshCw, ChevronDown, Flame, Settings2, X, Bell, BellOff, AlertCircle } from 'lucide-react'
+import { RefreshCw, ChevronDown, Flame, X, Bell, BellOff, AlertCircle } from 'lucide-react'
 import { DatePicker } from '@/components/DatePicker'
+import { Switch } from '@/components/Switch'
 import { api, type LimitLadderTier, type LimitLadderStock, type MonitorRule } from '@/lib/api'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { toNavItems, type NavItem } from '@/lib/listNav'
@@ -11,6 +12,7 @@ import { QK } from '@/lib/queryKeys'
 import { storage } from '@/lib/storage'
 import { fmtPct, priceColorClass } from '@/lib/format'
 import { PageHeader } from '@/components/PageHeader'
+import { Note } from '@/components/Toolbar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { useTheme } from '@/lib/theme'
@@ -154,29 +156,30 @@ const STATUS_STYLE: Record<string, { bg: string; bar: string; nameCls: string; c
   limit_up: {
     bg: '',
     bar: 'border-l-2 border-bull/50',
-    // 亮色用深酒红, 暗色保持近白 — 卡片底是淡红渐变, 双主题都要有对比度
-    nameCls: 'text-rose-900 dark:text-rose-50 text-[13px]',
+    // 名字用语义涨色 (--bull), 不再写死 rose/emerald 的明暗两套:
+    // 亮暗皮都由主题层给值, 卡片底也只是同色淡底, 对比度不会掉。
+    nameCls: 'text-bull text-[13px]',
     codeCls: 'text-muted/80',
     badge: '',
     badgeText: '',
     cardStyle: {
-      background: 'linear-gradient(105deg, hsl(4 60% 45% / 0.14) 0%, hsl(6 50% 30% / 0.09) 40%, hsl(220 15% 12% / 0.0) 100%)',
-      boxShadow: 'inset 1px 0 0 hsl(4 80% 55% / 0.12), 0 0 10px -4px hsl(4 80% 50% / 0.10)',
+      background: 'hsl(var(--bull) / 0.05)',
+      boxShadow: 'inset 1px 0 0 hsl(var(--bull) / 0.25)',
     },
-    hoverShadow: 'inset 1px 0 0 hsl(4 80% 55% / 0.30), 0 0 18px -4px hsl(4 80% 50% / 0.28)',
+    hoverShadow: 'inset 1px 0 0 hsl(var(--bull) / 0.45)',
   },
   limit_down: {
     bg: '',
     bar: 'border-l-2 border-bear/50',
-    nameCls: 'text-emerald-900 dark:text-green-50 text-[13px]',
+    nameCls: 'text-bear text-[13px]',
     codeCls: 'text-muted/80',
     badge: '',
     badgeText: '',
     cardStyle: {
-      background: 'linear-gradient(105deg, hsl(152 60% 45% / 0.14) 0%, hsl(150 50% 30% / 0.09) 40%, hsl(220 15% 12% / 0.0) 100%)',
-      boxShadow: 'inset 1px 0 0 hsl(152 80% 45% / 0.12), 0 0 10px -4px hsl(152 80% 45% / 0.10)',
+      background: 'hsl(var(--bear) / 0.05)',
+      boxShadow: 'inset 1px 0 0 hsl(var(--bear) / 0.25)',
     },
-    hoverShadow: 'inset 1px 0 0 hsl(152 80% 45% / 0.30), 0 0 18px -4px hsl(152 80% 45% / 0.28)',
+    hoverShadow: 'inset 1px 0 0 hsl(var(--bear) / 0.45)',
   },
   broken: {
     bg: 'opacity-75',
@@ -262,7 +265,7 @@ const StockCard = React.memo(function StockCard({ stock, extFields, direction, s
 
   const hasTags = conceptTags.length > 0 || industryTags.length > 0
 
-  // 齿轮始终可见: 让免费用户也能看到功能入口, 点开后在菜单内提示权限不足。
+  // 齿轮始终可见: 无五档能力时也能看到功能入口, 点开后在菜单内提示能力不足。
   // 有五档盘口能力的用户正常设置; 无能力时保存按钮禁用 + 显示能力提示。
   return (
     <div className="relative group w-full">
@@ -278,7 +281,7 @@ const StockCard = React.memo(function StockCard({ stock, extFields, direction, s
           monitored ? 'opacity-100 text-amber-400' : 'opacity-0 group-hover:opacity-70 text-muted hover:!opacity-100'
         }`}
       >
-        {monitored ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+        {monitored ? <Bell className="h-[12px] w-[12px]" /> : <BellOff className="h-[12px] w-[12px]" />}
       </button>
       {/* 监控菜单 */}
       {showMonitorMenu && menuAnchor && (
@@ -544,11 +547,11 @@ function MonitorMenu({ stock, direction, sealMode, monitorRule, anchorRect, hasD
             <div className="flex gap-0.5 flex-1 bg-elevated/50 rounded p-0.5">
               <button
                 onClick={() => switchMetric('sealed_vol')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] transition-colors ${metric === 'sealed_vol' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary'}`}
+                className={`ctl ctl-sm ctl-ghost flex-1 px-1.5 ${metric === 'sealed_vol' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary'}`}
               >封单量</button>
               <button
                 onClick={() => switchMetric('sealed_amount')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] transition-colors ${metric === 'sealed_amount' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary'}`}
+                className={`ctl ctl-sm ctl-ghost flex-1 px-1.5 ${metric === 'sealed_amount' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-secondary'}`}
               >封单额</button>
             </div>
           </div>
@@ -561,12 +564,12 @@ function MonitorMenu({ stock, direction, sealMode, monitorRule, anchorRect, hasD
               value={threshold}
               onChange={e => setThreshold(e.target.value)}
               placeholder="≤ 报警"
-              className="flex-1 min-w-0 h-7 px-2 rounded bg-base border border-border text-foreground text-center tabular-nums placeholder:text-muted/40 focus:outline-none focus:border-accent/50"
+              className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 text-center tabular-nums placeholder:text-muted/40 focus:border-accent/50 bg-base"
             />
             <select
               value={unitKey}
               onChange={e => setUnitKey(e.target.value)}
-              className="h-7 px-1.5 rounded bg-base border border-border text-secondary text-[11px] focus:outline-none focus:border-accent/50 cursor-pointer"
+              className="ctl ctl-md ctl-select"
             >
               {units.map(u => (
                 <option key={u.key} value={u.key}>{u.label}</option>
@@ -590,7 +593,7 @@ function MonitorMenu({ stock, direction, sealMode, monitorRule, anchorRect, hasD
                     key={ch.key}
                     type="button"
                     onClick={() => togglePushChannel(ch.key)}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-colors border cursor-pointer ${
+                    className={`ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 rounded-full ${
                       on
                         ? 'bg-accent/15 text-accent border-accent/40'
                         : 'bg-elevated/40 text-muted border-border hover:text-secondary'
@@ -604,11 +607,11 @@ function MonitorMenu({ stock, direction, sealMode, monitorRule, anchorRect, hasD
             </div>
           </div>
 
-          {/* 权限提示 (免费用户) */}
+          {/* 能力提示 (未接入五档盘口源) */}
           {!hasDepth && (
             <div className="flex items-start gap-1.5 rounded border border-amber-400/30 bg-amber-400/5 px-2 py-1.5 text-[10px] leading-relaxed text-amber-400/90">
-              <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
-              <span>当前 Key 权限无法获取五档行情,后续会适配免费数据源</span>
+              <AlertCircle className="h-[12px] w-[12px] shrink-0 mt-px" />
+              <span>当前数据源不提供五档盘口,可在数据源页为「五档盘口」能力选择其他来源</span>
             </div>
           )}
         </div>
@@ -619,14 +622,14 @@ function MonitorMenu({ stock, direction, sealMode, monitorRule, anchorRect, hasD
             <button
               onClick={handleRemove}
               disabled={saving || !hasDepth}
-              className="shrink-0 h-7 px-2.5 rounded text-[11px] text-muted hover:text-danger hover:bg-danger/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="ctl ctl-md ctl-ghost shrink-0 px-2.5 hover:text-danger hover:bg-danger/5 disabled:opacity-40 disabled:cursor-not-allowed"
             >关闭监控</button>
           )}
           <button
             onClick={handleSave}
             disabled={saving || !threshold || !hasDepth}
             title={!hasDepth ? '五档盘口(批量)数据不可用' : ''}
-            className="flex-1 h-7 rounded text-[11px] font-medium transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-accent text-white hover:bg-accent/90 active:scale-[0.98] disabled:active:scale-100"
+            className="ctl ctl-md ctl-btn pri flex-1 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/90 active:scale-[0.98] disabled:active:scale-100"
           >
             {saving ? '保存中…' : !hasDepth ? '五档盘口不可用' : existing ? '更新监控' : '开启监控'}
           </button>
@@ -746,12 +749,6 @@ const TIER_COLORS: Record<number, string> = {
   3: 'border-orange-500/50',
 }
 
-const TIER_TEXT: Record<number, string> = {
-  1: 'text-muted',
-  2: 'text-yellow-500',
-  3: 'text-orange-400',
-}
-
 function tierBorder(n: number): string {
   for (let i = Math.min(n, 20); i >= 1; i--) {
     if (TIER_COLORS[i]) return TIER_COLORS[i]
@@ -759,72 +756,49 @@ function tierBorder(n: number): string {
   return 'border-border'
 }
 
-function tierTextCls(n: number): string {
-  for (let i = Math.min(n, 20); i >= 1; i--) {
-    if (TIER_TEXT[i]) return TIER_TEXT[i]
-  }
-  return 'text-muted'
-}
-
+/** 层标题的板数称谓 (设计稿 .ld-k 的 span) */
 function tierLabel(n: number, direction: Direction): string {
-  if (direction === 'down') return n === 1 ? '首跌' : `${n}连跌`
-  return n === 1 ? '首板' : `${n}板`
+  if (direction === 'down') return n === 1 ? '首跌' : '连跌'
+  return n === 1 ? '首板' : '连板'
 }
 
-// ===== 梯队总览条 =====
+// ===== 梯队切换条 (设计稿 04 的 .ld-bar) =====
 
-function OverviewBar({ tiers, dateValue, onDateChange, filterKeys, bf, direction }: {
+/** 方向切换 + 视图筛选 + 右侧口径读注 */
+function LadderBar({ tiers, direction, onDirectionChange, children }: {
   tiers: LimitLadderTier[]
-  dateValue: string
-  onDateChange: (v: string) => void
-  filterKeys: Set<FilterKey>
-  bf?: BrokenFailedConfig
   direction: Direction
+  onDirectionChange: (d: Direction) => void
+  /** 视图筛选控件 (状态/板块/封单模式) */
+  children?: React.ReactNode
 }) {
-  if (tiers.length === 0) return null
-  const cfg = { ...DEFAULT_BF, ...bf }
-  const mainStatus = direction === 'down' ? 'limit_down' : 'limit_up'
-  const brokenStatus = direction === 'down' ? 'recovery' : 'broken'
-  // 命中数: 涨停/跌停主状态(含无 status 兜底)
-  const limitUpCounts = tiers.map(t => t.stocks.filter(s => s.status === mainStatus || !s.status).length)
-  const maxCount = Math.max(...limitUpCounts, 1)
-  const showBroken = (filterKeys.has('broken') || filterKeys.has('recovery')) && cfg.brokenShow
-  const showFailed = filterKeys.has('failed') && cfg.failedShow
-  const totalBroken = cfg.brokenCount
-    ? tiers.reduce((s, t) => s + t.stocks.filter(st => st.status === brokenStatus).length, 0)
-    : 0
-  const totalFailed = cfg.failedCount
-    ? tiers.reduce((s, t) => s + t.stocks.filter(st => st.status === 'failed').length, 0)
-    : 0
-  const brokenLabel = direction === 'down' ? '翘板' : '炸板'
-  const failedLabel = direction === 'down' ? '止跌' : '断板'
-
+  // 口径读注按未筛选的原始梯队算: 各层含今日已开板标的, 故合计大于涨停家数
+  const maxBoards = tiers.reduce((m, t) => Math.max(m, t.boards), 0)
+  const total = tiers.reduce((s, t) => s + t.stocks.length, 0)
   return (
-    <div className="flex items-center gap-4 px-5 py-2">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
-        {tiers.map((t, idx) => {
-          const luCount = limitUpCounts[idx]
-          return (
-            <div key={t.boards} className="flex items-center gap-1">
-              <span className={`font-medium ${tierTextCls(t.boards)}`}>{tierLabel(t.boards, direction)}</span>
-              <div
-                className="h-2 rounded-sm bg-accent/40"
-                style={{ width: `${Math.max(8, (luCount / maxCount) * 48)}px` }}
-              />
-              <span className="text-muted">{luCount}</span>
-            </div>
-          )
-        })}
-        {showBroken && totalBroken > 0 && (
-          <span className="text-purple-400 font-medium">{brokenLabel} {totalBroken}</span>
-        )}
-        {showFailed && totalFailed > 0 && (
-          <span className="text-yellow-500 font-medium">{failedLabel} {totalFailed}</span>
-        )}
+    <div className="flex flex-wrap items-center gap-2 border-b border-rule-strong px-4 py-2.5">
+      <div className="seg" role="group" aria-label="梯队方向">
+        <button
+          type="button"
+          className={direction === 'up' ? 'on' : ''}
+          aria-pressed={direction === 'up'}
+          onClick={() => onDirectionChange('up')}
+        >
+          涨停梯队
+        </button>
+        <button
+          type="button"
+          className={direction === 'down' ? 'on' : ''}
+          aria-pressed={direction === 'down'}
+          onClick={() => onDirectionChange('down')}
+        >
+          跌停梯队
+        </button>
       </div>
-      <div className="ml-auto">
-        <DatePicker value={dateValue} onChange={onDateChange} />
-      </div>
+      {children}
+      <span className="tb-note ml-auto">
+        {maxBoards > 0 ? `最高 ${maxBoards} 板 · 各层合计 ${total} 只` : '当日无梯队'}
+      </span>
     </div>
   )
 }
@@ -881,7 +855,7 @@ function TagStats({ title, tiers, extFields, fieldKey, color, selectedTag, onSel
         {needsExpand && (
           <span className="text-[10px] text-muted/60 group-hover:text-muted ml-auto flex items-center gap-0.5 transition-colors">
             {expanded ? '收起' : '展开'}
-            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`h-[12px] w-[12px] transition-transform ${expanded ? 'rotate-180' : ''}`} />
           </span>
         )}
       </button>
@@ -901,7 +875,7 @@ function TagStats({ title, tiers, extFields, fieldKey, color, selectedTag, onSel
                   onSelect(isSelected ? null : { fieldKey, tag: name })
                   onDimensionClick(fieldKey, name, extFields[fieldKey]?.field)
                 }}
-                className="text-[11px] px-2 py-1 rounded-sm whitespace-nowrap cursor-pointer hover:brightness-110 transition-all"
+                className="ctl ctl-sm ctl-ghost px-1.5 rounded-sm whitespace-nowrap hover:brightness-110 transition-all"
                 style={{
                   // 亮色: 深色阶文字 + 更淡的底; 选中态不用白字 (黄底白字在亮色下不可读)
                   color: isSelected
@@ -1009,7 +983,6 @@ function TierGroup({ tier, defaultOpen, extFields, filterKeys, bf, onStockClick,
   const showBroken = (filterKeys.has('broken') || filterKeys.has('recovery')) && cfg.brokenShow
   const showFailed = filterKeys.has('failed') && cfg.failedShow
 
-  const luCount = tier.stocks.filter(s => s.status === mainStatus || !s.status).length
   const brCount = cfg.brokenCount ? tier.stocks.filter(s => s.status === brokenStatus).length : 0
   const faCount = cfg.failedCount ? tier.stocks.filter(s => s.status === 'failed').length : 0
 
@@ -1046,22 +1019,26 @@ function TierGroup({ tier, defaultOpen, extFields, filterKeys, bf, onStockClick,
       animate={{ opacity: 1, y: 0 }}
       className={`border-l-2 ${tierBorder(tier.boards)} rounded-r-lg bg-surface/50`}
     >
-      {/* 头部 */}
+      {/* 头部 — 设计稿 .ld-k: 大号板数 + 连板/首板 + N 只 */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface/80 transition-colors"
+        className="w-full flex items-start gap-2.5 px-3 py-2 hover:bg-surface/80 transition-colors"
       >
-        <Flame className={`h-3.5 w-3.5 ${tier.boards >= 5 ? 'text-orange-500' : tier.boards >= 3 ? 'text-yellow-500' : 'text-muted'}`} />
-        <span className={`text-sm font-bold tabular-nums ${tierTextCls(tier.boards)}`}>{tierLabel(tier.boards, direction)}<span className="text-muted/40 mx-1">·</span>{luCount}</span>
+        <Flame className={`mt-1 h-3.5 w-3.5 shrink-0 ${tier.boards >= 5 ? 'text-orange-500' : tier.boards >= 3 ? 'text-yellow-500' : 'text-muted'}`} />
+        <span className="flex w-16 shrink-0 flex-col items-end border-r border-rule-strong pr-3 text-right">
+          <b className="font-mono text-[22px] font-normal leading-none text-accent">{tier.boards}</b>
+          <span className="mt-1 text-[9px] tracking-[.08em] text-muted">{tierLabel(tier.boards, direction)}</span>
+          <em className="mt-1.5 font-mono text-[10px] not-italic text-secondary">{tier.count} 只</em>
+        </span>
         {(showBroken && brCount > 0) || (showFailed && faCount > 0) ? (
-          <span className="text-[11px] text-muted/60">
+          <span className="mt-1 text-[11px] text-muted/60">
             {showBroken && brCount > 0 && <span className="text-purple-400">{brCount}{brokenBadge}</span>}
             {showBroken && brCount > 0 && showFailed && faCount > 0 && <span className="text-muted/40"> · </span>}
             {showFailed && faCount > 0 && <span className="text-muted/80">{faCount}{failedBadge}</span>}
           </span>
         ) : null}
         <ChevronDown
-          className={`h-3.5 w-3.5 ml-auto text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`mt-1 h-3.5 w-3.5 ml-auto text-muted transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -1090,7 +1067,7 @@ function TierGroup({ tier, defaultOpen, extFields, filterKeys, bf, onStockClick,
                             onSelectTag(isSelected ? null : { fieldKey: 'concept', tag: name })
                             onDimensionClick('concept', name, extFields.concept?.field)
                           }}
-                          className="text-[10px] px-1.5 py-0.5 rounded-sm whitespace-nowrap cursor-pointer hover:brightness-110 transition-all"
+                          className="ctl ctl-sm ctl-ghost px-1.5 rounded-sm whitespace-nowrap hover:brightness-110 transition-all"
                           style={{
                             color: isSelected
                               ? (isDarkTheme ? '#fff' : 'rgb(161,98,7)')
@@ -1120,7 +1097,7 @@ function TierGroup({ tier, defaultOpen, extFields, filterKeys, bf, onStockClick,
                             onSelectTag(isSelected ? null : { fieldKey: 'industry', tag: name })
                             onDimensionClick('industry', name, extFields.industry?.field)
                           }}
-                          className="text-[10px] px-1.5 py-0.5 rounded-sm whitespace-nowrap cursor-pointer hover:brightness-110 transition-all"
+                          className="ctl ctl-sm ctl-ghost px-1.5 rounded-sm whitespace-nowrap hover:brightness-110 transition-all"
                           style={{
                             color: isSelected
                               ? (isDarkTheme ? '#fff' : 'rgb(29,78,216)')
@@ -1141,9 +1118,11 @@ function TierGroup({ tier, defaultOpen, extFields, filterKeys, bf, onStockClick,
               </div>
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 px-3 pb-3">
-              {tier.stocks.map(s => (
+              {tier.stocks.map((s, i) => (
                 <StockCard
-                  key={`${s.symbol}-${s.status}`}
+                  // 同一只票可能同时以「封板」和「炸板」两种状态进同一档,
+                  // (symbol, status) 不唯一 —— 加上序号才不会出现重复 key 警告。
+                  key={`${s.symbol}-${s.status ?? 'x'}-${i}`}
                   stock={s}
                   extFields={extFields}
                   direction={direction}
@@ -1174,20 +1153,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   return (
     <label className="flex items-center justify-between gap-2 text-xs cursor-pointer">
       <span className="text-secondary">{label}</span>
-      <span
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        style={{ width: 32, height: 18, position: 'relative', borderRadius: 9, transition: 'background-color 0.15s', cursor: 'pointer' }}
-        className={checked ? 'bg-accent/60' : 'bg-border'}
-      >
-        <span
-          style={{
-            position: 'absolute', top: 2, left: 0, width: 14, height: 14, borderRadius: '50%', background: '#fff',
-            transition: 'transform 0.15s', transform: checked ? 'translateX(16px)' : 'translateX(2px)',
-          }}
-        />
-      </span>
+      <Switch checked={checked} onChange={onChange} label={label} />
     </label>
   )
 }
@@ -1213,7 +1179,7 @@ function NumInput({ label, value, onChange, min, max, placeholder }: {
           onChange(v)
         }}
         placeholder={placeholder}
-        className="w-16 h-7 bg-elevated border border-border rounded text-xs text-foreground text-center px-1 placeholder:text-muted focus:outline-none focus:border-accent/50"
+        className="ctl ctl-md ctl-input w-16 bg-elevated text-center px-2.5 placeholder:text-muted focus:border-accent/50"
       />
     </label>
   )
@@ -1228,7 +1194,7 @@ function FieldSelect({ value, onChange, options }: {
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full h-7 bg-elevated border border-border rounded text-xs text-foreground px-2 focus:outline-none focus:border-accent/50"
+        className="ctl ctl-md ctl-select w-full"
       >
       <option value="">不显示</option>
       {options.map(o => (
@@ -1270,8 +1236,8 @@ function ExtFieldSection({ item, onChange, options }: {
           <div className="flex items-center gap-2">
             <span className="text-xs text-secondary shrink-0 w-16">显示模式</span>
             <div className="flex flex-1 min-w-0 rounded overflow-hidden border border-border">
-              <button onClick={() => updateDisplay({ displayMode: 'tag' })} className={`flex-1 py-1 text-xs transition-colors ${displayMode === 'tag' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>标签</button>
-              <button onClick={() => updateDisplay({ displayMode: 'text' })} className={`flex-1 py-1 text-xs transition-colors border-l border-border ${displayMode === 'text' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>文本</button>
+              <button onClick={() => updateDisplay({ displayMode: 'tag' })} className={`ctl ctl-sm ctl-ghost flex-1 ${displayMode === 'tag' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>标签</button>
+              <button onClick={() => updateDisplay({ displayMode: 'text' })} className={`ctl ctl-sm ctl-ghost flex-1 border-l border-border ${displayMode === 'text' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>文本</button>
             </div>
           </div>
           {displayMode === 'tag' && (
@@ -1283,7 +1249,7 @@ function ExtFieldSection({ item, onChange, options }: {
                   value={cfg?.separator ?? ''}
                   onChange={e => updateDisplay({ separator: e.target.value })}
                   placeholder="留空"
-                  className="flex-1 min-w-0 h-7 bg-elevated border border-border rounded text-xs text-foreground px-2 placeholder:text-muted focus:outline-none focus:border-accent/50"
+                  className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 placeholder:text-muted focus:border-accent/50 bg-elevated"
                 />
               </div>
               <div className="text-[10px] text-muted mt-1" style={{ paddingLeft: 72 }}>
@@ -1302,7 +1268,7 @@ function ExtFieldSection({ item, onChange, options }: {
                   updateDisplay({ maxTags: v, ...(v ? {} : { hiddenIndices: undefined }) })
                 }}
                 placeholder="不限制"
-                className="flex-1 min-w-0 h-7 bg-elevated border border-border rounded text-xs text-foreground px-2 placeholder:text-muted focus:outline-none focus:border-accent/50"
+                className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 placeholder:text-muted focus:border-accent/50 bg-elevated"
               />
             </div>
           )}
@@ -1320,7 +1286,7 @@ function ExtFieldSection({ item, onChange, options }: {
                         const next = hidden ? cur.filter(x => x !== i) : [...cur, i]
                         updateDisplay({ hiddenIndices: next.length ? next : undefined })
                       }}
-                      className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${hidden ? 'bg-elevated text-muted line-through' : 'bg-accent/15 text-accent'}`}
+                      className={`ctl ctl-sm ctl-ghost w-6 px-0 ${hidden ? 'bg-elevated text-secondary line-through' : 'bg-accent/15 text-accent'}`}
                     >{i + 1}</button>
                   )
                 })}
@@ -1331,8 +1297,8 @@ function ExtFieldSection({ item, onChange, options }: {
             <div className="flex items-center gap-2">
               <span className="text-xs text-secondary shrink-0 w-16">排列方向</span>
               <div className="flex flex-1 min-w-0 rounded overflow-hidden border border-border">
-                <button onClick={() => updateDisplay({ tagLayout: 'horizontal' })} className={`flex-1 py-1 text-xs transition-colors ${(cfg?.tagLayout ?? 'horizontal') === 'horizontal' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>横</button>
-                <button onClick={() => updateDisplay({ tagLayout: 'vertical' })} className={`flex-1 py-1 text-xs transition-colors border-l border-border ${cfg?.tagLayout === 'vertical' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>竖</button>
+                <button onClick={() => updateDisplay({ tagLayout: 'horizontal' })} className={`ctl ctl-sm ctl-ghost flex-1 ${(cfg?.tagLayout ?? 'horizontal') === 'horizontal' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>横</button>
+                <button onClick={() => updateDisplay({ tagLayout: 'vertical' })} className={`ctl ctl-sm ctl-btn flex-1 border-l ${cfg?.tagLayout === 'vertical' ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>竖</button>
               </div>
             </div>
           )}
@@ -1417,7 +1383,7 @@ function ExtConfigDialog({ fields, onSave, onClose }: {
         {/* 头部 */}
         <div className="flex items-center justify-between px-4 pt-3 pb-1">
           <span className="text-sm font-medium">配置</span>
-          <button onClick={onClose} className="p-0.5 text-muted hover:text-foreground"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground"><X className="h-[16px] w-[16px]" /></button>
         </div>
         {/* 三列平铺 */}
         <div className="flex gap-0 border-b border-border px-2 overflow-hidden">
@@ -1444,10 +1410,10 @@ function ExtConfigDialog({ fields, onSave, onClose }: {
         </div>
         {/* 底部按钮 */}
         <div className="flex justify-end gap-2 px-4 py-3">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs text-secondary hover:text-foreground">取消</button>
+          <button onClick={onClose} className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground">取消</button>
           <button
             onClick={() => { onSave(draft); onClose() }}
-            className="px-3 py-1.5 text-xs bg-accent/15 text-accent rounded hover:bg-accent/25"
+            className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-accent/25 bg-accent/15"
           >保存</button>
         </div>
       </motion.div>
@@ -1594,12 +1560,136 @@ export function LimitUpLadder() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <RefreshCw className="h-5 w-5 animate-spin text-muted" />
+        <RefreshCw className="h-[20px] w-[20px] animate-spin text-muted" />
       </div>
     )
   }
 
   const dateValue = displayDate || new Date().toISOString().slice(0, 10)
+
+  // 工具条左侧状态签 (设计稿 .tb-left): 涨跌停家数 + 封板状态 + 梯队口径
+  const headerChips = (
+    <div className="flex items-center gap-2">
+      <span className="tb-chip">涨停 {data?.counts?.up ?? 0}</span>
+      <span className="tb-chip border-bear text-bear">跌停 {data?.counts?.down ?? 0}</span>
+      {!sealedDegrade.sealedReady && (
+        <span className="tb-chip warn">封板状态未修正</span>
+      )}
+      <SealedBadge
+        degraded={sealedDegrade.degraded}
+        hasDepth={sealedDegrade.hasDepth}
+        isHistorical={sealedDegrade.isHistorical}
+        sealedReady={sealedDegrade.sealedReady}
+        sealedCountsUp={data?.sealed_counts_up}
+        sealedCountsDown={data?.sealed_counts_down}
+        rawUp={data?.counts_raw?.up}
+        rawDown={data?.counts_raw?.down}
+      />
+      <Note>梯队各层含今日已开板标的</Note>
+    </div>
+  )
+
+  // 工具条右侧: 日期 + 列设置 + 刷新 (设计稿 .tb-right)
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <DatePicker value={dateValue} onChange={setAsOf} />
+      <button type="button" className="ctl ctl-md ctl-btn" onClick={() => setShowExtConfig(true)}>列设置</button>
+      <button
+        onClick={() => refetch()}
+        disabled={isFetching}
+        className="ctl ctl-md ctl-btn !px-0 !w-7 inline-flex items-center justify-center disabled:opacity-50"
+        title="刷新"
+      >
+        <RefreshCw className={`h-[14px] w-[14px] ${isFetching ? 'animate-spin' : ''}`} />
+      </button>
+    </div>
+  )
+
+  // 视图筛选: 设计稿把它收在 .ld-bar 里, v2 原先挤在页头右侧
+  const ladderFilters = (
+    <>
+      {/* 封单模式: 成交量/金额(仅 sealed 就绪时显示) — 胶囊式 */}
+      {data?.sealed_ready && (
+        <>
+          <div className="flex items-center rounded-full bg-elevated/60 p-0.5">
+            {(['vol', 'amount'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  setSealMode(m)
+                  storage.limitLadderSealMode.set(m)
+                }}
+                className={`ctl ctl-sm ctl-ghost flex items-center px-1.5 rounded-full transition-all ${
+                  sealMode === m
+                    ? 'bg-accent/15 text-accent font-medium'
+                    : 'text-muted hover:text-secondary'
+                }`}
+              >
+                {m === 'vol' ? '封单量' : '封单额'}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-4 bg-border mx-1" />
+        </>
+      )}
+
+      {/* 状态组: 涨停/炸板/断板 或 跌停/翘板/止跌 */}
+      {statusTabs(direction).map(tab => (
+        <button
+          key={tab.key}
+          onClick={() => toggleFilter(tab.key)}
+          className={`ctl ctl-sm ctl-ghost px-1.5 ${
+            filterKeys.has(tab.key)
+              ? 'bg-accent/15 text-accent font-medium'
+              : 'text-secondary hover:text-foreground hover:bg-surface'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+
+      <div className="w-px h-4 bg-border mx-1" />
+
+      {/* 显示组: 概念/行业 */}
+      <button
+        onClick={toggleConcept}
+        className={`ctl ctl-sm ctl-ghost px-1.5 ${
+          showConcept
+            ? 'bg-yellow-500/15 text-yellow-400 font-medium'
+            : 'text-secondary hover:text-foreground hover:bg-surface'
+        }`}
+      >
+        概念
+      </button>
+      <button
+        onClick={toggleIndustry}
+        className={`ctl ctl-sm ctl-ghost px-1.5 ${
+          showIndustry
+            ? 'bg-blue-500/15 text-blue-400 font-medium'
+            : 'text-secondary hover:text-foreground hover:bg-surface'
+        }`}
+      >
+        行业
+      </button>
+
+      <div className="w-px h-4 bg-border mx-1" />
+
+      {/* 板块组 */}
+      {BOARD_TABS.map(tab => (
+        <button
+          key={tab.key}
+          onClick={() => toggleFilter(tab.key)}
+          className={`ctl ctl-sm ctl-ghost px-1.5 ${
+            filterKeys.has(tab.key)
+              ? 'bg-accent/15 text-accent font-medium'
+              : 'text-secondary hover:text-foreground hover:bg-surface'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </>
+  )
 
   // 请求失败与空数据分开呈现: 失败显示错误态 + 重试, 而非误导性的「暂无连板数据」
   if (isError) {
@@ -1619,8 +1709,32 @@ export function LimitUpLadder() {
   if (!data || rawTiers.length === 0) {
     return (
       <div className="flex flex-col h-full">
-        <PageHeader seal="梯" title={direction === 'down' ? '连跌梯队' : '连板梯队'} />
-        <EmptyState icon={Flame} title={direction === 'down' ? '暂无连跌数据' : '暂无连板数据'} hint={direction === 'down' ? '该日期无跌停股或 enriched 数据未就绪' : '该日期无涨停股或 enriched 数据未就绪'} />
+        <PageHeader
+          seal="梯"
+          title={direction === 'down' ? '连跌梯队' : '连板梯队'}
+          subtitle="LIMIT LADDER"
+          titleExtra={headerChips}
+          right={headerRight}
+        />
+        <LadderBar tiers={rawTiers} direction={direction} onDirectionChange={toggleDirection}>
+          {ladderFilters}
+        </LadderBar>
+        <EmptyState
+          icon={Flame}
+          eyebrow={`NO RESULT · ${dateValue}`}
+          title={direction === 'down' ? '暂无连跌数据' : '暂无连板数据'}
+          hint={direction === 'down' ? '该日期无跌停股或 enriched 数据未就绪' : '该日期无涨停股或 enriched 数据未就绪'}
+        />
+        {/* 空态仍可换日期/列设置/筛选 (LadderBar 与弹窗需在空分支单独挂载) */}
+        <AnimatePresence>
+          {showExtConfig && (
+            <ExtConfigDialog
+              fields={extFields}
+              onSave={handleSaveExtFields}
+              onClose={() => setShowExtConfig(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     )
   }
@@ -1628,150 +1742,17 @@ export function LimitUpLadder() {
   return (
     <div className="flex flex-col h-full">
       <PageHeader
+        seal="梯"
         title={direction === 'down' ? '连跌梯队' : '连板梯队'}
-        titleExtra={
-          <div className="flex items-center gap-2">
-            <SealedBadge
-              degraded={sealedDegrade.degraded}
-              hasDepth={sealedDegrade.hasDepth}
-              isHistorical={sealedDegrade.isHistorical}
-              sealedReady={sealedDegrade.sealedReady}
-              sealedCountsUp={data?.sealed_counts_up}
-              sealedCountsDown={data?.sealed_counts_down}
-              rawUp={data?.counts_raw?.up}
-              rawDown={data?.counts_raw?.down}
-            />
-            {/* 涨跌停切换(胶囊式): 点击切换方向, 当前方向有背景 */}
-            <div className="flex items-center rounded-full bg-elevated/60 p-0.5">
-              <button
-                onClick={() => direction !== 'up' && toggleDirection('up')}
-                className={`flex items-center gap-1 px-2.5 h-7 rounded-full text-xs tabular-nums transition-all ${
-                  direction === 'up'
-                    ? 'bg-bull/15 text-bull font-semibold'
-                    : 'text-muted hover:text-bull/70'
-                }`}
-              >
-                <span>涨停</span>
-                <span>{data?.counts?.up ?? 0}</span>
-              </button>
-              <button
-                onClick={() => direction !== 'down' && toggleDirection('down')}
-                className={`flex items-center gap-1 px-2.5 h-7 rounded-full text-xs tabular-nums transition-all ${
-                  direction === 'down'
-                    ? 'bg-bear/15 text-bear font-semibold'
-                    : 'text-muted hover:text-bear/70'
-                }`}
-              >
-                <span>跌停</span>
-                <span>{data?.counts?.down ?? 0}</span>
-              </button>
-            </div>
-          </div>
-        }
-        right={
-          <div className="flex items-center gap-1">
-            {/* 封单模式: 成交量/金额(仅 sealed 就绪时显示) — 胶囊式 */}
-            {data?.sealed_ready && (
-              <>
-                <div className="flex items-center rounded-full bg-elevated/60 p-0.5">
-                  {(['vol', 'amount'] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => {
-                        setSealMode(m)
-                        storage.limitLadderSealMode.set(m)
-                      }}
-                      className={`flex items-center px-2 py-1 rounded-full text-xs transition-all ${
-                        sealMode === m
-                          ? 'bg-accent/15 text-accent font-medium'
-                          : 'text-muted hover:text-secondary'
-                      }`}
-                    >
-                      {m === 'vol' ? '封单量' : '封单额'}
-                    </button>
-                  ))}
-                </div>
-                <div className="w-px h-4 bg-border mx-1" />
-              </>
-            )}
-
-            {/* 状态组: 涨停/炸板/断板 或 跌停/翘板/止跌 */}
-            {statusTabs(direction).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => toggleFilter(tab.key)}
-                className={`px-2 py-1 text-xs transition-colors ${
-                  filterKeys.has(tab.key)
-                    ? 'bg-accent/15 text-accent font-medium'
-                    : 'text-secondary hover:text-foreground hover:bg-surface'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-
-            <div className="w-px h-4 bg-border mx-1" />
-
-            {/* 显示组: 概念/行业 */}
-            <button
-              onClick={toggleConcept}
-              className={`px-2 py-1 text-xs transition-colors ${
-                showConcept
-                  ? 'bg-yellow-500/15 text-yellow-400 font-medium'
-                  : 'text-secondary hover:text-foreground hover:bg-surface'
-              }`}
-            >
-              概念
-            </button>
-            <button
-              onClick={toggleIndustry}
-              className={`px-2 py-1 text-xs transition-colors ${
-                showIndustry
-                  ? 'bg-blue-500/15 text-blue-400 font-medium'
-                  : 'text-secondary hover:text-foreground hover:bg-surface'
-              }`}
-            >
-              行业
-            </button>
-
-            <div className="w-px h-4 bg-border mx-1" />
-
-            {/* 板块组 */}
-            {BOARD_TABS.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => toggleFilter(tab.key)}
-                className={`px-2 py-1 text-xs transition-colors ${
-                  filterKeys.has(tab.key)
-                    ? 'bg-accent/15 text-accent font-medium'
-                    : 'text-secondary hover:text-foreground hover:bg-surface'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-
-            <div className="w-px h-4 bg-border mx-1" />
-            <button
-              onClick={() => setShowExtConfig(true)}
-              className="p-1.5 hover:bg-surface text-muted hover:text-accent"
-              title="配置"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="p-1.5 hover:bg-surface text-muted disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        }
+        subtitle="LIMIT LADDER"
+        titleExtra={headerChips}
+        right={headerRight}
       />
 
-      {/* 总览条 + 日期 */}
-      <OverviewBar tiers={tiers} dateValue={dateValue} onDateChange={setAsOf} filterKeys={filterKeys} bf={extFields.bf} direction={direction} />
+      {/* 梯队切换条 (设计稿 .ld-bar): 方向切换 + 视图筛选 + 口径读注 */}
+      <LadderBar tiers={rawTiers} direction={direction} onDirectionChange={toggleDirection}>
+        {ladderFilters}
+      </LadderBar>
 
       {/* 概念统计 */}
       {(extFields.showConceptStats ?? true) && (
@@ -1804,6 +1785,11 @@ export function LimitUpLadder() {
 
       {/* 梯队列表 */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {sortedTiers.length === 0 && rawTiers.length > 0 && (
+          <div className="py-10 text-center text-xs text-muted">
+            当前筛选条件下无梯队 — {direction === 'down' ? '跌停' : '涨停'}等状态签可切换显示断板/炸板股，或换一个日期
+          </div>
+        )}
         {sortedTiers.map(t => (
           <TierGroup
             key={t.boards}

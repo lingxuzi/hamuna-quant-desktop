@@ -105,7 +105,7 @@ export function DefinitionPicker({ kinds = ['signal', 'factor'], onSelect, selec
               <button
                 key={k}
                 onClick={() => setKindFilter(k)}
-                className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+                className={`ctl ctl-sm ctl-ghost rounded-full px-1.5 ${
                   kindFilter === k
                     ? 'bg-accent/15 text-accent'
                     : 'text-muted hover:bg-elevated hover:text-foreground'
@@ -122,7 +122,7 @@ export function DefinitionPicker({ kinds = ['signal', 'factor'], onSelect, selec
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索 id 或名称…"
-            className="w-full rounded-btn border border-border bg-surface py-1.5 pl-8 pr-2.5 text-xs text-foreground placeholder:text-muted focus:border-accent/40 focus:outline-none"
+            className="ctl ctl-md ctl-input w-full pl-8 pr-2.5 placeholder:text-muted focus:border-accent/40 bg-surface"
           />
         </div>
       </div>
@@ -130,13 +130,13 @@ export function DefinitionPicker({ kinds = ['signal', 'factor'], onSelect, selec
       {/* 目录列表 */}
       {listQ.isLoading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted">
-          <Loader2 className="h-4 w-4 animate-spin" /> 加载定义目录…
+          <Loader2 className="h-[16px] w-[16px] animate-spin" /> 加载定义目录…
         </div>
       ) : listQ.isError ? (
         <div className="py-8 text-center text-xs text-danger">定义目录加载失败, 请刷新重试</div>
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 py-8 text-xs text-muted">
-          <SearchX className="h-4 w-4" />
+          <SearchX className="h-[16px] w-[16px]" />
           {search || kindFilter !== 'all' ? '没有匹配的定义' : '暂无自定义信号 / 因子 — 可在信号库或因子库中创建, 或从配置备份导入'}
         </div>
       ) : (
@@ -184,9 +184,9 @@ export function DefinitionPicker({ kinds = ['signal', 'factor'], onSelect, selec
                       onClick={(e) => { e.stopPropagation(); smokeM.mutate(it) }}
                       disabled={smoking}
                       title="冒烟: 校验 → 编译 → 依赖可解析 (不跑回测)"
-                      className="inline-flex items-center gap-1 rounded-btn border border-border px-2 py-1 text-[10px] text-muted transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-50"
+                      className="ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 hover:border-accent/30 hover:text-accent disabled:opacity-50"
                     >
-                      {smoking ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+                      {smoking ? <Loader2 className="h-[12px] w-[12px] animate-spin" /> : <FlaskConical className="h-[12px] w-[12px]" />}
                       冒烟
                     </button>
                   </span>

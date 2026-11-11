@@ -79,7 +79,7 @@ function CardHeader({ icon, title, subtitle, children }: {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-accent/10 text-accent">
+        <div className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-btn bg-accent/10 text-accent">
           {icon}
         </div>
         <div className="min-w-0">
@@ -116,7 +116,7 @@ function CategoryCheck({ label, desc, checked, onChange, sensitive }: {
       />
       <div className="min-w-0">
         <div className="flex items-center gap-1 text-xs text-foreground">
-          {sensitive && <ShieldAlert className="h-3 w-3 shrink-0 text-warning" />}
+          {sensitive && <ShieldAlert className="h-[12px] w-[12px] shrink-0 text-warning" />}
           {label}
         </div>
         {desc && <div className="mt-0.5 text-[11px] leading-snug text-muted">{desc}</div>}
@@ -191,9 +191,9 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {/* ── 导出 ── */}
-      {mode !== 'import' && <div className="leaf-cell">
+      {mode !== 'import' && <div className="border-t border-border-strong pt-4">
         <CardHeader
-          icon={<Download className="h-4 w-4" />}
+          icon={<Download className="h-[16px] w-[16px]" />}
           title="导出配置备份"
           subtitle="打包所选用户配置；外部扩展安装文件需单独保留"
         >
@@ -286,9 +286,9 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
       </div>}
 
       {/* ── 导入 ── */}
-      {mode !== 'export' && <div className="leaf-cell">
+      {mode !== 'export' && <div className="border-t border-border-strong pt-4">
         <CardHeader
-          icon={<Upload className="h-4 w-4" />}
+          icon={<Upload className="h-[16px] w-[16px]" />}
           title="导入配置备份"
           subtitle="选择导出的备份文件, 预览确认后恢复到本机"
         />
@@ -310,12 +310,12 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
           >
             {inspectM.isPending ? (
               <>
-                <RotateCcw className="h-5 w-5 animate-spin text-accent" />
+                <RotateCcw className="h-[20px] w-[20px] animate-spin text-accent" />
                 <span className="text-xs text-secondary">解析备份内容…</span>
               </>
             ) : (
               <>
-                <FileArchive className="h-5 w-5 text-accent" />
+                <FileArchive className="h-[20px] w-[20px] text-accent" />
                 <span className="text-xs text-secondary">点击选择备份文件 (.zip)</span>
                 <span className="text-[11px] text-muted">导入前会先解析预览, 不会直接写入</span>
               </>
@@ -323,7 +323,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
           </button>
         ) : (
           <div className="mt-3 flex items-center gap-2 rounded-btn border border-border/70 bg-elevated/30 px-3 py-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" />
+            <CheckCircle2 className="h-[16px] w-[16px] shrink-0 text-accent" />
             <span className="min-w-0 flex-1 truncate text-xs text-foreground">{file?.name}</span>
             <button
               onClick={() => fileRef.current?.click()}
@@ -385,7 +385,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
                       />
                     </td>
                     <td className="py-1.5 text-foreground">
-                      {c.key === 'secrets' && <ShieldAlert className="mr-1 inline h-3 w-3 text-warning" />}
+                      {c.key === 'secrets' && <ShieldAlert className="mr-1 inline h-[12px] w-[12px] text-warning" />}
                       {c.label}
                     </td>
                     <td className="py-1.5 text-right text-secondary">{c.count}</td>
@@ -421,7 +421,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
               <button
                 onClick={() => setConfirming(true)}
                 disabled={importSel.size === 0 || applyM.isPending}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-btn border border-danger/30 bg-danger/10 px-3.5 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+                className="ctl ctl-md ctl-btn soft inline-flex shrink-0 items-center gap-1.5 border-danger/30 px-2.5 hover:bg-danger/20 disabled:opacity-50 bg-danger/10"
               >
                 <Upload className="h-3.5 w-3.5" />
                 导入所选 {importSel.size} 个类别
@@ -434,7 +434,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
         {applyResult && (
           <div className="mt-3 space-y-2 rounded-btn border border-border/70 bg-elevated/25 p-3">
             <div className="flex items-center gap-2 text-sm text-foreground">
-              <CheckCircle2 className={`h-4 w-4 ${applyResult.categories.some((c) => c.failed.length > 0) ? 'text-warning' : 'text-accent'}`} />
+              <CheckCircle2 className={`h-[16px] w-[16px] ${applyResult.categories.some((c) => c.failed.length > 0) ? 'text-warning' : 'text-accent'}`} />
               导入结果
             </div>
             <table className="w-full text-[11px]">
@@ -485,8 +485,8 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
                     <div key={`${c.key}:${sm.file}`} className="rounded-btn bg-elevated/50 px-2.5 py-1.5">
                       <div className="flex items-center gap-1.5 text-[11px]">
                         {sm.ok
-                          ? <CheckCircle2 className="h-3 w-3 shrink-0 text-accent" />
-                          : <TriangleAlert className="h-3 w-3 shrink-0 text-danger" />}
+                          ? <CheckCircle2 className="h-[12px] w-[12px] shrink-0 text-accent" />
+                          : <TriangleAlert className="h-[12px] w-[12px] shrink-0 text-danger" />}
                         <span className="truncate font-mono text-muted" title={sm.file}>{sm.file}</span>
                         {sm.ok && sm.warmup_bars != null && (
                           <span className="ml-auto shrink-0 text-muted">预热 {sm.warmup_bars} bars</span>
@@ -524,7 +524,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
         <Modal onClose={closeConfirm} ariaLabel="确认导入配置备份">
           <div className="p-5">
             <div className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 text-warning" />
+              <TriangleAlert className="h-[16px] w-[16px] text-warning" />
               <div className="text-sm font-medium">确认导入配置备份?</div>
             </div>
             <div className="mt-2 space-y-1 text-[12px] text-muted">
@@ -542,14 +542,14 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
               <button
                 onClick={closeConfirm}
                 disabled={applyM.isPending}
-                className="rounded-btn border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground disabled:opacity-50"
+                className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={() => applyM.mutate()}
                 disabled={applyM.isPending}
-                className="inline-flex items-center gap-1.5 rounded-btn border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+                className="ctl ctl-md ctl-btn soft inline-flex items-center gap-1.5 border-danger/30 px-2.5 hover:bg-danger/20 disabled:opacity-50 bg-danger/10"
               >
                 <Upload className="h-3.5 w-3.5" />
                 {applyM.isPending ? '导入中…' : '确认导入'}

@@ -9,7 +9,7 @@
 入口: backend/app/desktop.py (桌面版入口, 含 uvicorn + pywebview)
 
 构建 (在项目根目录):
-  cd frontend && pnpm build                     # 先构建前端到 frontend/dist
+  cd frontend_v2 && pnpm build                  # 先构建前端到 frontend_v2/dist
   pyinstaller packaging/tsp.spec                # 产物在 dist/TSP/
 """
 import sys
@@ -29,8 +29,7 @@ block_cipher = None
 
 # ── 资源路径基准: 项目根 (spec 文件在 packaging/ 下) ──────────────────
 ROOT = Path(SPECPATH).parent
-FRONTEND_DIST = str(ROOT / "frontend" / "dist")
-TIERS_YAML = str(ROOT / "tiers.yaml")
+FRONTEND_DIST = str(ROOT / "frontend_v2" / "dist")
 RESEARCH_TEMPLATE = str(ROOT / "backend" / "app" / "strategy" / "research")
 # 内置策略种子目录 (strategy_seeds 按路径读文本, frozen 下需落盘, 同 research)
 # 图标按平台选: Windows 用 brand/icon.ico, macOS 用 brand/icon.icns —
@@ -49,18 +48,6 @@ for pkg in ("polars", "pyarrow", "duckdb", "fastexcel"):
     datas += d
     binaries += b
     hiddenimports += h
-
-# tdxaidata (TdxQuant 插件依赖) — 后端对其全部懒导入, 必须显式声明:
-#   纯 Python 接口 (包 __init__ + tdxaidata.py) 进 PYZ; lib/ 是跨平台原生库
-#   合集 (win dll / mac dylib / linux so 同包), 运行时由 client.materialize_lib
-#   复制物化后 ctypes 加载, 属数据文件 — 只能整目录按 datas 复制。
-#   注意不能用 collect_all / collect_submodules: lib/ 下的 libTdxAiData.so
-#   会被当成 Python 扩展子模块收进 binaries, mac 构建的 macholib 解析
-#   Linux ELF 直接崩。
-if (spec_tdx := find_spec("tdxaidata")) is not None and spec_tdx.origin:
-    _tdx_pkg = Path(spec_tdx.origin).parent
-    datas += [(str(_tdx_pkg / "lib"), "tdxaidata/lib")]
-    hiddenimports += ["tdxaidata", "tdxaidata.tdxaidata"]
 
 # Polars 的发行包名为 polars-runtime-32 / polars-runtime-compat, 但实际
 # Python 导入包带前导下划线。release.yml 安装 legacy-cpu 后必须收集二者，
@@ -83,14 +70,12 @@ hiddenimports += collect_submodules("polars")
 # 注: 其他内置插件如需进桌面包, 仿照 fuyao 双声明添加。
 datas += [
     (str(ROOT / "backend" / "app" / "plugins" / "fuyao" / "plugin.yaml"), "app/plugins/fuyao"),
-    (str(ROOT / "backend" / "app" / "plugins" / "tdxquant" / "plugin.yaml"), "app/plugins/tdxquant"),
+    (str(ROOT / "backend" / "app" / "plugins" / "easytdx" / "plugin.yaml"), "app/plugins/easytdx"),
 ]
 hiddenimports += [
     "app.plugins.fuyao.provider",
     "app.plugins.fuyao.client",
-    "app.plugins.tdxquant.provider",
-    "app.plugins.tdxquant.client",
-    "app.plugins.tdxquant.probe",
+    "app.plugins.easytdx.provider",
 ]
 
 # ── 后端源码扩展 (app/custom/*) ──────────────────────────────────────
@@ -137,7 +122,7 @@ hiddenimports += [
 
 # ── fastapi / pydantic 元数据 (版本检测用) ───────────────────────────
 # 注意: 任何用 importlib.metadata.version() 读版本的包, 都必须 copy_metadata,
-# 否则 frozen 后报 PackageNotFoundError。tickflow 包内部就是这么读的。
+# 否则 frozen 后报 PackageNotFoundError。
 # 用容错写法: 不存在的包跳过, 避免不同环境 (有无装某依赖) 导致构建失败。
 def _safe_metadata(pkg):
     """收集包元数据, 包不存在时静默跳过。"""
@@ -148,7 +133,6 @@ def _safe_metadata(pkg):
 
 for pkg in (
     "fastapi", "pydantic", "pydantic_settings", "starlette", "anyio",
-    "tickflow",  # tickflow/__version__.py 用 importlib.metadata 读版本
     "uvicorn", "polars", "duckdb", "pyarrow", "httpx", "numpy", "pandas",
     "openai", "platformdirs", "winotify", "plyer", "apscheduler",
     "python-dotenv", "fastexcel",
@@ -158,11 +142,9 @@ for pkg in (
 # ── 随包资源 (只读, 放进 _MEIPASS) ────────────────────────────────────
 # 前端 dist → static/ (config.py frozen 模式读 _MEIPASS/static)
 datas += [(FRONTEND_DIST, "static")]
-# tiers.yaml → 包根 (config.py frozen 模式读 _MEIPASS/tiers.yaml)
-datas += [(TIERS_YAML, ".")]
-# frontend/package.json → 包根 (app/__init__.py frozen 模式读 _MEIPASS/package.json,
+# frontend_v2/package.json → 包根 (app/__init__.py frozen 模式读 _MEIPASS/package.json,
 # __version__ 与安装包 AppVersion / 页面显示同源, 版本号只改 package.json 一处)
-datas += [(str(ROOT / "frontend" / "package.json"), ".")]
+datas += [(str(ROOT / "frontend_v2" / "package.json"), ".")]
 # 研究模板 → app/strategy/research/ (importlib 动态加载, 不能进 PYZ; 挖掘功能依赖)
 datas += [(RESEARCH_TEMPLATE, "app/strategy/research")]
 # 策略种子 → app/strategy/seeds/ (启动时按路径读取种入 custom, 不进 PYZ)
@@ -246,8 +228,8 @@ coll = COLLECT(
 if _IS_MACOS:
     import json
 
-    # 版本号从 frontend/package.json 读, 与 Release tag 对齐
-    _pkg_json = json.loads((ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
+    # 版本号从 frontend_v2/package.json 读, 与 Release tag 对齐
+    _pkg_json = json.loads((ROOT / "frontend_v2" / "package.json").read_text(encoding="utf-8"))
     APP_VERSION = _pkg_json["version"]
 
     app = BUNDLE(

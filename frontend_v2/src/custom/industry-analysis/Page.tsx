@@ -1,8 +1,7 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import {
-  Activity,
   Crown,
   Layers3,
   RefreshCw,
@@ -17,6 +16,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { AnalysisConfigDialog, DimensionHeatmap, PresetFetchState, type AnalysisFieldConfig } from '@/components/analysis-shared'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { toNavItems, type NavItem } from '@/lib/listNav'
+import { keyboardActivate } from '@/lib/a11y'
 import { RpsRotationDialog } from '@/components/RpsRotationDialog'
 import { api, type MarketSnapshotRow } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
@@ -353,7 +353,6 @@ export function IndustryAnalysis() {
   const selected = filteredStats.find(s => s.key === selectedKey) ?? filteredStats[0] ?? null
   const leading = useMemo(() => [...stats].sort(statSort('heat')).slice(0, 10), [stats])
   const falling = useMemo(() => [...stats].sort(statSort('down')).slice(0, 10), [stats])
-  const activeIndustry = useMemo(() => [...stats].sort(statSort('amount'))[0] ?? null, [stats])
   const industryBreadth = useMemo(() => {
     const priced = stats.filter(s => s.avgPct != null)
     return {
@@ -368,6 +367,33 @@ export function IndustryAnalysis() {
     stats.forEach(s => s.stocks.forEach(st => { if (st.symbol) set.add(st.symbol) }))
     return set.size
   }, [stats])
+
+  // 设计稿 16 的 4 格读数带: 全市场上涨/下跌家数 (来自快照行, 非行业口径)
+  // ponytail: 收盘 chip 的日期截取假设 as_of 形如 YYYY-MM-DD; 若数据源格式变化, 退化为显示原始值
+  const asOfDate = marketQuery.data?.as_of ?? rowsQuery.data?.date ?? ''
+  const closeLabel = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate) ? `收盘 ${asOfDate.slice(5)}` : '最新'
+  const marketBreadth = useMemo(() => {
+    const priced = (marketQuery.data?.rows ?? []).filter(r => num(r.change_pct) != null)
+    return {
+      total: priced.length,
+      up: priced.filter(r => (r.change_pct ?? 0) > 0).length,
+      down: priced.filter(r => (r.change_pct ?? 0) < 0).length,
+    }
+  }, [marketQuery.data?.rows])
+  // 行业中位涨幅: 各行业 medianPct 的中位数
+  const industryMedian = useMemo(() => {
+    const vals = stats.map(s => s.medianPct).filter((v): v is number => v != null)
+    return median(vals)
+  }, [stats])
+  // 全市场成交额(亿): 快照行 amount 求和 (amount 单位=元)
+  const totalAmountYi = useMemo(
+    () => (marketQuery.data?.rows ?? []).reduce((sum, r) => sum + (num(r.amount) ?? 0), 0) / 1e8,
+    [marketQuery.data?.rows],
+  )
+  // 设计稿的两张榜单 + 色阶网格数据
+  const rankUp = useMemo(() => [...stats].sort(statSort('avgPct')).slice(0, 16), [stats])
+  const rankDown = useMemo(() => [...stats].sort(statSort('avgPct')).slice(-8).reverse(), [stats])
+  const heatTop = useMemo(() => [...stats].sort(statSort('avgPct')).slice(0, 36), [stats])
 
   // 热力图用的 quoteMap（兼容 DimensionHeatmap 组件接口）
   const heatmapQuoteMap = useMemo(() => {
@@ -389,19 +415,19 @@ export function IndustryAnalysis() {
   }
 
   if (configsQuery.isLoading) {
-    return <div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-muted" /></div>
+    return <div className="flex h-full items-center justify-center"><RefreshCw className="h-[20px] w-[20px] animate-spin text-muted" /></div>
   }
 
   if (!activeConfig) {
-    // 极端情况: 无任何行业配置。仍提供一键获取内置行业数据入口
+    // 极端情况:无任何行业配置.仍提供一键获取内置行业数据入口
     return (
       <>
         <div className="flex h-full flex-col">
           <PageHeader seal="行"
             title="行业板块"
             right={
-              <button onClick={() => setShowConfig(true)} className="p-1.5 text-muted hover:bg-surface hover:text-accent" title="配置数据源">
-                <Settings2 className="h-4 w-4" />
+              <button onClick={() => setShowConfig(true)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-surface hover:text-accent" title="配置数据源">
+                <Settings2 className="h-[16px] w-[16px]" />
               </button>
             }
           />
@@ -426,13 +452,23 @@ export function IndustryAnalysis() {
     <>
       <PageHeader seal="行"
         title="行业板块"
-        subtitle={`${industryLevelLabel} · ${marketQuery.data?.as_of ?? rowsQuery.data?.date ?? '最新'} · ${stats.length} 个行业 · ${totalSymbols} 只标的`}
+        subtitle="SECTOR · INDUSTRY"
+        titleExtra={
+          <>
+            <span className="tb-chip">{stats.length} 个行业</span>
+            <span className="tb-chip">{closeLabel}</span>
+            {marketBreadth.down > marketBreadth.up && marketBreadth.total > 0 && (
+              <span className="tb-chip warn">普跌 {marketBreadth.up} : {marketBreadth.down.toLocaleString()}</span>
+            )}
+            <span className="tb-note">{industryLevelLabel} · {totalSymbols} 只标的</span>
+          </>
+        }
         right={
           <div className="flex items-center gap-1">
             {/* RPS 轮动: 打开行业涨幅轮动矩阵对话框 */}
             <button
               onClick={() => setShowRps(true)}
-              className="inline-flex items-center gap-1 rounded-btn border border-amber-400/40 bg-amber-400/15 px-2.5 py-1.5 text-[11px] text-amber-400 font-medium transition-colors hover:bg-amber-400/25 hover:border-amber-400/60"
+              className="ctl ctl-md ctl-btn inline-flex items-center gap-1 border-amber-400/40 bg-amber-400/15 px-2.5 text-amber-400 hover:bg-amber-400/25 hover:border-amber-400/60"
               title="行业涨幅轮动矩阵"
             >
               <Repeat className="h-3.5 w-3.5" />涨幅RPS轮动分析
@@ -440,23 +476,85 @@ export function IndustryAnalysis() {
             <button
               onClick={() => { rowsQuery.refetch(); marketQuery.refetch() }}
               disabled={rowsQuery.isFetching || marketQuery.isFetching}
-              className="p-1.5 text-muted hover:bg-surface disabled:opacity-50"
+              className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-surface disabled:opacity-50"
               title="刷新"
             >
-              <RefreshCw className={cn('h-4 w-4', (rowsQuery.isFetching || marketQuery.isFetching) && 'animate-spin')} />
+              <RefreshCw className={cn('h-[16px] w-[16px]', (rowsQuery.isFetching || marketQuery.isFetching) && 'animate-spin')} />
             </button>
-            <button onClick={() => setShowConfig(true)} className="p-1.5 text-muted hover:bg-surface hover:text-accent" title="配置数据源">
-              <Settings2 className="h-4 w-4" />
-            </button>
+            <button onClick={() => setShowConfig(true)} className="ctl ctl-md ctl-btn">配置数据源</button>
           </div>
         }
       />
 
-      <div className="min-h-full px-6 py-5">
-        <div className="mx-auto max-w-[1440px] space-y-5">
+      <div className="min-h-full">
+        <div className="space-y-5">
           <SectorRotationCard kind="industry" />
 
-          <HeroPanel leading={leading[0]} falling={falling[0]} activeIndustry={activeIndustry} industryBreadth={industryBreadth} />
+          {/* 设计稿 16 的 4 格读数带 (.b4h): 家数 / 中位 / 领涨 / 成交额 */}
+          <DesignBoard
+            breadth={marketBreadth}
+            industryMedian={industryMedian}
+            leading={leading[0]}
+            totalAmountYi={totalAmountYi}
+          />
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
+            <div>
+              <RankTable title="涨 幅 榜 · 前 16" rows={rankUp} onSelect={setSelectedKey} onStockClick={handleStockClick} />
+              <RankTable title="跌 幅 榜 · 末 8" rows={rankDown} onSelect={setSelectedKey} onStockClick={handleStockClick} />
+            </div>
+            <div>
+              <div className="sec-h">板 块 色 阶 · 前 36</div>
+              <div className="grid grid-cols-4 gap-px border border-border bg-border" aria-label="行业涨幅色阶">
+                {heatTop.map(s => {
+                  const pct = s.avgPct ?? 0
+                  // 色阶强度: 基础 18% 起步, 每 1% 涨幅 +11%, 封顶 36% (对齐设计稿渐变)
+                  const intensity = Math.min(36, 18 + Math.abs(pct) * 11)
+                  const color = pct >= 0
+                    ? `color-mix(in srgb, hsl(var(--bull)) ${intensity}%, hsl(var(--surface)))`
+                    : `color-mix(in srgb, hsl(var(--bear)) ${intensity}%, hsl(var(--surface)))`
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setSelectedKey(s.key)}
+                      title={`${s.key} ${fmtPct(s.avgPct)} · ${s.count} 只`}
+                      className="flex min-w-0 flex-col justify-between gap-1 p-2 text-left transition-[filter] hover:brightness-110"
+                      style={{ background: color }}
+                    >
+                      <b className="truncate text-[11px] font-medium">{s.key}</b>
+                      <em className="font-mono text-[11px] not-italic tabular-nums">{s.avgPct != null ? fmtPct(s.avgPct) : '—'}</em>
+                      <small className="font-mono text-[8.5px] opacity-70">{s.count} 只</small>
+                    </button>
+                  )
+                })}
+                {heatTop.length === 0 && <div className="col-span-4 bg-surface p-6 text-center text-xs text-muted">暂无行业数据</div>}
+              </div>
+              <div className="sec-h">行 业 广 度</div>
+              <table className="w-full text-[11.5px]">
+                <tbody>
+                  <tr className="border-b border-border">
+                    <td className="py-2 text-left text-foreground">平均上涨占比</td>
+                    <td className="py-2 text-right font-mono tabular-nums">
+                      {industryBreadth.up > industryBreadth.down
+                        ? <span className="text-bull">{stats.length}</span>
+                        : <span className="text-bear">{stats.length}</span>}
+                    </td>
+                    <td className="py-2 text-right font-mono text-secondary tabular-nums">{industryBreadth.up} 涨 / {industryBreadth.down} 跌</td>
+                  </tr>
+                  <tr className="border-b border-border">
+                    <td className="py-2 text-left text-foreground">景气与广度背离</td>
+                    <td className="py-2 text-right font-mono tabular-nums">
+                      <span className={stats.length > 0 && industryBreadth.up > industryBreadth.down ? 'text-bull' : 'text-bear'}>
+                        {stats.filter(s => ((s.avgPct ?? 0) > 0) !== (s.upRate >= 0.5)).length}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right font-mono text-secondary tabular-nums">均涨但上涨占比不足半数</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <MarketPulse
             leading={leading}
@@ -492,11 +590,11 @@ export function IndustryAnalysis() {
               <IndustryFocus stat={selected} activeSymbol={previewSymbol} onStockClick={handleStockClick} />
             </div>
           ) : rowsQuery.isLoading ? (
-            <div className="rounded-2xl border border-border bg-surface px-6 py-16 text-center text-sm text-muted">正在计算行业强度...</div>
+            <div className="border-t border-border-strong py-16 text-center text-sm text-muted">正在计算行业强度...</div>
           ) : needsIndustryFetch ? (
             <PresetFetchState
               title="未获取行业数据"
-              hint="内置行业数据源已就绪,点击下方按钮从同花顺获取行业分类数据"
+              hint="内置行业数据源已就绪，点击下方按钮从同花顺获取行业分类数据"
               isLoading={fetchMutation.isPending}
               error={fetchMutation.error}
               onFetch={() => fetchMutation.mutate()}
@@ -525,64 +623,121 @@ export function IndustryAnalysis() {
   )
 }
 
-// ===== HeroPanel =====
+// ===== 设计稿 16 的 4 格读数带 (.b4h → v2 .band) =====
 
-function HeroPanel({
+function DesignBoard({
+  breadth,
+  industryMedian,
   leading,
-  falling,
-  activeIndustry,
-  industryBreadth,
+  totalAmountYi,
 }: {
+  breadth: { total: number; up: number; down: number }
+  industryMedian: number | null
   leading?: IndustryStat
-  falling?: IndustryStat
-  activeIndustry?: IndustryStat | null
-  industryBreadth: { up: number; down: number; flat: number }
+  totalAmountYi: number
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-      <HeroMetric icon={TrendingUp} label="最强行业" value={leading?.key ?? '—'} hint={leading?.avgPct != null ? <span className={priceColorClass(leading.avgPct)}>{fmtPct(leading.avgPct)}</span> : '等待行情'} tone="up" />
-      <HeroMetric icon={TrendingDown} label="最大风险" value={falling?.key ?? '—'} hint={falling?.avgPct != null ? <span className={priceColorClass(falling.avgPct)}>{fmtPct(falling.avgPct)}</span> : '等待行情'} tone="down" />
-      <HeroMetric
-        icon={Activity}
-        label="涨跌行业"
-        value={<><span className="text-bull">{industryBreadth.up}</span><span className="mx-1 text-muted">/</span><span className="text-bear">{industryBreadth.down}</span></>}
-        hint={<><span className="text-bull">上涨</span><span className="mx-1 text-muted">/</span><span className="text-bear">下跌</span>{industryBreadth.flat ? <span className="text-muted"> · 平 {industryBreadth.flat}</span> : null}</>}
-        tone="blue"
-      />
-      <HeroMetric icon={Activity} label="资金活跃" value={activeIndustry?.key ?? '—'} hint={activeIndustry ? fmtBigNum(activeIndustry.totalAmount) : '等待行情'} tone="blue" />
-      <HeroMetric icon={Crown} label="龙头算法" value="6 因子" hint="强势 + 承接 + 容量" tone="gold" />
+    <div className="band grid grid-cols-2 md:grid-cols-4">
+      <div>
+        <span className="k">上 涨 / 下 跌 家 数</span>
+        <span className="v"><span className="text-bull">{breadth.up.toLocaleString()}</span> / <span className="text-bear">{breadth.down.toLocaleString()}</span></span>
+        <div className="flex h-[5px] mt-1.5" aria-hidden="true">
+          <i className="bg-bull" style={{ width: breadth.total ? `${(breadth.up / breadth.total) * 100}%` : '0%' }} />
+          <i className="bg-bear" style={{ width: breadth.total ? `${(breadth.down / breadth.total) * 100}%` : '0%' }} />
+        </div>
+        <small>全部 {breadth.total.toLocaleString()} 只有价个股</small>
+      </div>
+      <div>
+        <span className="k">行 业 中 位 涨 幅</span>
+        <span className={cn('v', priceColorClass(industryMedian))}>{industryMedian != null ? fmtPct(industryMedian) : '—'}</span>
+        <small>等权个股中位的行业中位数</small>
+      </div>
+      <div>
+        <span className="k">领 涨 行 业</span>
+        <span className="v truncate">{leading?.key ?? '—'}</span>
+        <small>{leading ? `${leading.avgPct != null ? fmtPct(leading.avgPct) : '—'} · ${leading.upCount}/${leading.count} 只上涨` : '等待行情'}</small>
+      </div>
+      <div>
+        <span className="k">全 场 成 交 额</span>
+        <span className="v">{totalAmountYi > 0 ? fmtBigNum(totalAmountYi * 1e8) : '—'}</span>
+        <small>亿元 · 全市场快照口径</small>
+      </div>
     </div>
   )
 }
 
-function HeroMetric({ icon: Icon, label, value, hint, tone }: {
-  icon: typeof TrendingUp
-  label: string
-  value: ReactNode
-  hint: ReactNode
-  tone: 'up' | 'down' | 'gold' | 'blue'
+// ===== 设计稿 16 的榜单表 (.b4t): 行业/均涨幅/中位/上涨占比/成交额(亿)/领涨股 =====
+
+function RankTable({
+  title,
+  rows,
+  onSelect,
+  onStockClick,
+}: {
+  title: string
+  rows: IndustryStat[]
+  onSelect: (key: string) => void
+  onStockClick: (symbol: string, name?: string) => void
 }) {
-  const toneClass = {
-    up: 'text-bull bg-bull/10',
-    down: 'text-bear bg-bear/10',
-    gold: 'text-amber-300 bg-amber-400/10',
-    blue: 'text-accent bg-accent/10',
-  }[tone]
-  const valueClass = {
-    up: 'text-bull',
-    down: 'text-bear',
-    gold: 'text-amber-300',
-    blue: 'text-foreground',
-  }[tone]
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2">
-      <div className="flex items-center justify-between text-[11px] text-muted">
-        <span>{label}</span>
-        <span className={cn('rounded-md p-1', toneClass)}><Icon className="h-3.5 w-3.5" /></span>
-      </div>
-      <div className={cn('mt-1 truncate text-sm font-semibold', valueClass)}>{value}</div>
-      <div className="mt-0.5 truncate text-[11px] text-muted">{hint}</div>
-    </div>
+    <section className="mb-6">
+      <div className="sec-h">{title}</div>
+      <table className="w-full text-[11.5px] table-fixed">
+        <thead>
+          <tr className="border-b border-border-strong text-right text-[9px] tracking-[0.1em] text-muted">
+            <th className="py-1.5 pr-2 text-left font-normal">行业</th>
+            <th className="py-1.5 pr-2 font-normal">均涨幅</th>
+            <th className="py-1.5 pr-2 font-normal">中位</th>
+            <th className="py-1.5 pr-2 font-normal">上涨占比</th>
+            <th className="py-1.5 pr-2 font-normal">成交额(亿)</th>
+            <th className="py-1.5 font-normal">领涨股</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s, idx) => {
+            const leader = s.leader
+            const leaderPct = leader?.change_pct
+            return (
+              <tr
+                key={s.key}
+                className="cursor-pointer border-b border-border hover:bg-accent/[0.06]"
+                onClick={() => onSelect(s.key)}
+                {...keyboardActivate(() => onSelect(s.key))}
+              >
+                <td className="truncate py-2 text-left font-sans text-foreground">
+                  <span className="mr-1.5 inline-block w-6 font-mono text-[9px] text-muted">{String(idx + 1).padStart(2, '0')}</span>
+                  {s.key}
+                </td>
+                <td className={cn('py-2 text-right font-mono tabular-nums', priceColorClass(s.avgPct))}>{s.avgPct != null ? fmtPct(s.avgPct) : '—'}</td>
+                <td className={cn('py-2 text-right font-mono tabular-nums', priceColorClass(s.medianPct))}>{s.medianPct != null ? fmtPct(s.medianPct) : '—'}</td>
+                <td className="py-2 text-right font-mono text-secondary tabular-nums">{Math.round(s.upRate * 100)}%</td>
+                <td className="py-2 text-right font-mono text-secondary tabular-nums">{s.totalAmount > 0 ? Math.round(s.totalAmount / 1e8) : '—'}</td>
+                <td className="py-2 text-right">
+                  {leader ? (
+                    <button
+                      type="button"
+                      className={cn('font-mono tabular-nums hover:underline', priceColorClass(leaderPct))}
+                      title={leader.name || leader.symbol}
+                      onClick={e => {
+                        e.stopPropagation()
+                        onStockClick(leader.symbol, leader.name || undefined)
+                      }}
+                    >
+                      {leaderPct != null ? fmtPct(leaderPct) : '—'}
+                    </button>
+                  ) : (
+                    <span className={cn('font-mono tabular-nums', priceColorClass(leaderPct))}>—</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+          {rows.length === 0 && (
+            <tr><td colSpan={6} className="py-4 text-center text-xs text-muted">暂无数据</td></tr>
+          )}
+        </tbody>
+      </table>
+    </section>
   )
 }
 
@@ -630,17 +785,16 @@ function PulseList({
 }) {
   const toneText = mode === 'up' ? 'text-bull' : 'text-bear'
   const toneBorder = mode === 'up' ? 'border-bull/20' : 'border-bear/20'
-  const toneBg = mode === 'up' ? 'bg-bull/10' : 'bg-bear/10'
   const toneHover = mode === 'up' ? 'hover:border-bull/35' : 'hover:border-bear/35'
 
   return (
-    <div className={cn('rounded-xl border bg-base/35 p-2', toneBorder)}>
-      <div className="mb-1.5 flex items-center justify-between px-1">
-        <div className={cn('flex items-center gap-1.5 text-xs font-medium', toneText)}>
-          {mode === 'up' ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+    <div className="border-t border-rule-strong pt-2">
+      <div className="mb-1 flex items-center justify-between">
+        <div className={cn('figcap flex items-center gap-1.5', toneText)}>
+          {mode === 'up' ? <TrendingUp className="h-[12px] w-[12px]" /> : <TrendingDown className="h-[12px] w-[12px]" />}
           {title}
         </div>
-        <span className="rounded-full bg-elevated/60 px-2 py-0.5 text-[10px] text-muted">Top 10</span>
+        <span className="font-mono text-[9px] text-muted">Top 10</span>
       </div>
       <div className="space-y-1">
         {items.map((item, idx) => {
@@ -651,18 +805,17 @@ function PulseList({
           const downPct = item.count > 0 ? (item.downCount / item.count) * 100 : 0
           const flatPct = Math.max(0, 100 - upPct - downPct)
           return (
-            <button
+            <div
               key={item.key}
-              onClick={() => onSelect(item.key)}
               className={cn(
-                'block w-full rounded-lg border border-transparent bg-surface/45 px-2 py-1.5 text-left transition-colors',
-                active ? cn('bg-accent/[0.08]', toneBorder) : cn('hover:bg-elevated/35', toneHover),
+                'block w-full border-b border-border px-0 py-2 text-left transition-colors',
+                active ? cn('bg-accent/[0.06]', toneBorder) : cn('hover:bg-elevated/25', toneHover),
               )}
             >
               <div className="grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(16rem,1.1fr)] md:items-center">
-                <div className="min-w-0">
+                <button type="button" onClick={() => onSelect(item.key)} className="min-w-0 text-left">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-mono text-[10px]', idx < 3 ? cn(toneBg, toneText) : 'bg-elevated/70 text-muted')}>{idx + 1}</span>
+                    <span className="w-5 shrink-0 font-mono text-[9px] text-muted">{String(idx + 1).padStart(2, '0')}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-xs font-medium text-foreground">{item.key}</span>
@@ -682,22 +835,22 @@ function PulseList({
                       <div className="h-full bg-bear/70" style={{ width: `${downPct}%` }} />
                     </div>
                   </div>
-                </div>
+                </button>
                 <div className="grid min-w-0 grid-cols-3 gap-1">
                   {Array.from({ length: 3 }).map((_, i) => {
                     const stock = leaders[i]
                     return stock ? (
-                      <span key={stock.symbol} title={stock.name || stock.symbol} onClick={e => { e.stopPropagation(); onStockClick(stock.symbol, stock.name || undefined, toNavItems(sortedStocks.slice(0, MAX_RENDERED_STOCKS))) }} className={cn('flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] cursor-pointer hover:brightness-125', i === 0 ? 'bg-amber-300/10 text-foreground' : 'bg-elevated/60 text-secondary', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
+                      <button type="button" key={stock.symbol} title={stock.name || stock.symbol} onClick={() => onStockClick(stock.symbol, stock.name || undefined, toNavItems(sortedStocks.slice(0, MAX_RENDERED_STOCKS)))} className={cn('ctl ctl-sm ctl-ghost flex min-w-0 items-center gap-1 px-1.5 hover:brightness-125', i === 0 ? 'bg-amber-300/10 text-foreground' : 'bg-elevated/60 text-secondary', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
                         <span className="flex min-w-0 items-center gap-1">
                           <span className="min-w-0 truncate font-medium">{stock.name || stock.symbol}</span>
                         </span>
                         <span className={cn('shrink-0 font-mono', priceColorClass(stock.change_pct))}>{stock.change_pct != null ? fmtPct(stock.change_pct) : '—'}</span>
-                      </span>
+                      </button>
                     ) : <span key={i} className="rounded-md bg-elevated/30 px-1.5 py-0.5 text-[10px] text-muted/40">—</span>
                   })}
                 </div>
               </div>
-            </button>
+            </div>
           )
         })}
       </div>
@@ -725,7 +878,7 @@ function IndustryRail({
   onSelect: (v: string) => void
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-surface p-2.5">
+    <section className="border-t border-border-strong pt-4">
       <div className="px-1 pb-2.5">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">行业矩阵</h3>
@@ -733,13 +886,13 @@ function IndustryRail({
         </div>
         <div className="mt-2 relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-          <input value={search} onChange={e => onSearch(e.target.value)} placeholder="搜索行业" className="h-8 w-full rounded-lg border border-border bg-base pl-8 pr-3 text-xs text-foreground outline-none focus:border-accent/50" />
+          <input value={search} onChange={e => onSearch(e.target.value)} placeholder="搜索行业" className="ctl ctl-md ctl-input w-full pl-8 pr-3 focus:border-accent/50" />
         </div>
         <div className="mt-2 grid grid-cols-5 overflow-hidden rounded-lg border border-border text-[10px]">
           {([
             ['heat', '强度'], ['avgPct', '涨幅'], ['leader', '龙头'], ['amount', '成交'], ['down', '跌幅'],
           ] as [SortMode, string][]).map(([key, label]) => (
-            <button key={key} onClick={() => onSort(key)} className={cn('py-1.5 transition-colors', sortMode === key ? 'bg-amber-500/15 text-amber-400' : 'bg-base text-muted hover:text-foreground')}>{label}</button>
+            <button key={key} onClick={() => onSort(key)} className={cn('ctl ctl-md ctl-ghost', sortMode === key ? 'bg-amber-500/15 text-amber-400' : 'bg-base text-muted hover:text-foreground')}>{label}</button>
           ))}
         </div>
       </div>
@@ -821,7 +974,7 @@ function IndustryFocus({ stat, onStockClick, activeSymbol }: { stat: IndustrySta
           </thead>
           <tbody className="divide-y divide-border/70">
             {stocks.map((s, idx) => (
-              <tr key={`${s.symbol}-${idx}`} className={cn('cursor-pointer', s.symbol === activeSymbol ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-elevated/30')} onClick={() => onStockClick(s.symbol, s.name || undefined, focusNav)}>
+              <tr key={`${s.symbol}-${idx}`} className={cn('cursor-pointer', s.symbol === activeSymbol ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-elevated/30')} onClick={() => onStockClick(s.symbol, s.name || undefined, focusNav)} {...keyboardActivate(() => onStockClick(s.symbol, s.name || undefined, focusNav))}>
                 <td className="px-4 py-2 font-mono text-muted">{idx + 1}</td>
                 <td className="px-4 py-2">
                   <div className="font-medium text-foreground">{s.name || '—'}</div>
@@ -862,7 +1015,7 @@ function LeaderStage({ stocks, onStockClick, activeSymbol }: { stocks: EnrichedS
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {stocks.map((stock, idx) => (
-          <div key={stock.symbol} onClick={() => onStockClick(stock.symbol, stock.name || undefined)} className={cn('rounded-lg border p-3 cursor-pointer hover:brightness-110 transition-all', idx === 0 ? 'border-amber-400/25 bg-amber-400/[0.06]' : 'border-border/60 bg-base/35', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')}>
+          <div key={stock.symbol} role="button" onClick={() => onStockClick(stock.symbol, stock.name || undefined)} className={cn('rounded-lg border p-3 cursor-pointer hover:brightness-110 transition-all', idx === 0 ? 'border-amber-400/25 bg-amber-400/[0.06]' : 'border-border/60 bg-base/35', stock.symbol === activeSymbol && 'ring-1 ring-accent/60')} {...keyboardActivate(() => onStockClick(stock.symbol, stock.name || undefined))}>
             <div className="flex items-center justify-between gap-2">
               <span className={cn('text-[10px] font-medium', idx === 0 ? 'text-amber-300' : 'text-muted')}>{idx === 0 ? '主龙头' : `辅龙 ${idx}`}</span>
               <span className="font-mono text-[11px] text-amber-300">{stock.leaderScore.toFixed(0)}</span>

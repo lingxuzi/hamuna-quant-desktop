@@ -214,7 +214,7 @@ def get_minute_sync_segment_days() -> int:
 
     每段拉完后立即落盘(流式),避免全量攒内存导致 OOM。
     段越小内存峰值越低但总耗时越长(限速 sleep 随段数线性增加);
-    物理上限 ~41 交易日(TickFlow 单次 10000 根 / 一天 241 根 ≈ 41 天),max=30 留出余量。
+    物理上限 ~41 交易日(单次 10000 根 / 一天 241 根 ≈ 41 天),max=30 留出余量。
     """
     return max(5, min(30, load().get("minute_sync_segment_days", 20)))
 
@@ -240,9 +240,8 @@ def get_minute_refresh_interval() -> int:
     )
 
 
-# ===== 数据源选择 (默认 TickFlow；第一阶段仅日K切换入口) =====
+# ===== 数据源选择 (每个能力独立选源；合法源 = 已注册的插件/自定义源) =====
 
-_ALLOWED_DATA_PROVIDERS = {"tickflow"}
 DATA_SOURCE_JOB_TIMEOUT_MIN_S = 60
 
 
@@ -354,29 +353,74 @@ def set_backtest_worker_rss_limit_gib(gib: int) -> int:
 
 
 def _allowed_data_providers() -> set[str]:
+    """当前合法数据源 = 已注册的插件源 + 用户自定义源。
+
+    未注册的源 (依赖未装 / 已卸载) 不合法: 偏好里留着它只会让每次 getter
+    走回退路径, 且回退目标与用户当初的选择无关。
+    """
     try:
         from app.data_providers import custom as custom_sources
-        return _ALLOWED_DATA_PROVIDERS | custom_sources.names()
+        return set(custom_sources.names())
     except Exception:  # noqa: BLE001
-        return set(_ALLOWED_DATA_PROVIDERS)
+        return set()
 
 
-def _validated_provider(raw: str, pref_key: str) -> str:
-    """数据源偏好白名单校验。非法/已卸载的源回退 tickflow 并告警。
+def _known_data_providers() -> set[str]:
+    """本产品认识的全部源名 —— 含当前不可用的 (插件依赖没装 / 外部包未装)。
+
+    与 _allowed_data_providers() 的差集 = 源还在但此刻不可用。
+    """
+    try:
+        from app.data_providers import custom as custom_sources
+        return ({p["name"] for p in custom_sources.list_plugins()}
+                | {s["name"] for s in custom_sources.list_sources()})
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+# 同一进程内每个 (偏好键, 非法值) 只告警一次:
+# 行情轮询一轮会调 8~12 次 getter, 不抑制就是日志刷屏。
+_warned_invalid: set[tuple[str, str]] = set()
+
+
+def _validated_provider(raw: str, pref_key: str, default: str) -> str:
+    """数据源偏好白名单校验。非法/已卸载的源回退该能力的默认源并告警。
 
     静默回退曾让「配了 fuyao 却全程走免费档」无从排查 (fuyao 事件的
-    定位难点之一): 回退必须留痕。
+    定位难点之一): 回退必须留痕 —— 但只留一次 (见 _warned_invalid)。
+
+    已下线的源 (旧版本留下的 'tickflow' 之类) 顺手写回默认源: 留着它
+    就每次 getter 都走回退路径, 老配置永远收敛不了。仍在但此刻不可用
+    的源 (插件依赖没装) 不写回 —— 用户的显式选择要留着, 依赖装好即恢复。
     """
-    if raw in _allowed_data_providers():
+    allowed = _allowed_data_providers()
+    if raw in allowed:
         return raw
+    if not raw:
+        return default  # 无可用源 (插件未装): 不是非法偏好, 不告警
+    if (pref_key, raw) in _warned_invalid:
+        return default
+    _warned_invalid.add((pref_key, raw))
+    if raw not in _known_data_providers() and default:
+        logger.warning(
+            "数据源偏好 %s=%r 不在可用列表 %s, 回退 %r 并写回默认源",
+            pref_key, raw, sorted(allowed), default)
+        try:
+            save({pref_key: default})
+        except Exception:
+            logger.exception("写回默认数据源失败: %s", pref_key)
+        return default
     logger.warning(
-        "数据源偏好 %s=%r 不在可用列表 %s, 回退 tickflow",
-        pref_key, raw, sorted(_allowed_data_providers()))
-    return "tickflow"
+        "数据源偏好 %s=%r 不在可用列表 %s, 回退 %r (源当前不可用, 偏好保留)",
+        pref_key, raw, sorted(allowed), default)
+    return default
 
 
 def _default_provider() -> str:
-    """默认数据源: easytdx 插件已加载时优先, 否则 tickflow(插件未装自动回落)。
+    """默认行情源: easytdx 已加载则 easytdx, 否则空串 (无可用源)。
+
+    与 capabilities._default_provider() 同口径 —— 注册表是能力矩阵展示的
+    唯一真相源, 两处不一致会出现「默认列显示 easytdx 而实际路由空」。
 
     先判可用性再给默认值, 不走 _validated_provider 的告警路径 —— 否则插件
     没装时每次 getter 调用都刷一条 warning。用户显式选过的源仍走校验。
@@ -387,31 +431,34 @@ def _default_provider() -> str:
             return "easytdx"
     except Exception:  # noqa: BLE001
         pass
-    return "tickflow"
+    return ""
 
 
 def get_daily_data_provider() -> str:
-    provider = str(load().get("daily_data_provider") or _default_provider()).lower()
-    return _validated_provider(provider, "daily_data_provider")
+    default = _default_provider()
+    provider = str(load().get("daily_data_provider") or default).lower()
+    return _validated_provider(provider, "daily_data_provider", default)
 
 
 def get_adj_factor_provider() -> str:
-    # 「跟随日K」(same_as_daily) 特殊值已下线: 存量配置里的旧值按非法值回退 tickflow
-    provider = str(load().get("adj_factor_provider") or _default_provider()).lower()
-    return _validated_provider(provider, "adj_factor_provider")
+    # 「跟随日K」(same_as_daily) 特殊值已下线: 存量配置里的旧值按非法值回退默认源
+    default = _default_provider()
+    provider = str(load().get("adj_factor_provider") or default).lower()
+    return _validated_provider(provider, "adj_factor_provider", default)
 
 
 def get_minute_data_provider() -> str:
-    provider = str(load().get("minute_data_provider") or _default_provider()).lower()
-    return _validated_provider(provider, "minute_data_provider")
+    default = _default_provider()
+    provider = str(load().get("minute_data_provider") or default).lower()
+    return _validated_provider(provider, "minute_data_provider", default)
 
 
 def _default_full_minute_provider() -> str:
-    """全量分钟默认源: easytdx 插件已加载时优先, 否则 tickflow。
+    """全量分钟默认源: easytdx 已加载则 easytdx, 否则空串。
 
-    与 capabilities._default_full_minute_provider() 同口径。TickFlow 需 Expert
-    档; easytdx 逐标的拉当日 1m(全市场一轮约 13 分钟), 仅在盘中刷新开关
-    打开时才跑, 不会因默认值变化自动产生负载。
+    与 capabilities._default_full_minute_provider() 同口径。easytdx 逐标的拉
+    当日 1m(全市场一轮约 13 分钟), 仅在盘中刷新开关打开时才跑, 不会因
+    默认值变化自动产生负载。
     """
     try:
         from app.data_providers import custom as custom_sources
@@ -419,31 +466,32 @@ def _default_full_minute_provider() -> str:
             return "easytdx"
     except Exception:  # noqa: BLE001
         pass
-    return "tickflow"
+    return ""
 
 
 def get_full_minute_data_provider() -> str:
-    provider = str(load().get("full_minute_data_provider") or _default_full_minute_provider()).lower()
-    return _validated_provider(provider, "full_minute_data_provider")
+    default = _default_full_minute_provider()
+    provider = str(load().get("full_minute_data_provider") or default).lower()
+    return _validated_provider(provider, "full_minute_data_provider", default)
 
 
 def get_depth5_data_provider() -> str:
-    provider = str(load().get("depth5_data_provider") or _default_provider()).lower()
-    return _validated_provider(provider, "depth5_data_provider")
+    default = _default_provider()
+    provider = str(load().get("depth5_data_provider") or default).lower()
+    return _validated_provider(provider, "depth5_data_provider", default)
 
 
 def get_realtime_data_provider() -> str:
-    provider = str(load().get("realtime_data_provider") or _default_provider()).lower()
-    return _validated_provider(provider, "realtime_data_provider")
+    default = _default_provider()
+    provider = str(load().get("realtime_data_provider") or default).lower()
+    return _validated_provider(provider, "realtime_data_provider", default)
 
 
 def _default_financial_provider() -> str:
-    """财务默认源: fuyao 插件已加载时优先, 否则 tickflow。
+    """财务默认源: fuyao 已加载则 fuyao, 否则空串 (无可用源)。
 
     与 capabilities._default_financial_provider() 同口径 —— 矩阵是展示真相源,
-    两处不一致会出现「默认列显示 fuyao 而实际路由 tickflow」。
-    TickFlow 财务需 Expert 档; fuyao 声明了 financial, 硬编码 tickflow 会让
-    配了 Key 的用户仍看到「能力不可用」。
+    两处不一致会出现「默认列显示 fuyao 而实际路由空」。
     """
     try:
         from app.data_providers import custom as custom_sources
@@ -451,12 +499,35 @@ def _default_financial_provider() -> str:
             return "fuyao"
     except Exception:  # noqa: BLE001
         pass
-    return "tickflow"
+    return ""
 
 
 def get_financial_provider() -> str:
-    provider = str(load().get("financial_data_provider") or _default_financial_provider()).lower()
-    return _validated_provider(provider, "financial_data_provider")
+    default = _default_financial_provider()
+    provider = str(load().get("financial_data_provider") or default).lower()
+    return _validated_provider(provider, "financial_data_provider", default)
+
+
+# 数据集 id → 生效源 getter。数据集 id 与能力注册表的 cap id 同名。
+_PROVIDER_GETTERS = {
+    "daily": get_daily_data_provider,
+    "adj_factor": get_adj_factor_provider,
+    "realtime": get_realtime_data_provider,
+    "minute": get_minute_data_provider,
+    "depth5": get_depth5_data_provider,
+    "financial": get_financial_provider,
+    "full_minute": get_full_minute_data_provider,
+}
+
+
+def get_data_provider(dataset: str) -> str:
+    """数据集 id → 生效源名 (已校验); 未知数据集返回空串。
+
+    服务层按数据集取源时走这里, 不再各写各的 getter —— 多写一处就多一处
+    可能与注册表脱节。
+    """
+    getter = _PROVIDER_GETTERS.get(dataset)
+    return getter() if getter else ""
 
 
 # ===== 盘后管道拉取内容开关 (A股 / ETF / 指数 独立控制) =====

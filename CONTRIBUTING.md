@@ -66,17 +66,16 @@ Before changing anything, check the upstream and downstream along this chain. It
 | --- | --- | --- |
 | `backend/app/api/` | HTTP, SSE, parameter validation, and response mapping | Keep it thin. No heavy computation, full scans, or data-source-specific business logic |
 | `backend/app/services/` | Synchronization, realtime quotes, notifications, and other business orchestration | Compose domain capabilities. Do not duplicate repository or provider implementations |
-| `backend/app/tickflow/` | Data storage, repositories, capability detection, and TickFlow integration | Expose capabilities only through existing abstractions; upper layers must not depend on storage details |
-| `backend/app/data_providers/` | Data source interfaces, normalized models, and custom data sources | Define the dataset contract first for any new data capability, then implement it in a provider |
+| `backend/app/data_providers/` | Data source interfaces, normalized models, custom data sources, storage repositories, and capability detection | Define the dataset contract first for any new data capability, then implement it in a provider; expose capabilities only through existing abstractions so upper layers never depend on storage details |
 | `backend/app/plugins/` | Plugin discovery, loading, and plugin protocol | Plugin failure must not break main flows when the plugin is not enabled |
 | `backend/app/indicators/` | Indicator computation and the enriched pipeline | Keep it vectorized; be explicit about raw price, adjusted price, and output units |
 | `backend/app/strategy/` | Strategy registration, execution, monitoring, and AI strategies | Built-in and custom strategies should share the execution contract as much as possible; do not create divergent semantics |
 | `backend/app/backtest/` | Backtesting, optimization, walk-forward optimization, and workers | Strictly isolate signal generation from fill simulation to prevent look-ahead bias |
-| `frontend/src/lib/api.ts` | Frontend API requests and type contracts | Backend contract changes must be reflected in types and callers |
-| `frontend/src/lib/queryKeys.ts` | TanStack Query keys | Maintain query keys centrally; do not build parallel keys inside components |
-| `frontend/src/lib/useSharedQueries.ts` and similar | Cross-page shared queries | Prefer shared caching for identical data; avoid repeated requests per card |
-| `frontend/src/pages/` | Page-level orchestration | Push complex domain logic down into hooks, components, or backend services |
-| `frontend/src/components/` | Reusable interactive components | Keep prop contracts stable; do not put page-specific state into shared components |
+| `frontend_v2/src/lib/api.ts` | Frontend API requests and type contracts | Backend contract changes must be reflected in types and callers |
+| `frontend_v2/src/lib/queryKeys.ts` | TanStack Query keys | Maintain query keys centrally; do not build parallel keys inside components |
+| `frontend_v2/src/lib/useSharedQueries.ts` and similar | Cross-page shared queries | Prefer shared caching for identical data; avoid repeated requests per card |
+| `frontend_v2/src/pages/` | Page-level orchestration | Push complex domain logic down into hooks, components, or backend services |
+| `frontend_v2/src/components/` | Reusable interactive components | Keep prop contracts stable; do not put page-specific state into shared components |
 | `data/` | User runtime data | Not committed to Git. Never write local samples, account information, or absolute paths into a PR |
 
 ## 3. Data Contracts That Must Not Be Mixed
@@ -122,13 +121,13 @@ The `bid_volumes` / `ask_volumes` of the five-level order book follow the existi
 
 ## 4. Data Source Plugin Requirements
 
-Data sources are already pluginized. Any general feature must access data through provider capabilities and normalized datasets. TickFlow SDK calls must never be hardcoded into strategies, monitoring, backtests, APIs, or frontend flows.
+Data sources are already pluginized. Any general feature must access data through provider capabilities and normalized datasets. Vendor SDK calls must never be hardcoded into strategies, monitoring, backtests, APIs, or frontend flows.
 
 - Use the existing `get_provider()`, `provider_has_dataset()`, and preferences-based routing capabilities.
 - Supported datasets include but are not limited to `daily`, `adj_factor`, `minute`, `full_minute` (intraday full-market minute persistence), `realtime`, `depth5`, and `financial`. New datasets must first define a clear input/output contract.
 - Providers are responsible for converting vendor fields, units, dates, and symbol formats into the internal standard format.
 - Upper-layer services depend on standard fields and capability declarations, not on vendor response structures.
-- Only features explicitly marked as TickFlow-exclusive may depend on TickFlow directly, and they must not affect other providers.
+- The built-in source is `easytdx` (registered in `backend/app/data_providers/registry.py`); its provider class is imported from the registry, never by importing the plugin module directly. `fuyao` is a plugin source and may supplement any capability it declares, but must not affect other providers.
 - When a provider lacks a capability, the system must clearly indicate it, skip the feature, or fail closed. Silently switching to wrong data or wrong semantics is forbidden.
 - Plugin load failures, missing fields, and empty data must have isolation tests. They must not cause application startup failure or make other data sources unavailable.
 - New data source adapters must update the corresponding contract in `docs/custom-data-source.md` or `docs/plugin-development.md`.
@@ -137,9 +136,9 @@ Data sources are already pluginized. Any general feature must access data throug
 
 The capability matrix (the registry in `backend/app/data_providers/capabilities.py` plus `/api/settings/capability-matrix`) is the single source of truth for capability routing. The following invariants apply:
 
-- The registry centrally declares each capability's display metadata, routing preference fields, and TickFlow tier requirements. The frontend must not hardcode the capability list. Add new capabilities following the existing pattern: registry + preferences getter + capability-matrix injection + matrix test.
-- All page-level capability gating must rely on the matrix's `usable` value (whether the active source can genuinely provide the capability right now), not on the TickFlow plan perspective. Missing-capability prompts must guide users to data source configuration.
-- Capability layer neutrality: general UI (sidebar badges, capability routing cards, per-page gating messages) must not contain TickFlow tier or subscription vocabulary. Tier information appears only in the TickFlow-exclusive detail card. Provider names may appear as routing facts.
+- The registry centrally declares each capability's display metadata and routing preference fields. The frontend must not hardcode the capability list. Add new capabilities following the existing pattern: registry + preferences getter + capability-matrix injection + matrix test.
+- All page-level capability gating must rely on the matrix's `usable` value (whether the active source can genuinely provide the capability right now), not on any single provider's packaging or plan. Missing-capability prompts must guide users to data source configuration.
+- Capability layer neutrality: general UI (sidebar badges, capability routing cards, per-page gating messages) must not contain any provider's tier or subscription vocabulary. Provider names may appear as routing facts.
 - Each capability is routed independently. Follow-on/derived special values are forbidden (`same_as_daily` has been removed). Legacy invalid preference values self-heal via preference getter fallback instead of migration.
 - Boundary notes: intraday monitoring is backed by the minute capability (`intraday_monitor_support`); there is no separate intraday capability. Both the `full_minute` (full minute data) and `depth5` datasets are open for plugin declaration. `depth5` is routed independently and does not fall back across sources on failure.
 - Realtime indices are a product-level fixed contract and do not go through the routing matrix: the display layer (sidebar index strip, market overview) is fixed to the four core indices (`backend/app/services/index_const.py` is the single source of truth: SSE Composite / SZSE Component / ChiNext / STAR Composite). Backend consumers and the frontend Layout reference the same definition without creating copies. The index page is retained, but its symbols are fixed to the four core indices (no all-index search/browsing; `/api/index/list` and `/api/index/search` have been removed). Sidebar index multi-select configuration has been removed, along with the related preferences (`realtime_index_symbols`/`sidebar_index_symbols`/`indices_nav_pinned`/`realtime_pull_index`/`realtime_index_mode`). Monitoring rule index symbols are unrestricted — quote_service merges the four core indices with indices from enabled rules into an explicit pull list.
@@ -204,7 +203,7 @@ The project has repository caches, enriched history caches, realtime aggregation
 
 ## 7. Frontend Requirements
 
-- Reuse the request wrappers and types in `frontend/src/lib/api.ts`. Components must not scatter request URLs directly.
+- Reuse the request wrappers and types in `frontend_v2/src/lib/api.ts`. Components must not scatter request URLs directly.
 - Use centrally defined TanStack Query keys. Parameters that affect results — asset type, date, timeframe, etc. — must be part of the query key.
 - After switching stock, ETF, date, or strategy, cached results from the previous context must not be treated as current results.
 - Realtime refresh must keep the last valid data until new data is ready, avoiding flicker where columns, counts, and lists disappear.
@@ -294,7 +293,7 @@ Both author self-review and maintainer review follow this order, to avoid lookin
 1. **Confirm the problem**: reproduce the old behavior based on the description and tests, and confirm the PR solves the same problem.
 2. **Check boundaries**: confirm the code sits in the correct module, with no reverse dependencies, parallel implementations, or heavy recomputation in the API layer.
 3. **Verify data contracts**: check units, adjustment, dates, time zones, asset types, nulls, and sort direction.
-4. **Verify pluginization**: check whether the change depends on provider capabilities and whether non-TickFlow data sources work or degrade explicitly.
+4. **Verify pluginization**: check whether the change depends on provider capabilities and whether the other data sources work or degrade explicitly.
 5. **Trace state changes**: verify persistence, caches, generation, SSE, and frontend query invalidation from the write path onward.
 6. **Check compatibility**: validate with historical configuration, old strategy JSON, old Parquet schemas, and data with missing fields.
 7. **Check performance and concurrency**: determine whether it enters realtime, list, or full-scan hot paths, and check locks and atomic replacement.
@@ -500,17 +499,16 @@ The measure of following this guide is not how much documentation is written, bu
 | --- | --- | --- |
 | `backend/app/api/` | HTTP、SSE、参数校验和响应映射 | 保持薄层，不放重计算、全量扫描或数据源专属业务 |
 | `backend/app/services/` | 同步、实时行情、通知等业务编排 | 组合领域能力，不复制仓库或 provider 的实现 |
-| `backend/app/tickflow/` | 数据存储、仓库、能力检测和 TickFlow 接入 | 对外通过既有抽象暴露能力，避免上层依赖存储细节 |
-| `backend/app/data_providers/` | 数据源接口、标准化模型和自定义数据源 | 新数据能力先定义数据集契约，再由 provider 实现 |
+| `backend/app/data_providers/` | 数据源接口、标准化模型、自定义数据源、数据存储仓库与能力检测 | 新数据能力先定义数据集契约，再由 provider 实现；对外通过既有抽象暴露能力，避免上层依赖存储细节 |
 | `backend/app/plugins/` | 插件发现、加载和插件协议 | 插件失败不得破坏未启用插件的主流程 |
 | `backend/app/indicators/` | 指标计算和 enriched 流水线 | 保持向量化，明确原始价、复权价和输出单位 |
 | `backend/app/strategy/` | 策略注册、执行、监控和 AI 策略 | 内置与自定义策略尽量共享执行契约，不能各自形成不同口径 |
 | `backend/app/backtest/` | 回测、优化、步进优化和 worker | 严格隔离信号生成与成交模拟，防止未来函数 |
-| `frontend/src/lib/api.ts` | 前端 API 请求和类型契约 | 后端契约变化必须同步更新类型与调用方 |
-| `frontend/src/lib/queryKeys.ts` | TanStack Query 查询键 | 查询键集中维护，不在组件内拼出平行键 |
-| `frontend/src/lib/useSharedQueries.ts` 等 | 跨页面共享查询 | 相同数据优先共享缓存，避免每张卡片重复请求 |
-| `frontend/src/pages/` | 页面级编排 | 复杂领域逻辑下沉到 hook、组件或后端服务 |
-| `frontend/src/components/` | 可复用交互组件 | 保持 props 契约稳定，不把页面专属状态塞进公共组件 |
+| `frontend_v2/src/lib/api.ts` | 前端 API 请求和类型契约 | 后端契约变化必须同步更新类型与调用方 |
+| `frontend_v2/src/lib/queryKeys.ts` | TanStack Query 查询键 | 查询键集中维护，不在组件内拼出平行键 |
+| `frontend_v2/src/lib/useSharedQueries.ts` 等 | 跨页面共享查询 | 相同数据优先共享缓存，避免每张卡片重复请求 |
+| `frontend_v2/src/pages/` | 页面级编排 | 复杂领域逻辑下沉到 hook、组件或后端服务 |
+| `frontend_v2/src/components/` | 可复用交互组件 | 保持 props 契约稳定，不把页面专属状态塞进公共组件 |
 | `data/` | 用户运行时数据 | 不提交到 Git，不把本地样本、账号信息或绝对路径写入 PR |
 
 ## 3. 不可混用的数据契约
@@ -557,13 +555,13 @@ The measure of following this guide is not how much documentation is written, bu
 
 ## 4. 数据源插件化要求
 
-数据源已经插件化。任何通用功能都必须通过 provider 能力和标准化数据集访问数据，不能把 TickFlow SDK 调用硬编码到策略、监控、回测、API 或前端流程中。
+数据源已经插件化。任何通用功能都必须通过 provider 能力和标准化数据集访问数据，不能把任何厂商 SDK 调用硬编码到策略、监控、回测、API 或前端流程中。
 
 - 使用现有的 `get_provider()`、`provider_has_dataset()` 和 preferences 路由能力。
 - 支持的数据集包括但不限于 `daily`、`adj_factor`、`minute`、`full_minute`（盘中全市场分钟落盘）、`realtime`、`depth5`、`financial`；新增数据集应先定义清晰的输入输出契约。
 - provider 负责把供应商字段、单位、日期和代码格式转换为内部标准格式。
 - 上层服务依赖标准字段和能力声明，不依赖供应商响应结构。
-- 只有明确标注为 TickFlow 专属的功能才可以直接依赖 TickFlow，并且不得影响其他 provider。
+- 内置源是 `easytdx`（注册于 `backend/app/data_providers/registry.py`）；provider 类一律从注册表取，不得直接 import 插件模块。`fuyao` 是插件源，可补充它声明的任意能力，但不得影响其他 provider。
 - provider 缺少某项能力时，应明确提示、跳过该功能或 fail-closed；禁止静默换用错误数据或错误口径。
 - 插件加载失败、字段缺失和空数据必须有隔离测试，不能导致应用启动失败或其他数据源不可用。
 - 新增数据源适配应同步更新 `docs/custom-data-source.md` 或 `docs/plugin-development.md` 中对应契约。
@@ -572,9 +570,9 @@ The measure of following this guide is not how much documentation is written, bu
 
 能力矩阵（`backend/app/data_providers/capabilities.py` 注册表 + `/api/settings/capability-matrix`）是能力路由的单一权威，遵循以下不变量：
 
-- 注册表集中声明每个能力的展示元数据、路由偏好字段与 TickFlow 档位要求；前端不硬编码能力清单。新增能力按既有模式扩展：注册表 + preferences getter + capability-matrix 注入 + 矩阵测试。
-- 各页面能力门控统一以矩阵的 `usable` 为准（生效源当前能否真正提供该能力），不是 TickFlow 套餐视角；缺能力提示统一引导到数据源配置。
-- 能力层中立：通用界面（侧栏徽章、能力路由卡、各页门控提示）不得出现 TickFlow 档位/订阅词汇；档位信息只在 TickFlow 专属详情卡展示。provider 名称作为路由事实可以出现。
+- 注册表集中声明每个能力的展示元数据与路由偏好字段；前端不硬编码能力清单。新增能力按既有模式扩展：注册表 + preferences getter + capability-matrix 注入 + 矩阵测试。
+- 各页面能力门控统一以矩阵的 `usable` 为准（生效源当前能否真正提供该能力），不看任何单一源的套餐口径；缺能力提示统一引导到数据源配置。
+- 能力层中立：通用界面（侧栏徽章、能力路由卡、各页门控提示）不得出现任何数据源的档位/订阅词汇。provider 名称作为路由事实可以出现。
 - 每个能力独立路由，禁止跟随/派生特殊值（`same_as_daily` 已下线）；存量非法偏好值由 preferences getter 回退默认自愈，不做迁移。
 - 边界注记：分时监控由分钟能力兜底（`intraday_monitor_support`），不单设分时能力；`full_minute`（全量分钟）和 `depth5` 数据集均已开放插件声明。`depth5` 独立路由且失败时不跨源回退。
 - 实时指数为产品级固定契约，不走路由矩阵：展示层（侧栏指数条、市场总览）固定核心四只（`backend/app/services/index_const.py` 单一权威：上证/深成/创业板/科创综指），后端各消费方与前端 Layout 引用同一份定义不建副本；指数页保留但标的固定为核心四只（无全指数搜索/浏览，`/api/index/list`、`/api/index/search` 已下线）；侧栏指数多选配置已下线，相关偏好（`realtime_index_symbols`/`sidebar_index_symbols`/`indices_nav_pinned`/`realtime_pull_index`/`realtime_index_mode`）已删除。监控规则的指数标的不受限——quote_service 把核心四只 + 启用规则的指数并入显式拉取。
@@ -639,7 +637,7 @@ The measure of following this guide is not how much documentation is written, bu
 
 ## 7. 前端改动要求
 
-- 复用 `frontend/src/lib/api.ts` 中的请求封装和类型，禁止组件直接散落请求地址。
+- 复用 `frontend_v2/src/lib/api.ts` 中的请求封装和类型，禁止组件直接散落请求地址。
 - TanStack Query 查询键使用集中定义；资产类型、日期、周期等影响结果的参数必须进入查询键。
 - 切换股票、ETF、日期或策略后，不得把上一上下文的缓存结果当作当前结果。
 - 实时刷新保留上一份有效数据直到新数据就绪，避免列、计数和列表闪烁消失。
@@ -729,7 +727,7 @@ PR 描述必须包含：
 1. **确认问题**：根据描述和测试复现旧行为，确认 PR 解决的是同一个问题。
 2. **检查边界**：确认代码位于正确模块，没有反向依赖、平行实现或 API 层重计算。
 3. **核对数据契约**：检查单位、复权、日期、时区、资产类型、空值和排序方向。
-4. **核对插件化**：检查是否依赖 provider 能力，非 TickFlow 数据源能否工作或明确降级。
+4. **核对插件化**：检查是否依赖 provider 能力，其他数据源能否工作或明确降级。
 5. **跟踪状态变化**：从写入一路检查持久化、缓存、generation、SSE 和前端查询失效。
 6. **检查兼容性**：使用历史配置、旧策略 JSON、旧 Parquet schema 和缺字段数据验证。
 7. **检查性能和并发**：定位是否进入实时、列表或全量扫描热路径，检查锁和原子替换。

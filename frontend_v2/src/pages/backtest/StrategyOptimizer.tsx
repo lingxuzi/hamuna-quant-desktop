@@ -18,6 +18,7 @@ import {
 import { buildDefaultOverrides, applyStrategyParams } from '@/lib/strategyOverrides'
 import {
   INPUT_CLS,
+  SELECT_CLS,
   PRIMARY_OBJECTIVES,
   GRID_MAX_COMBINATIONS,
   useParamSweep,
@@ -138,7 +139,7 @@ export function StrategyOptimizer() {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)] h-full min-h-0 overflow-hidden">
       {/* ── 配置面板 ── */}
-      <div className="space-y-3 leaf-cell overflow-y-auto min-h-0">
+      <div className="space-y-3 bg-surface border border-border overflow-y-auto min-h-0">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">策略</label>
           <StrategySelect strategies={strategies} value={sweep.strategyId} onChange={sweep.selectStrategy} />
@@ -146,7 +147,7 @@ export function StrategyOptimizer() {
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">优化目标 (白名单)</label>
-          <select value={objective} onChange={e => setObjective(e.target.value)} className={INPUT_CLS}>
+          <select value={objective} onChange={e => setObjective(e.target.value)} className={SELECT_CLS}>
             {PRIMARY_OBJECTIVES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
           <div className="mt-1 text-[10px] text-muted">胜率/持仓天数等退化目标已排除 (交易少时可被运气推高)</div>
@@ -166,7 +167,7 @@ export function StrategyOptimizer() {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-secondary">验证段数 K</label>
-            <select value={kSegments} onChange={e => setKSegments(Number(e.target.value))} className={INPUT_CLS}>
+            <select value={kSegments} onChange={e => setKSegments(Number(e.target.value))} className={SELECT_CLS}>
               {[2, 3, 4, 5, 6].map(k => <option key={k} value={k}>{k} 段</option>)}
             </select>
           </div>
@@ -195,7 +196,7 @@ export function StrategyOptimizer() {
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">模式</label>
-          <select value={mode} onChange={e => setMode(e.target.value as any)} className={INPUT_CLS}>
+          <select value={mode} onChange={e => setMode(e.target.value as any)} className={SELECT_CLS}>
             <option value="position">组合仓位</option>
             <option value="full">全量独立</option>
           </select>
@@ -206,18 +207,18 @@ export function StrategyOptimizer() {
         <div className="text-[11px] text-secondary">每组跑 K 段验证 + Top-20 全窗细化, 耗时约为旧版 1.7 倍</div>
 
         {task?.isPending ? (
-          <button onClick={stopRobust} className="inline-flex w-full items-center justify-center gap-1.5 rounded-btn bg-red-500/90 px-3 py-2 text-xs font-medium text-white hover:bg-red-500">
+          <button onClick={stopRobust} className="ctl ctl-sm ctl-ghost inline-flex w-full items-center justify-center gap-1.5 bg-red-500/90 px-1.5 hover:bg-red-500">
             <Square className="h-3.5 w-3.5" /> 停止
           </button>
         ) : (
-          <button onClick={onRun} disabled={!canRun} className="inline-flex w-full items-center justify-center gap-1.5 rounded-btn bg-accent px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+          <button onClick={onRun} disabled={!canRun} className="ctl ctl-sm ctl-btn pri inline-flex w-full items-center justify-center gap-1.5 px-1.5 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
             <Play className="h-3.5 w-3.5" /> 开始稳健优化
           </button>
         )}
       </div>
 
       {/* ── 结果面板 ── */}
-      <div className="min-h-0 leaf-cell overflow-y-auto">
+      <div className="min-h-0 bg-surface border border-border overflow-y-auto">
         {task?.error && (
           <div className="mb-3 rounded-input border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{task.error}</div>
         )}
@@ -250,8 +251,8 @@ export function StrategyOptimizer() {
               <div className="rounded-card border border-accent/30 bg-accent/5 p-3">
                 <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-accent">
                   <Trophy className="h-3.5 w-3.5" /> 稳健冠军 · {result.objective} 稳健分 {num(result.best_score)}
-                  {conv && <Badge icon={<GitBranch className="h-3 w-3" />} text={CONVERGENCE_LABEL[conv.label]?.text ?? conv.label} cls={CONVERGENCE_LABEL[conv.label]?.cls ?? ''} />}
-                  {plateau && <Badge icon={<Mountain className="h-3 w-3" />} text={PLATEAU_LABEL[plateau.label]?.text ?? plateau.label} cls={PLATEAU_LABEL[plateau.label]?.cls ?? ''} />}
+                  {conv && <Badge icon={<GitBranch className="h-[12px] w-[12px]" />} text={CONVERGENCE_LABEL[conv.label]?.text ?? conv.label} cls={CONVERGENCE_LABEL[conv.label]?.cls ?? ''} />}
+                  {plateau && <Badge icon={<Mountain className="h-[12px] w-[12px]" />} text={PLATEAU_LABEL[plateau.label]?.text ?? plateau.label} cls={PLATEAU_LABEL[plateau.label]?.cls ?? ''} />}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(result.best_params).map(([k, v]) => (
@@ -273,7 +274,7 @@ export function StrategyOptimizer() {
                 <button
                   onClick={() => onApply(result.best_params!, '来源: 稳健优化冠军 (含退化/高原判据)')}
                   disabled={applying}
-                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+                  className="ctl ctl-md ctl-btn pri mt-2.5 inline-flex items-center gap-1.5 px-2.5 hover:opacity-90 disabled:opacity-40"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" /> {applying ? '应用中…' : '应用参数到策略'}
                 </button>

@@ -13,27 +13,19 @@ import polars as pl
 
 from app.market_time import CN_TZ
 from app.services import kline_sync
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 
 def test_fetch_minute_single_window_is_beijing_wall_clock(monkeypatch):
-    captured: dict[str, int] = {}
+    """取数窗口按北京墙钟构造 (带时区), 与服务器本地时区无关。"""
+    captured: dict[str, datetime] = {}
 
-    def _fake_try_custom_minute(*args, **kwargs):
-        return (None, True)  # 未配自定义源 → 走 TickFlow 分支
-
-    class _FakeKlines:
-        @staticmethod
-        def batch(symbols, period, start_time, end_time, **kwargs):
-            captured["start_ms"] = start_time
-            captured["end_ms"] = end_time
-            return []
-
-    class _FakeClient:
-        klines = _FakeKlines
+    def _fake_try_custom_minute(symbols, start_time=None, end_time=None, **kwargs):
+        captured["start"] = start_time
+        captured["end"] = end_time
+        return (pl.DataFrame(), True)
 
     monkeypatch.setattr(kline_sync, "_try_custom_minute", _fake_try_custom_minute)
-    monkeypatch.setattr(kline_sync, "get_client", lambda: _FakeClient())
 
     kline_sync.fetch_minute_single(
         "600000.SH",
@@ -41,8 +33,9 @@ def test_fetch_minute_single_window_is_beijing_wall_clock(monkeypatch):
         capset=CapabilitySet({Cap.KLINE_MINUTE_BY_SYMBOL: CapabilityLimits()}),
     )
 
-    start = datetime.fromtimestamp(captured["start_ms"] / 1000, tz=CN_TZ)
-    end = datetime.fromtimestamp(captured["end_ms"] / 1000, tz=CN_TZ)
+    start, end = captured["start"], captured["end"]
+    assert start.utcoffset() == timedelta(hours=8)
+    assert end.utcoffset() == timedelta(hours=8)
     assert (start.date(), start.hour, start.minute) == (date(2026, 8, 14), 9, 25)
     assert (end.date(), end.hour, end.minute) == (date(2026, 8, 14), 15, 5)
 
@@ -58,7 +51,12 @@ def _capture_minute_window(monkeypatch, tmp_path, local_dt: datetime, **kwargs) 
         captured.update(call_kwargs)
         return pl.DataFrame()
 
-    monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: "tickflow")
+    monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: "mock_src")
+    monkeypatch.setattr(kline_sync.preferences, "load", lambda: {"minute_data_provider": "mock_src"})
+    monkeypatch.setattr(
+        kline_sync, "_resolve_minute_provider",
+        lambda name: (SimpleNamespace(config=SimpleNamespace(datasets={"minute": {}})), None),
+    )
     monkeypatch.setattr(kline_sync.preferences, "get_minute_sync_segment_days", lambda: 20)
     monkeypatch.setattr(kline_sync, "_cleanup_null_datetime_minute", lambda repo: None)
     monkeypatch.setattr(kline_sync, "_migrate_symbol_to_date_partition", lambda repo: None)
@@ -115,35 +113,20 @@ def test_sync_and_persist_minute_extend_backward_window_is_beijing_wall_clock(mo
 
 
 def _capture_tickflow_minute_batch(monkeypatch) -> tuple[list[tuple[datetime, datetime]], list]:
-    """桩掉 TickFlow 客户端, 截获 sync_minute_batch 发出的窗口 (换算回北京时间)。
+    """截获 sync_minute_batch 发给生效分钟源的窗口。
 
-    同时记录交给 _datetime_to_ms 的 datetime 是否带时区: naive 值经 .timestamp()
-    按服务器本地时区解释, 只有带北京时区才与主机时区无关。
+    同时记录窗口的时区偏移: naive 值按服务器本地时区解释, 只有带北京时区
+    才与主机时区无关。
     """
     windows: list[tuple[datetime, datetime]] = []
     offsets: list = []
 
-    class _FakeKlines:
-        @staticmethod
-        def batch(symbols, period, start_time=None, end_time=None, **kwargs):
-            windows.append((
-                datetime.fromtimestamp(start_time / 1000, tz=CN_TZ),
-                datetime.fromtimestamp(end_time / 1000, tz=CN_TZ),
-            ))
-            return []
+    def _fake_try(symbols, start_time=None, end_time=None, **kwargs):
+        offsets.append(start_time.utcoffset())
+        windows.append((start_time, end_time))
+        return (pl.DataFrame(), True)
 
-    class _FakeClient:
-        klines = _FakeKlines
-
-    real_to_ms = kline_sync._datetime_to_ms
-
-    def _spy_to_ms(dt: datetime) -> int:
-        offsets.append(dt.utcoffset())
-        return real_to_ms(dt)
-
-    monkeypatch.setattr(kline_sync, "_try_custom_minute", lambda *a, **kw: (None, True))
-    monkeypatch.setattr(kline_sync, "get_client", lambda: _FakeClient())
-    monkeypatch.setattr(kline_sync, "_datetime_to_ms", _spy_to_ms)
+    monkeypatch.setattr(kline_sync, "_try_custom_minute", _fake_try)
     return windows, offsets
 
 

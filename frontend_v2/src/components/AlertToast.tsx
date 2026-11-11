@@ -130,7 +130,7 @@ export function AlertToastContainer() {
       role="status"
       aria-live="polite"
       aria-atomic="false"
-      className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 w-[320px] pointer-events-none"
+      className="fixed bottom-[74px] right-4 z-[9999] flex flex-col gap-2 w-[320px] pointer-events-none"
     >
       <AnimatePresence>
         {items.map(item => {
@@ -178,8 +178,8 @@ export function AlertToastContainer() {
                     {fmtPct(pct)}
                   </span>
                 )}
-                <button aria-label="关闭通知" onClick={(e) => { e.stopPropagation(); dismiss(item.id) }} className="shrink-0 p-0.5 rounded text-muted/50 hover:text-foreground hover:bg-elevated transition-colors cursor-pointer">
-                  <X className="h-3 w-3" />
+                <button aria-label="关闭通知" onClick={(e) => { e.stopPropagation(); dismiss(item.id) }} className="ctl ctl-sm ctl-ghost ctl-icon shrink-0 text-muted/50 hover:text-foreground hover:bg-elevated">
+                  <X className="h-[12px] w-[12px]" />
                 </button>
               </div>
 
@@ -188,7 +188,7 @@ export function AlertToastContainer() {
                 <>
                   {ev.symbol ? (
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-0.5">
-                      <Bell className={cn('h-3 w-3 shrink-0', sev.replace('bg-', 'text-'))} />
+                      <Bell className={cn('h-[12px] w-[12px] shrink-0', sev.replace('bg-', 'text-'))} />
                       <span className={cn('shrink-0 text-[11px] font-medium', eventMeta.className)}>
                         {eventMeta.action}
                       </span>
@@ -200,7 +200,7 @@ export function AlertToastContainer() {
                     </div>
                   ) : (
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-0.5">
-                      <Bell className={cn('h-3 w-3 shrink-0', sev.replace('bg-', 'text-'))} />
+                      <Bell className={cn('h-[12px] w-[12px] shrink-0', sev.replace('bg-', 'text-'))} />
                       <span className="truncate text-[11px] text-foreground/70">{ev.message}</span>
                     </div>
                   )}
@@ -214,7 +214,7 @@ export function AlertToastContainer() {
                 </>
               ) : (
                 <div className="mt-1 flex items-center gap-1.5 pl-0.5">
-                  <Bell className={cn('h-3 w-3 shrink-0', sev.replace('bg-', 'text-'))} />
+                  <Bell className={cn('h-[12px] w-[12px] shrink-0', sev.replace('bg-', 'text-'))} />
                   {/* message 已含「条件摘要 · 现价 · 涨跌幅」(后端生成), 直接展示避免重复 */}
                   {ev.message && <span className="text-[11px] text-foreground/70 truncate flex-1">{ev.message}</span>}
                 </div>

@@ -99,10 +99,10 @@ function StatCard({ label, value, hint, icon: Icon }: {
   icon: ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="leaf-cell">
+    <div className="p-4">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted">{label}</span>
-        <Icon className="h-4 w-4 text-secondary" />
+        <Icon className="h-[16px] w-[16px] text-secondary" />
       </div>
       <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</div>
       <div className="mt-1 text-[11px] text-muted">{hint}</div>
@@ -257,7 +257,7 @@ export function ExtDimensionAnalysis({
             <select
               value={activeConfigId}
               onChange={(e) => { setSelectedConfigId(e.target.value); setDimensionField(''); setSelectedGroup(null) }}
-              className="h-8 min-w-40 rounded-btn border border-border bg-surface px-2 text-xs text-foreground focus:outline-none focus:border-accent/50"
+              className="ctl ctl-md ctl-select min-w-40"
             >
               {availableConfigs.length === 0 ? (
                 <option value="">暂无扩展数据</option>
@@ -269,7 +269,7 @@ export function ExtDimensionAnalysis({
               value={activeDimensionField}
               onChange={(e) => { setDimensionField(e.target.value); setSelectedGroup(null) }}
               disabled={!activeConfig}
-              className="h-8 min-w-36 rounded-btn border border-border bg-surface px-2 text-xs text-foreground disabled:opacity-50 focus:outline-none focus:border-accent/50"
+              className="ctl ctl-md ctl-select min-w-36"
             >
               {dimensionOptions.length === 0 ? (
                 <option value="">暂无字段</option>
@@ -288,18 +288,18 @@ export function ExtDimensionAnalysis({
         </p>
 
         {configs.isLoading || menuQuery.isLoading ? (
-          <div className="leaf-cell text-center text-sm text-muted">加载配置中…</div>
+          <div className="py-8 text-center text-sm text-muted">加载配置中…</div>
         ) : menuQuery.isError ? (
-          <div className="leaf-cell text-center text-sm text-muted">分析菜单不存在或已删除。</div>
+          <div className="border-l-2 border-danger pl-3 py-1 text-sm text-danger">分析菜单不存在或已删除。</div>
         ) : !activeConfig ? (
-          <div className="leaf-cell text-center">
-            <Database className="mx-auto h-8 w-8 text-muted" />
-            <div className="mt-3 text-sm text-secondary">{emptyHint}</div>
-            <div className="mt-1 text-xs text-muted">请先在“数据”页面新增扩展数据，并在“扩展分析”中创建分析菜单。</div>
+          <div className="bt-empty">
+            <span className="em">扩 展 分 析 · 无 数 据</span>
+            <h2>{emptyHint}</h2>
+            <p>请先在“数据”页面新增扩展数据，并在“扩展分析”中创建分析菜单。</p>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="hgrid grid grid-cols-1 md:grid-cols-4">
               <StatCard label="数据源" value={activeConfig.label} hint={`${activeConfig.mode === 'snapshot' ? '快照' : '时序'} · ${activeConfig.id}`} icon={Database} />
               <StatCard label="分组数量" value={groups.length || '—'} hint={activeDimensionField ? `按 ${fieldLabel(fields, activeDimensionField)} 聚合` : '未配置分组字段'} icon={Tags} />
               <StatCard label="覆盖标的" value={coveredSymbols || rows.length} hint={rowsQuery.data?.date ? `数据日期 ${rowsQuery.data.date}` : '当前快照'} icon={Users} />
@@ -307,14 +307,14 @@ export function ExtDimensionAnalysis({
             </div>
 
             {missingConfiguredColumns.length > 0 && (
-              <div className="rounded-card border border-warning/40 bg-warning/5 px-4 py-3 text-xs text-warning">
+              <div className="border-l-2 border-warning pl-3 py-1 text-xs text-warning">
                 菜单中有字段在当前数据中不存在：{missingConfiguredColumns.map(c => c.field).join('、')}
               </div>
             )}
 
-            <div className={menu?.template === 'table' || menu?.template === 'ranking' ? 'grid grid-cols-1' : 'grid grid-cols-1 xl:grid-cols-[24rem_1fr] gap-5'}>
+            <div className={menu?.template === 'table' || menu?.template === 'ranking' ? 'hgrid grid grid-cols-1' : 'hgrid grid grid-cols-1 xl:grid-cols-[24rem_1fr]'}>
               {menu?.template !== 'table' && menu?.template !== 'ranking' && (
-                <section className="leaf-cell overflow-hidden">
+                <section className="overflow-hidden">
                   <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-medium text-foreground">分组榜单</h3>
@@ -329,7 +329,7 @@ export function ExtDimensionAnalysis({
                         value={search}
                         onChange={(e) => { setSearch(e.target.value); setSelectedGroup(null) }}
                         placeholder={`搜索${activeKindLabel}`}
-                        className="h-8 w-full rounded-btn border border-border bg-base pl-8 pr-3 text-xs text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent/50"
+                        className="ctl ctl-md ctl-input w-full pl-8 pr-3 placeholder:text-muted/50 focus:border-accent/50 bg-base"
                       />
                     </div>
                   </div>
@@ -367,7 +367,7 @@ export function ExtDimensionAnalysis({
                 </section>
               )}
 
-              <section className="leaf-cell overflow-hidden">
+              <section className="overflow-hidden">
                 <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2">

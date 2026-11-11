@@ -1,4 +1,4 @@
-"""版本号单一来源: app.__version__ 运行时从 frontend/package.json 加载。
+"""版本号单一来源: app.__version__ 运行时从 frontend_v2/package.json 加载。
 
 dev 模式读仓库文件, PyInstaller 冻结后读 _MEIPASS/package.json (tsp.spec 收集),
 两者必须返回同一版本 —— 保证安装包、页面徽标、更新检查的"当前版本"永不漂移。
@@ -12,11 +12,11 @@ import app as app_pkg
 from app import __version__
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PKG_JSON = REPO_ROOT / "frontend" / "package.json"
+PKG_JSON = REPO_ROOT / "frontend_v2" / "package.json"
 
 
 def test_dev_version_matches_package_json():
-    """dev 模式: __version__ 与 frontend/package.json 完全一致。"""
+    """dev 模式: __version__ 与 frontend_v2/package.json 完全一致。"""
     assert __version__ == json.loads(PKG_JSON.read_text(encoding="utf-8"))["version"]
 
 

@@ -4,7 +4,7 @@ import os
 import polars as pl
 import pytest
 
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.repository import DataStore, KlineRepository
 
 
 @pytest.fixture()

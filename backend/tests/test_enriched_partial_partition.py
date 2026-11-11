@@ -18,7 +18,7 @@ from app.indicators import pipeline
 from app.jobs import daily_pipeline
 from app.jobs.daily_pipeline import _prune_partial_enriched_partitions
 from app.services import data_integrity, preferences
-from app.tickflow.capabilities import CapabilitySet
+from app.data_providers.capabilities import CapabilitySet
 
 
 def _write_partition(base: Path, day: str, symbols: list[str]) -> None:
@@ -191,10 +191,10 @@ def test_pruned_interior_date_is_rebuilt_without_new_daily_or_factors(tmp_path, 
     monkeypatch.setattr(daily_pipeline.settings, "data_dir", tmp_path)
     monkeypatch.setattr(preferences, "load", lambda: {
         "pipeline_pull_a_share": False, "pipeline_regime_enabled": False,
-        "minute_sync_enabled": False, "adj_factor_provider": "tickflow",
-        # 固定日K源: 默认源已是 easytdx, 跟随默认会把指数/ETF 阶段带起来
-        # (该阶段只认 TickFlow 维表), 与本用例要测的 enriched 重建无关。
-        "daily_data_provider": "tickflow",
+        "minute_sync_enabled": False,
+        # 本用例只测 enriched 重建: 指数/ETF 阶段与日K源无关, 直接关掉,
+        # 避免走到指数维表同步(需要真实维表)。
+        "pipeline_pull_index": False, "pipeline_pull_etf": False,
     })
     monkeypatch.setattr(daily_pipeline.instrument_sync, "sync_instruments", lambda *_: 0)
     monkeypatch.setattr(daily_pipeline, "_resolve_universe", lambda *_: [])

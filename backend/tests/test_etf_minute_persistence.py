@@ -11,9 +11,9 @@ import polars as pl
 import pytest
 
 from app.api import kline as kline_api
+from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 from app.services import kline_sync
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
 
 DAY = date(2026, 11, 5)
 ETF = "159558.SZ"
@@ -41,8 +41,13 @@ def market(tmp_path, monkeypatch):
     monkeypatch.setattr(kline_api, "cn_today", lambda: DAY)
     monkeypatch.setattr(kline_api, "cn_now", lambda: datetime(2026, 11, 5, 9, 32))
     monkeypatch.setattr(kline_api.trading_day, "is_trading_day", lambda: True)
-    monkeypatch.setattr(kline_sync, "_selected_minute_provider_name", lambda: "test")
-    monkeypatch.setattr(kline_sync, "_resolve_minute_provider", lambda _: (object(), False, None))
+    # 伪造分钟源: 偏好存值与生效值必须一致, 否则被判定 unavailable 而 fail-closed
+    monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: "test")
+    monkeypatch.setattr(kline_sync.preferences, "load", lambda: {"minute_data_provider": "test"})
+    monkeypatch.setattr(
+        "app.data_providers.custom.get_provider",
+        lambda name: SimpleNamespace(config=SimpleNamespace(datasets={"minute"})),
+    )
     monkeypatch.setattr(kline_sync.preferences, "get_minute_sync_segment_days", lambda: 20)
     calls = []
 

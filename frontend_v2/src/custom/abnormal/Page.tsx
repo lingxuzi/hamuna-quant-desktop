@@ -13,6 +13,7 @@ import {
 import { QK } from '@/lib/queryKeys'
 import { storage } from '@/lib/storage'
 import { toNavItems, type NavItem } from '@/lib/listNav'
+import { keyboardActivate } from '@/lib/a11y'
 import { fmtPrice, fmtPct, priceColorClass } from '@/lib/format'
 import { boardTag } from '@/components/stock-table/primitives'
 import { PageHeader } from '@/components/PageHeader'
@@ -27,8 +28,9 @@ import { useQuoteStatus } from '@/lib/useSharedQueries'
  * - 偏移异动 (多日累计): 交易所异动规则口径 (3日±20%/30%/40%, 10日+100%, 30日+200%)
  *   实时计算个股「偏离值/阈值」接近度, 找出处于异动边缘的标的。
  *
- * 偏移异动计算量可控: 主开关默认关闭, 开启后才发起轮询 (每 60s 一次); 关闭后
- * 保留展示上次计算结果 (含计算时间, 取自 localStorage)。规则口径通过工具栏「?」
+ * 偏移异动是默认落地视图 (设计稿 18 首屏): 读数带 + 触发/临界两张榜 + 判定阈值/
+ * 竞价基准右栏。快照来自后端进程内缓存, 计算量可控; 「实时刷新」开关只控制轮询
+ * (每 60s 一次), 关闭后仍展示当前截面。规则口径通过工具栏「?」
  * 展开查看。告警走系统监控体系: 在「监控中心」创建异动监控规则后由后端持续评估,
  * 统一触发记录/站内通知/外部渠道推送。
  */
@@ -43,9 +45,9 @@ const WINDOW_LABELS: Record<WindowKey, string> = {
 }
 
 const STATUS_META: Record<AbnormalStatus, { label: string; cls: string; bar: string }> = {
-  triggered: { label: '已触发', cls: 'bg-danger/15 text-danger', bar: 'bg-danger' },
-  edge: { label: '异动边缘', cls: 'bg-warning/15 text-warning', bar: 'bg-warning' },
-  watch: { label: '观察', cls: 'bg-elevated text-secondary', bar: 'bg-muted' },
+  triggered: { label: '触发', cls: 'text-bull', bar: 'bg-bull' },
+  edge: { label: '临界', cls: 'text-warning', bar: 'bg-warning' },
+  watch: { label: '观察', cls: 'text-muted', bar: 'bg-muted' },
 }
 
 const BOARDS = ['主板', '创业板', '科创板', '北交所'] as const
@@ -64,19 +66,29 @@ const TAB_META: Array<{ key: AbnormalTab; label: string; icon: typeof Compass; d
 const SIGNAL_KEYS: IntradaySignalKey[] = ['limit_up', 'broken', 'recovery', 'limit_down', 'new_high', 'new_low', 'volume_surge']
 
 const SIGNAL_META: Record<IntradaySignalKey, { label: string; cls: string }> = {
-  limit_up: { label: '涨停', cls: 'text-bull bg-bull/10 border-bull/25' },
-  broken: { label: '炸板', cls: 'text-orange-400 bg-orange-400/10 border-orange-400/25' },
-  recovery: { label: '翘板', cls: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/25' },
-  limit_down: { label: '跌停', cls: 'text-bear bg-bear/10 border-bear/25' },
-  new_high: { label: '60日新高', cls: 'text-amber-400 bg-amber-400/10 border-amber-400/25' },
-  new_low: { label: '60日新低', cls: 'text-sky-400 bg-sky-400/10 border-sky-400/25' },
-  volume_surge: { label: '放量', cls: 'text-violet-400 bg-violet-400/10 border-violet-400/25' },
+  limit_up: { label: '涨停', cls: 'text-bull border-bull/40' },
+  broken: { label: '炸板', cls: 'text-orange-400 border-orange-400/40' },
+  recovery: { label: '翘板', cls: 'text-cyan-400 border-cyan-400/40' },
+  limit_down: { label: '跌停', cls: 'text-bear border-bear/40' },
+  new_high: { label: '60日新高', cls: 'text-amber-400 border-amber-400/40' },
+  new_low: { label: '60日新低', cls: 'text-sky-400 border-sky-400/40' },
+  volume_surge: { label: '放量', cls: 'text-violet-400 border-violet-400/40' },
 }
 
 export function AbnormalMoves() {
-  const [tab, setTab] = useState<AbnormalTab>('intraday')
+  // 设计稿 18 默认落地「偏移异动」视图
+  const [tab, setTab] = useState<AbnormalTab>('deviation')
   // navList: 弹窗切股的候选列表, 打开详情时由来源 tab 一并给出
   const [preview, setPreview] = useState<{ symbol: string; name: string; navList: NavItem[] } | null>(null)
+  // 工具条状态签 (触发/临界/观察) 与偏移视图共用一份快照缓存: 主层挂常驻观察者,
+  // 切去别的 tab 也保持数据新鲜, 状态签数字不冻结
+  const headerCounts = useQuery({
+    queryKey: QK.abnormalOverview(0.5, 300),
+    queryFn: () => api.abnormalOverview(0.5, 300),
+    staleTime: 60_000,
+    refetchInterval: REFRESH_MS,
+    retry: 1,
+  })
 
   // 打开详情: 带上来源 tab 的候选列表, 切股限定在当前所见标的内
   const openStock = useCallback((symbol: string, name?: string, navList?: NavItem[]) => {
@@ -87,29 +99,35 @@ export function AbnormalMoves() {
     setPreview(prev => (prev ? { ...prev, symbol: sym, name: name ?? sym } : prev))
   }, [])
 
+  const activeTab = TAB_META.find(t => t.key === tab)
+
   return (
     // 整页占满视口: 头部/tab固定, 只有各 tab 内容区滚动
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0">
         <PageHeader seal="异"
           title="异动监控"
-          subtitle="竞价 · 盘中 · 偏移 · 全时段异动中心"
+          subtitle="ABNORMAL MOVES"
+          titleExtra={
+            <>
+              <span className="tb-chip warn">触发 {headerCounts.data?.counts.triggered ?? '—'}</span>
+              <span className="tb-chip">临界 {headerCounts.data?.counts.edge ?? '—'}</span>
+              <span className="tb-chip">观察 {headerCounts.data?.counts.watch ?? '—'}</span>
+              <span className="tb-chip">当日已收盘</span>
+            </>
+          }
           right={
-            <Link
-              to="/monitor"
-              className="inline-flex h-7 items-center gap-1 rounded border border-border bg-base px-2 text-[11px] text-secondary transition-colors hover:text-foreground"
-              title="在监控中心创建「异动监控」规则: 后台持续评估, 触发时统一走触发记录/站内通知/外部渠道推送, 无需保持本页打开"
-            >
-              <Settings2 className="h-3 w-3" />
-              告警规则
+            <Link to="/monitor" className="ctl ctl-md ctl-btn" title="在监控中心创建「异动监控」规则: 后台持续评估, 触发时统一走触发记录/站内通知/外部渠道推送, 无需保持本页打开">
+              <Settings2 className="h-[12px] w-[12px]" />
+              建告警规则
             </Link>
           }
         />
       </div>
 
-      {/* tab 条: 交易时间线 竞价(盘前) → 盘中 → 偏移(多日) — 单行, 描述超宽截断 */}
-      <div className="flex shrink-0 flex-nowrap items-center gap-3 px-5 pt-3">
-        <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-border/50 bg-base/70 p-0.5">
+      {/* tab 条: 交易时间线 竞价(盘前) → 盘中 → 偏移(多日) — 设计稿 20 .feed-hd 的钮列体例 */}
+      <div className="flex shrink-0 flex-nowrap items-center gap-3 border-b border-border px-0 pt-2.5">
+        <div className="inline-flex shrink-0 items-center gap-0">
           {TAB_META.map(t => {
             const Icon = t.icon
             const active = tab === t.key
@@ -119,10 +137,10 @@ export function AbnormalMoves() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs transition-all ${
+                className={`inline-flex items-center gap-1.5 border-b px-3.5 pb-2.5 pt-1 text-[11.5px] transition-colors ${
                   active
-                    ? 'bg-accent/15 font-medium text-accent shadow-sm'
-                    : 'text-secondary hover:text-foreground'
+                    ? 'border-accent font-medium text-accent'
+                    : 'border-transparent text-muted hover:text-secondary'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -131,16 +149,19 @@ export function AbnormalMoves() {
             )
           })}
         </div>
-        <span className="min-w-0 truncate text-[10px] text-muted">{TAB_META.find(t => t.key === tab)?.desc}</span>
+        <span className="min-w-0 truncate pb-2.5 text-[10px] text-muted">{activeTab?.desc}</span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col px-5 pb-4 pt-3">
+      <div className="flex min-h-0 flex-1 flex-col pb-4 pt-3">
         {tab === 'auction' && <AuctionView onOpenStock={openStock} />}
         {tab === 'intraday' && (
           <IntradayView onPreview={(r, navList) => openStock(r.symbol, r.name ?? undefined, navList)} />
         )}
         {tab === 'deviation' && (
-          <DeviationView onPreview={(r, navList) => openStock(r.symbol, r.name ?? undefined, navList)} />
+          <DeviationView
+            headerCounts={headerCounts.data?.counts ?? null}
+            onPreview={(r, navList) => openStock(r.symbol, r.name ?? undefined, navList)}
+          />
         )}
       </div>
 
@@ -179,19 +200,14 @@ function AuctionView({ onOpenStock }: {
   if (q.data?.state === 'source_unavailable') {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="m-auto leaf-cell p-8 text-center">
-          <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-cyan-500/10 text-cyan-500 ring-1 ring-cyan-500/20">
-            <Compass className="h-5 w-5" />
-          </span>
-          <div className="mt-3 text-sm font-medium text-foreground">竞价数据源未配置</div>
-          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted">
+        <div className="m-auto max-w-md border border-border bg-surface p-8 text-center">
+          <Compass className="mx-auto h-[20px] w-[20px] text-accent" />
+          <div className="mt-3 font-serif text-[16px] font-medium text-foreground">竞价数据源未配置</div>
+          <p className="mx-auto mt-2 max-w-[38ch] text-[11.5px] leading-[1.75] text-secondary">
             竞价异动 (同花顺盘前风向标与全市场竞价扫描) 依赖 fuyao 数据源,
             复盘页的龙虎榜同样来自该数据源。在「设置 → 数据源」配置 fuyao API Key 后即可使用。
           </p>
-          <Link
-            to="/settings?tab=data-sources"
-            className="mt-5 inline-flex h-9 items-center gap-2 rounded-btn bg-accent px-4 text-xs font-medium text-white transition-colors hover:bg-accent/90"
-          >
+          <Link to="/settings?tab=data-sources" className="ctl-btn ctl-sm pri mt-4">
             前往配置数据源
             <ChevronRight className="h-3.5 w-3.5" />
           </Link>
@@ -205,15 +221,13 @@ function AuctionView({ onOpenStock }: {
       <BenchmarkCard q={q} onOpenStock={onOpenStock} />
 
       {/* 全市场竞价扫描: 采集任务启用后填充 (接口与批量能力已验证) */}
-      <div className="rounded-card border border-dashed border-border bg-surface/50 px-4 py-4">
+      <div className="border border-border bg-surface/50 px-4 py-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-elevated/60">
-            <Radar className="h-4 w-4 text-muted/50" />
-          </span>
+          <Radar className="h-[16px] w-[16px] shrink-0 text-muted/50" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-foreground">全市场竞价扫描</span>
-              <span className="rounded-full border border-border bg-elevated px-2 py-px text-[9px] leading-tight text-muted">
+              <span className="text-[11.5px] font-medium text-foreground">全市场竞价扫描</span>
+              <span className="border border-border px-1.5 py-px text-[9px] leading-tight text-muted">
                 待采集任务启用
               </span>
             </div>
@@ -225,7 +239,7 @@ function AuctionView({ onOpenStock }: {
         </div>
       </div>
 
-      <p className="px-1 text-[10px] leading-relaxed text-muted/70">
+      <p className="border-t border-border px-0 pt-2.5 text-[10.5px] leading-[1.75] text-secondary">
         风向标为同花顺盘前竞价筛选名单 (每日约 5~6 只)。60 日回测: 名单当日开盘买入均值 +0.54%
         (超额 +0.44%), 但高开 ≥5% 子集当日 -1.97% — 追高是陷阱, 次日无显著优势, 仅作当日观察。
       </p>
@@ -246,15 +260,11 @@ function BenchmarkCard({ q, onOpenStock }: {
 
   if (q.isLoading) {
     return (
-      <div className="flex items-center gap-3 leaf-cell bg-surface/80">
-        <span className="grid h-8 w-8 shrink-0 animate-pulse place-items-center rounded bg-elevated">
-          <Compass className="h-4 w-4 text-muted/50" />
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-14 animate-pulse rounded-full bg-elevated/80" />
-          <span className="h-3 w-24 animate-pulse rounded-full bg-elevated/60" />
-          <span className="h-3 w-20 animate-pulse rounded-full bg-elevated/40" />
-        </div>
+      <div className="flex items-center gap-3 border border-border bg-surface p-4">
+        <Compass className="h-[16px] w-[16px] shrink-0 text-muted/50" />
+        <span className="h-3 w-14 animate-pulse bg-elevated" />
+        <span className="h-3 w-24 animate-pulse bg-elevated/70" />
+        <span className="h-3 w-20 animate-pulse bg-elevated/40" />
       </div>
     )
   }
@@ -263,12 +273,10 @@ function BenchmarkCard({ q, onOpenStock }: {
 
   if (!d || d.state === 'no_data') {
     return (
-      <div className="flex items-center gap-3 leaf-cell bg-surface/50 px-4 py-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-elevated/60">
-          <Compass className="h-4 w-4 text-muted/50" />
-        </span>
+      <div className="flex items-center gap-3 border border-border bg-surface/60 px-4 py-3">
+        <Compass className="h-[16px] w-[16px] shrink-0 text-muted/50" />
         <span className="text-[11px] text-muted">盘前风向标暂不可用{d?.message ? ` (${d.message.slice(0, 40)})` : ''}</span>
-        <button onClick={() => q.refetch()} className="ml-auto text-[10px] text-accent hover:underline">重试</button>
+        <button onClick={() => q.refetch()} className="ctl-btn ctl-sm ctl-ghost ml-auto">重试</button>
       </div>
     )
   }
@@ -279,96 +287,91 @@ function BenchmarkCard({ q, onOpenStock }: {
   const avgOc = ocs.length ? ocs.reduce((a, b) => a + b, 0) / ocs.length : null
 
   return (
-    <div className="leaf-cell bg-surface/80">
-      {/* 头部 */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-cyan-500/15 text-cyan-500 ring-1 ring-cyan-500/20">
-          <Compass className="h-4 w-4" />
-        </span>
-        <span className="leading-tight">
-          <span className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-foreground">盘前风向标</span>
-            {isFallback && (
-              <span
-                className="rounded border border-warning/30 bg-warning/10 px-1.5 py-px text-[9px] leading-tight text-warning"
-                title="目标日名单不可用, 已自动显示上一期"
-              >
-                显示上一期
-              </span>
-            )}
+    <div className="border border-border bg-surface">
+      {/* 头部: 题头走等宽小字, 状态签用描边徽章 (设计稿 18 .fig-h/.stw) */}
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <Compass className="h-[16px] w-[16px] shrink-0 text-accent" />
+        <span className="figcap shrink-0">盘 前 风 向 标</span>
+        {isFallback && (
+          <span
+            className="shrink-0 border border-warning px-1.5 py-px text-[9px] leading-tight text-warning"
+            title="目标日名单不可用, 已自动显示上一期"
+          >
+            显示上一期
           </span>
-          <span className="mt-0.5 block text-[10px] text-muted">
-            {d.trade_date} · {items.length} 只 · 同花顺竞价筛选
-            {avgOc != null && (
-              <> · 当日开盘买均值 <span className={priceColorClass(avgOc)}>{fmtPct(avgOc)}</span></>
-            )}
-          </span>
-        </span>
-        <span className="ml-auto text-right text-[9px] leading-tight text-muted/70">
-          次日无优势<br />仅当日观察
+        )}
+        <span className="ml-auto truncate text-[10px] text-muted">
+          {d.trade_date} · {items.length} 只 · 同花顺竞价筛选
+          {avgOc != null && (
+            <> · 当日开盘买均值 <span className={priceColorClass(avgOc)}>{fmtPct(avgOc)}</span></>
+          )}
+          <span className="ml-2 text-muted/70">次日无优势 · 仅当日观察</span>
         </span>
       </div>
 
-      {/* 名单 */}
+      {/* 名单: 发丝线数据表 (设计稿 18 .b4t) */}
       {items.length === 0 ? (
-        <p className="border-t border-border/60 px-4 py-3 text-center text-[11px] text-muted">本期无名单数据</p>
+        <p className="border-t border-border px-4 py-3 text-center text-[11px] text-muted">本期无名单数据</p>
       ) : (
-        <div>
-          <div className="flex items-center gap-2 border-t border-border/60 bg-elevated/50 px-4 py-1.5 text-[9px] font-medium uppercase tracking-wider text-muted/70">
-            <span className="w-14 shrink-0">竞价</span>
-            <span className="min-w-0 flex-1">股票</span>
-            <span className="w-16 shrink-0 text-right">当日</span>
-            <span className="w-16 shrink-0 text-right">次日</span>
-          </div>
-          {items.map((i: AuctionBenchmarkItem) => {
-            const gap = i.auction_pct ?? null
-            const chase = (gap ?? 0) >= _BENCH_CHASE_RISK_PCT
-            return (
-              <button
-                key={i.thscode}
-                type="button"
-                onClick={() => onOpenStock(i.thscode, i.name ?? undefined, navItems)}
-                className="flex w-full items-center gap-2 border-t border-border/30 px-4 py-2 text-left text-[11px] transition-colors hover:bg-accent/[0.05]"
-                title={`查看 ${i.name ?? i.thscode} 详情 · 竞价 ${gap ?? '—'}%`}
-              >
-                <span className={('w-14 shrink-0 font-mono tabular-nums ' + priceColorClass(gap)).trim()}>
-                  {gap == null ? '—' : fmtPct(gap / 100)}
-                </span>
-                <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span className="truncate text-foreground">{i.name ?? i.thscode}</span>
-                  <span className="shrink-0 font-mono text-[9px] text-muted">{i.ticker ?? i.thscode}</span>
-                  {(() => { const b = boardTag(i.thscode); return b && (
-                    <span className={`shrink-0 inline-flex items-center rounded border px-1 text-[8px] font-bold leading-tight ${b.color}`}>
-                      {b.label}
-                    </span>
-                  ) })()}
-                  {chase && (
-                    <span
-                      className="shrink-0 rounded border border-danger/30 bg-danger/10 px-1 text-[8px] font-medium leading-tight text-danger"
-                      title="60日回测: 高开≥5%子集当日开盘买入平均 -1.97% (次日 +1.79%) — 追高陷阱"
-                    >
-                      追高风险
-                    </span>
-                  )}
-                  {(i.tags ?? []).slice(0, 2).map(t => (
-                    <span key={t} className="max-w-24 truncate rounded-full bg-base/70 px-1.5 py-px text-[9px] text-muted" title={t}>
-                      {t}
-                    </span>
-                  ))}
-                </span>
-                <span
-                  className={('w-16 shrink-0 text-right font-mono tabular-nums ' + priceColorClass(i.day0_oc)).trim()}
-                  title={i.day0_pct != null ? `全天 ${fmtPct(i.day0_pct)}` : undefined}
+        <table className="dt">
+          <thead>
+            <tr>
+              <th className="w-14">竞价</th>
+              <th>股票</th>
+              <th className="w-16">当日</th>
+              <th className="w-16">次日</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((i: AuctionBenchmarkItem) => {
+              const gap = i.auction_pct ?? null
+              const chase = (gap ?? 0) >= _BENCH_CHASE_RISK_PCT
+              return (
+                <tr
+                  key={i.thscode}
+                  onClick={() => onOpenStock(i.thscode, i.name ?? undefined, navItems)}
+                  className="cursor-pointer"
+                  title={`查看 ${i.name ?? i.thscode} 详情 · 竞价 ${gap ?? '—'}%`}
+                  {...keyboardActivate(() => onOpenStock(i.thscode, i.name ?? undefined, navItems))}
                 >
-                  {i.day0_oc == null ? '—' : fmtPct(i.day0_oc)}
-                </span>
-                <span className={('w-16 shrink-0 text-right font-mono tabular-nums ' + (i.d1_pct == null ? 'text-muted' : priceColorClass(i.d1_pct))).trim()}>
-                  {i.d1_pct == null ? '—' : fmtPct(i.d1_pct)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+                  <td className={`text-left font-mono tabular-nums ${priceColorClass(gap)}`}>
+                    {gap == null ? '—' : fmtPct(gap / 100)}
+                  </td>
+                  <td>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{i.name ?? i.thscode}</span>
+                      <span className="shrink-0 font-mono text-[9px] text-muted">{i.ticker ?? i.thscode}</span>
+                      {(() => { const b = boardTag(i.thscode); return b && (
+                        <span className={`shrink-0 inline-flex items-center border px-1 text-[8px] font-bold leading-tight ${b.color}`}>
+                          {b.label}
+                        </span>
+                      ) })()}
+                      {chase && (
+                        <span
+                          className="shrink-0 border border-danger/40 bg-danger/10 px-1 text-[8px] font-medium leading-tight text-danger"
+                          title="60日回测: 高开≥5%子集当日开盘买入平均 -1.97% (次日 +1.79%) — 追高陷阱"
+                        >
+                          追高风险
+                        </span>
+                      )}
+                      {(i.tags ?? []).slice(0, 2).map(t => (
+                        <span key={t} className="max-w-24 truncate text-[9px] text-muted" title={t}>
+                          {t}
+                        </span>
+                      ))}
+                    </span>
+                  </td>
+                  <td className={priceColorClass(i.day0_oc)} title={i.day0_pct != null ? `全天 ${fmtPct(i.day0_pct)}` : undefined}>
+                    {i.day0_oc == null ? '—' : fmtPct(i.day0_oc)}
+                  </td>
+                  <td className={i.d1_pct == null ? 'text-muted' : priceColorClass(i.d1_pct)}>
+                    {i.d1_pct == null ? '—' : fmtPct(i.d1_pct)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   )
@@ -423,7 +426,7 @@ function IntradayView({ onPreview }: {
   const total = (data?.rows ?? []).length
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       {/* 信号筛选 chips (带各类型计数) + 工具行 — 单行横向滚动, 不折行 */}
       <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 [&>*]:shrink-0">
         <SigChip active={sigFilter === 'all'} onClick={() => setSigFilter('all')} label="全部" count={total} />
@@ -453,14 +456,14 @@ function IntradayView({ onPreview }: {
           <button
             type="button"
             onClick={() => q.refetch()}
-            className="inline-flex h-7 items-center gap-1 rounded border border-border bg-base px-2 text-[11px] text-secondary transition-colors hover:text-foreground"
+            className="ctl-btn ctl-sm"
             title="立即刷新"
           >
-            <RefreshCw className={`h-3 w-3 ${q.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-[12px] w-[12px] ${q.isFetching ? 'animate-spin' : ''}`} />
             刷新
           </button>
           <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="过滤 ST/*ST 风险警示股票">
-            <input type="checkbox" checked={excludeSt} onChange={e => setExcludeSt(e.target.checked)} className="h-3 w-3 accent-accent" />
+            <input type="checkbox" checked={excludeSt} onChange={e => setExcludeSt(e.target.checked)} className="h-[12px] w-[12px] accent-accent" />
             过滤ST
           </label>
           <div className="relative">
@@ -469,49 +472,49 @@ function IntradayView({ onPreview }: {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="搜索代码/名称"
-              className="h-7 w-40 rounded border border-border bg-base pl-7 pr-2 text-[11px] text-foreground"
+              className="ctl ctl-md ctl-input w-40 rounded-none pl-7 pr-2 bg-base"
             />
           </div>
         </div>
       </div>
 
-      {/* 主表 */}
-      <div className="min-h-0 flex-1 overflow-auto leaf-cell">
-        <table className="w-full min-w-[900px] text-xs">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted">
-              <th className="w-10 px-2 py-2 text-right">#</th>
-              <th className="px-2 py-2 text-left">代码 / 名称</th>
-              <th className="px-2 py-2 text-right">现价</th>
-              <th className="px-2 py-2 text-right">今日</th>
-              <th className="px-2 py-2 text-left">信号</th>
-              <th className="px-2 py-2 text-right" title="当日成交量 / 前5日平均成交量">量比</th>
-              <th className="px-2 py-2 text-right" title="当日高低价差 / 前收盘价">振幅</th>
-              <th className="px-2 py-2 text-right">换手</th>
+      {/* 主表: 发丝线数据表 (设计稿 18 .b4t) */}
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="dt min-w-[900px]">
+          <thead>
+            <tr>
+              <th className="w-10 text-right">#</th>
+              <th className="text-left">代码 / 名称</th>
+              <th className="text-right">现价</th>
+              <th className="text-right">今日</th>
+              <th className="text-left">信号</th>
+              <th className="text-right" title="当日成交量 / 前5日平均成交量">量比</th>
+              <th className="text-right" title="当日高低价差 / 前收盘价">振幅</th>
+              <th className="text-right">换手</th>
             </tr>
           </thead>
           <tbody>
             {q.isLoading ? (
-              <tr><td colSpan={8} className="px-3 py-10 text-center text-muted">正在加载盘中信号…</td></tr>
+              <tr><td colSpan={8} className="py-10 text-center text-muted">正在加载盘中信号…</td></tr>
             ) : q.isError ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center">
+                <td colSpan={8} className="py-10 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <span className="text-xs text-secondary">盘中信号加载失败，请检查数据源与网络</span>
                     <button
                       type="button"
                       onClick={() => q.refetch()}
                       disabled={q.isFetching}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-accent transition-colors hover:bg-elevated disabled:opacity-50"
+                      className="ctl-btn ctl-sm"
                     >
-                      <RefreshCw className="h-3 w-3" />
+                      <RefreshCw className="h-[12px] w-[12px]" />
                       重试
                     </button>
                   </div>
                 </td>
               </tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-10 text-center text-muted">{data ? '当前筛选下没有命中标的' : '暂无数据'}</td></tr>
+              <tr><td colSpan={8} className="py-10 text-center text-muted">{data ? '当前筛选下没有命中标的' : '暂无数据'}</td></tr>
             ) : (
               rows.map((r, i) => (
                 <IntradayRowView key={r.symbol} row={r} rank={i + 1} onPreview={handlePreviewRow} />
@@ -536,13 +539,13 @@ function SigChip({ active, onClick, label, count, cls }: {
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+      className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] transition-colors ${
         active
-          ? (cls ?? 'border-accent/40 bg-accent/[0.12] text-accent')
-          : 'border-border bg-elevated text-secondary hover:text-foreground'
+          ? (cls ?? 'border-accent text-accent')
+          : 'border-border text-secondary hover:text-foreground'
       }`}
     >
-      <span className="font-mono text-xs font-semibold tabular-nums">{count}</span>
+      <span className="font-mono text-[11px] font-semibold tabular-nums">{count}</span>
       {label}
     </button>
   )
@@ -556,49 +559,49 @@ const IntradayRowView = memo(function IntradayRowView({ row, rank, onPreview }: 
   const board = boardTag(row.symbol)
   const clu = row.consecutive_limit_ups ?? 0
   return (
-    <tr className="group border-b border-border/40 transition-colors last:border-0 hover:bg-elevated/50">
-      <td className="px-2 py-1.5 text-right font-mono text-[10px] text-muted/70">{rank}</td>
-      <td className="px-2 py-1.5">
+    <tr className="group">
+      <td className="text-right font-mono text-[10px] text-muted/70">{rank}</td>
+      <td>
         <button
           type="button"
           onClick={() => onPreview(row)}
           title="查看个股详情"
           className="flex min-w-0 items-center gap-1.5 text-left"
         >
-          <span className="shrink-0 font-mono text-xs text-foreground transition-colors duration-150 group-hover:text-accent">{row.symbol}</span>
-          <span className="min-w-0 max-w-40 truncate text-xs text-secondary transition-colors duration-150 group-hover:text-foreground">{row.name ?? '—'}</span>
+          <span className="shrink-0 font-mono text-[11.5px] text-foreground transition-colors duration-150 group-hover:text-accent">{row.symbol}</span>
+          <span className="min-w-0 max-w-40 truncate text-[11.5px] text-secondary transition-colors duration-150 group-hover:text-foreground">{row.name ?? '—'}</span>
           {board && (
-            <span className={`shrink-0 rounded border px-1 text-[9px] font-bold leading-tight ${board.color}`}>
+            <span className={`shrink-0 border px-1 text-[9px] font-bold leading-tight ${board.color}`}>
               {board.label}
             </span>
           )}
           {clu > 1 && (
-            <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1 text-[9px] font-bold leading-tight text-amber-500" title={`连续 ${clu} 日涨停`}>
+            <span className="shrink-0 border border-amber-500/40 px-1 text-[9px] font-bold leading-tight text-amber-500" title={`连续 ${clu} 日涨停`}>
               {clu}连板
             </span>
           )}
         </button>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-xs text-secondary">{fmtPrice(row.close)}</td>
-      <td className={`px-2 py-1.5 text-right font-mono text-xs font-medium ${priceColorClass(row.change_pct)}`}>
+      <td className="text-right font-mono text-[11px] text-secondary">{fmtPrice(row.close)}</td>
+      <td className={`text-right font-mono text-[11px] font-medium ${priceColorClass(row.change_pct)}`}>
         {fmtPct(row.change_pct)}
       </td>
-      <td className="px-2 py-1.5">
+      <td>
         <div className="flex flex-wrap items-center gap-1">
           {row.signals.map(s => (
-            <span key={s} className={`rounded border px-1 text-[9px] font-medium leading-tight ${SIGNAL_META[s].cls}`}>
+            <span key={s} className={`border px-1 text-[9px] font-medium leading-tight ${SIGNAL_META[s].cls}`}>
               {SIGNAL_META[s].label}
             </span>
           ))}
         </div>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-xs tabular-nums text-secondary">
+      <td className="text-right font-mono text-[11px] tabular-nums text-secondary">
         {row.vol_ratio_5d != null ? row.vol_ratio_5d.toFixed(2) : '—'}
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-xs tabular-nums text-secondary">
+      <td className="text-right font-mono text-[11px] tabular-nums text-secondary">
         {row.amplitude != null ? fmtPct(row.amplitude, 2) : '—'}
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-xs tabular-nums text-secondary">
+      <td className="text-right font-mono text-[11px] tabular-nums text-secondary">
         {row.turnover_rate != null ? `${Number(row.turnover_rate).toFixed(2)}%` : '—'}
       </td>
     </tr>
@@ -609,10 +612,12 @@ const IntradayRowView = memo(function IntradayRowView({ row, rank, onPreview }: 
 // 偏移异动 tab (原有异动边缘监控, 逻辑保持不变)
 // ================================================================
 
-function DeviationView({ onPreview }: {
+function DeviationView({ headerCounts, onPreview }: {
+  /** 主层传来的状态计数 (与偏移视图共用一份快照缓存) */
+  headerCounts: AbnormalOverview['counts'] | null
   onPreview: (r: AbnormalRow, navList?: NavItem[]) => void
 }) {
-  // 主开关: 默认关闭, 开启后才轮询计算 (仅控制本页计算, 后台告警由监控规则驱动)
+  // 实时刷新开关: 只控制轮询, 不再拦截首次加载 (快照计算在后端进程内缓存, 代价可控)
   const [enabled, setEnabled] = useState(() => storage.abnormalEnabled.get(false))
   // 规则口径面板 (工具栏「?」)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -633,7 +638,6 @@ function DeviationView({ onPreview }: {
   const overview = useQuery({
     queryKey: QK.abnormalOverview(minCloseness, 300),
     queryFn: () => api.abnormalOverview(minCloseness, 300),
-    enabled, // 关闭时零计算
     // 非交易时段偏离快照不变, 60s → 5min 兜底 (开盘后自动恢复); 字段缺失保持原频率
     refetchInterval: () => (enabled && quoteStatus?.is_trading_hours !== false ? REFRESH_MS : 300_000),
     // 拖动 closeness 滑杆换 key 时沿用上一份结果, 不整表闪空
@@ -650,9 +654,6 @@ function DeviationView({ onPreview }: {
   const toggleEnabled = (v: boolean) => {
     setEnabled(v)
     storage.abnormalEnabled.set(v)
-    if (v) {
-      overview.refetch()
-    }
   }
 
   const data = overview.data
@@ -662,8 +663,8 @@ function DeviationView({ onPreview }: {
     storage.abnormalLastResult.set(data)
   }, [data])
 
-  // 展示数据源: 开启 → 实时结果; 关闭 → 上次计算结果 (可能为空)
-  const view = enabled ? data : lastResult
+  // 展示数据源: 当前查询结果优先; 「实时刷新」关闭后轮询停了, 仍展示已有截面
+  const view = data ?? lastResult
   const stale = !enabled && lastResult != null
 
   const watchSymbols = useMemo(() => {
@@ -703,18 +704,27 @@ function DeviationView({ onPreview }: {
   navItemsRef.current = navItems
   const handlePreviewRow = useCallback((row: AbnormalRow) => onPreview(row, navItemsRef.current), [onPreview])
 
-  const counts = view?.counts
   const updating = overview.isFetching
 
+  // 设计稿两张独立榜: 已触发·前 10 / 临界·前 8 (按接近度降序, 后端行序已排好)
+  const triggeredTop = useMemo(
+    () => (view?.rows ?? []).filter(r => r.status === 'triggered').slice(0, 10),
+    [view],
+  )
+  const edgeTop = useMemo(
+    () => (view?.rows ?? []).filter(r => r.status === 'edge').slice(0, 8),
+    [view],
+  )
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       {/* 规则口径面板 (工具栏「?」展开) */}
       {rulesOpen && (
-        <div className="shrink-0 leaf-cell p-3">
+        <div className="shrink-0 border border-border bg-surface p-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {ruleChips()}
           </div>
-          <p className="mt-2.5 border-t border-border/60 pt-2 text-[10px] leading-relaxed text-muted">
+          <p className="mt-2.5 border-t border-border pt-2 text-[10px] leading-[1.75] text-secondary">
             口径说明: 偏离值 = 个股 N 日累计涨跌幅 − 对应指数同期涨跌幅 (沪主板: 上证A指/上证指数,
             科创板: 科创50, 深主板: 深证A指/深证成指, 创业板: 创业板综指, 北: 北证50)。
             阈值为交易所异常波动披露标准的近似值, 仅供风险提示,
@@ -726,222 +736,253 @@ function DeviationView({ onPreview }: {
         </div>
       )}
 
-      {/* 未开启且无历史结果: 说明 + 开启入口 (有上次结果时直接展示数据, 见下方 stale 横幅) */}
-      {!enabled && !stale ? (
+      {/* 空态: 后端快照缺失 (data 接口无历史 enriched 数据) */}
+      {!view ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div className="m-auto leaf-cell p-8 text-center">
-            <FlaskConical className="mx-auto h-8 w-8 text-muted/50" />
-            <div className="mt-3 text-sm font-medium text-foreground">监控未开启</div>
-            <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-muted">
-              开启后按交易所异动规则实时计算全市场个股的涨跌幅偏离值 (个股 N 日累计涨跌 −
-              对应指数同期), 找出接近触发「异常波动 / 严重异常波动」的标的。
-              计算量较大, 默认关闭; 每次计算的结果会保留, 关闭后仍可查看 (不再实时更新)。
+          <div className="m-auto max-w-lg border border-border bg-surface p-8 text-center">
+            <FlaskConical className="mx-auto h-[24px] w-[24px] text-muted/50" />
+            <div className="mt-3 font-serif text-[16px] font-medium text-foreground">偏离快照暂不可用</div>
+            <p className="mx-auto mt-2 max-w-[46ch] text-[11.5px] leading-[1.75] text-secondary">
+              偏移异动按交易所异动规则计算全市场个股的涨跌幅偏离值 (个股 N 日累计涨跌 −
+              对应指数同期)。这份数据来自日 K 线富集快照, 请先在「数据」页完成行情同步后再来看这里。
             </p>
-            <p className="mx-auto mt-2 max-w-lg text-[11px] leading-relaxed text-muted/80">
+            <p className="mx-auto mt-2 max-w-[46ch] text-[11px] leading-[1.75] text-muted">
               需要告警推送时, 在<Link to="/monitor?new=abnormal" className="text-accent hover:underline">监控中心</Link>
-              新建「异动监控」规则 —— 后台持续评估, 触发时统一走触发记录 / 站内通知 / 外部渠道推送,
-              与本页开关互不影响。
+              新建「异动监控」规则 —— 后台持续评估, 触发时统一走触发记录 / 站内通知 / 外部渠道推送。
             </p>
-            <button
-              type="button"
-              onClick={() => toggleEnabled(true)}
-              className="mt-5 inline-flex h-9 items-center gap-2 rounded-btn bg-accent px-4 text-xs font-medium text-white"
-            >
-              <Power className="h-4 w-4" />
-              开启监控
-            </button>
           </div>
         </div>
       ) : (
-        <>
-          {/* 关闭后展示上次计算结果 */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* 关闭轮询后的提示 (数据仍展示当前截面) */}
           {stale && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-card border border-warning/25 bg-warning/5 px-3 py-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border border-warning/30 bg-warning/[0.04] px-3 py-2">
               <History className="h-3.5 w-3.5 shrink-0 text-warning" />
-              <span className="text-[11px] font-medium text-warning">已暂停计算 · 展示上次结果</span>
+              <span className="text-[11px] font-medium text-warning">实时刷新已关闭 · 展示当前截面</span>
               <span className="text-[11px] text-secondary">
-                上次计算 {fmtCalcTime(lastResult.asof)} · 数据截至 {lastResult.cache_date ?? '—'}
-                {lastResult.includes_today ? ' (含今日收盘)' : ''}
+                上次计算 {fmtCalcTime(view.asof)} · 数据截至 {view.cache_date ?? '—'}
+                {view.includes_today ? ' (含今日收盘)' : ''}
               </span>
               <button
                 type="button"
                 onClick={() => toggleEnabled(true)}
-                className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded border border-accent/40 bg-accent/10 px-2.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/15"
+                className="ctl-btn ctl-sm ml-auto shrink-0"
               >
-                <Power className="h-3 w-3" />
-                开启实时计算
+                <Power className="h-[12px] w-[12px]" />
+                开启实时刷新
               </button>
             </div>
           )}
 
-          {/* 统计 + 控制 */}
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <StatusChip label="已触发" count={counts?.triggered} tone="danger" />
-            <StatusChip label="异动边缘" count={counts?.edge} tone="warning" />
-            <StatusChip label="观察" count={counts?.watch} tone="muted" />
-            {enabled && (
-              <span className="text-[10px] text-muted">
-                数据截至 {data?.cache_date ?? '—'}
-                {data?.includes_today ? ' (含今日收盘)' : ' · 已叠加今日实时涨跌'}
-                {data ? ` · 基准指数今日 ${(data.bench_rt_pct * 100).toFixed(2)}%` : ''}
-              </span>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                aria-pressed={rulesOpen}
-                aria-label="查看异动规则口径"
-                title="交易所异动规则口径 (阈值 / 偏离值计算方式)"
-                onClick={() => setRulesOpen(v => !v)}
-                className={`inline-flex h-7 w-7 items-center justify-center rounded border transition-colors ${
-                  rulesOpen
-                    ? 'border-accent/40 bg-accent/10 text-accent'
-                    : 'border-border bg-base text-secondary hover:text-foreground'
-                }`}
-              >
-                <HelpCircle className="h-3.5 w-3.5" />
-              </button>
-              {enabled && (
-                <button
-                  type="button"
-                  onClick={() => overview.refetch()}
-                  className="inline-flex h-7 items-center gap-1 rounded border border-border bg-base px-2 text-[11px] text-secondary transition-colors hover:text-foreground"
-                  title="立即刷新"
-                >
-                  <RefreshCw className={`h-3 w-3 ${updating ? 'animate-spin' : ''}`} />
-                  刷新
-                </button>
-              )}
-              {/* 主开关: 开启后才开始轮询计算 */}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={enabled}
-                aria-label="启用异动监控计算"
-                onClick={() => toggleEnabled(!enabled)}
-                className={`inline-flex h-7 items-center gap-2 rounded border px-2.5 text-[11px] font-medium transition-colors ${
-                  enabled
-                    ? 'border-accent/40 bg-accent/[0.12] text-accent'
-                    : 'border-border bg-base text-secondary hover:text-foreground'
-                }`}
-              >
-                <Power className="h-3 w-3" />
-                {enabled ? '监控中 · 每60秒计算' : '开启监控'}
-              </button>
+          {/* 读数带: 设计稿 18 .b4h 四格 */}
+          <div className="band grid shrink-0 grid-cols-2 md:grid-cols-4">
+            <div>
+              <span className="k">已 触 发</span>
+              <span className="v text-bull">{view.counts.triggered}</span>
+              <small>任一窗口达到交易所异常波动阈值</small>
+            </div>
+            <div>
+              <span className="k">临 界</span>
+              <span className="v">{view.counts.edge}</span>
+              <small>接近度 ≥ 50%，尚未越线</small>
+            </div>
+            <div>
+              <span className="k">观 察</span>
+              <span className="v">{view.counts.watch}</span>
+              <small>接近度 &lt; 50%</small>
+            </div>
+            <div>
+              <span className="k">分 析 日 期</span>
+              <span className="v">{view.cache_date ?? '—'}</span>
+              <small>
+                {view.includes_today ? '含今日收盘' : '缓存截面'}
+                {' · 共 '}
+                {(headerCounts?.triggered ?? view.counts.triggered)
+                  + (headerCounts?.edge ?? view.counts.edge)
+                  + (headerCounts?.watch ?? view.counts.watch)}{' '}
+                只进入榜单
+              </small>
             </div>
           </div>
 
+          {/* 控制行: 口径「?」/ 刷新 / 轮询开关 + 筛选控件 (设计稿无, v2 保留) */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <SegmentedControl
-              value={windowFilter}
-              onChange={v => setWindowFilter(v)}
-              options={[
-                { value: 'all', label: '全部窗口' },
-                ...WINDOW_KEYS.map(w => ({ value: w, label: WINDOW_LABELS[w] })),
-              ]}
-            />
-            <SegmentedControl
-              value={direction}
-              onChange={v => setDirection(v)}
-              options={[
-                { value: 'both', label: '双向' },
-                { value: 'up', label: '正向' },
-                { value: 'down', label: '负向' },
-              ]}
-            />
-            <SegmentedControl
-              value={boardFilter}
-              onChange={v => setBoardFilter(v)}
-              options={[
-                { value: 'all' as const, label: '全板块' },
-                ...BOARDS.map(b => ({ value: b, label: b })),
-              ]}
-            />
-            <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="只看自选列表中的标的">
-              <input
-                type="checkbox"
-                checked={watchlistOnly}
-                onChange={e => setWatchlistOnly(e.target.checked)}
-                className="h-3 w-3 accent-accent"
+            <button
+              type="button"
+              aria-pressed={rulesOpen}
+              aria-label="查看异动规则口径"
+              title="交易所异动规则口径 (阈值 / 偏离值计算方式)"
+              onClick={() => setRulesOpen(v => !v)}
+              className={`ctl ctl-md ctl-btn inline-flex w-7 px-0 items-center justify-center ${
+                rulesOpen
+                  ? 'border-accent text-accent'
+                  : 'border-border text-secondary hover:text-foreground'
+              }`}
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => overview.refetch()}
+              className="ctl-btn ctl-sm"
+              title="立即刷新"
+            >
+              <RefreshCw className={`h-[12px] w-[12px] ${updating ? 'animate-spin' : ''}`} />
+              刷新
+            </button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              aria-label="启用偏离快照实时刷新"
+              onClick={() => toggleEnabled(!enabled)}
+              className={`ctl ctl-md ctl-btn inline-flex items-center gap-2 px-2.5 ${
+                enabled
+                  ? 'border-accent text-accent'
+                  : 'border-border text-secondary hover:text-foreground'
+              }`}
+            >
+              <Power className="h-[12px] w-[12px]" />
+              {enabled ? '实时刷新 · 每60秒' : '开启实时刷新'}
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <SegmentedControl
+                value={windowFilter}
+                onChange={v => setWindowFilter(v)}
+                options={[
+                  { value: 'all', label: '全部窗口' },
+                  ...WINDOW_KEYS.map(w => ({ value: w, label: WINDOW_LABELS[w] })),
+                ]}
               />
-              只看自选
-            </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="过滤 ST/*ST 风险警示股票">
-              <input
-                type="checkbox"
-                checked={excludeSt}
-                onChange={e => setExcludeSt(e.target.checked)}
-                className="h-3 w-3 accent-accent"
+              <SegmentedControl
+                value={direction}
+                onChange={v => setDirection(v)}
+                options={[
+                  { value: 'both', label: '双向' },
+                  { value: 'up', label: '正向' },
+                  { value: 'down', label: '负向' },
+                ]}
               />
-              过滤ST
-            </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="接近度下限 (|偏离|/阈值)">
-              接近度 ≥ {(minCloseness * 100).toFixed(0)}%
-              <input
-                type="range"
-                min={30}
-                max={100}
-                step={5}
-                value={minCloseness * 100}
-                onChange={e => setMinCloseness(Number(e.target.value) / 100)}
-                className="h-1 w-24 accent-accent"
+              <SegmentedControl
+                value={boardFilter}
+                onChange={v => setBoardFilter(v)}
+                options={[
+                  { value: 'all' as const, label: '全板块' },
+                  ...BOARDS.map(b => ({ value: b, label: b })),
+                ]}
               />
-            </label>
-            <div className="relative ml-auto">
-              <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-muted" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="搜索代码/名称"
-                className="h-7 w-40 rounded border border-border bg-base pl-7 pr-2 text-[11px] text-foreground"
-              />
+              <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="只看自选列表中的标的">
+                <input
+                  type="checkbox"
+                  checked={watchlistOnly}
+                  onChange={e => setWatchlistOnly(e.target.checked)}
+                  className="h-[12px] w-[12px] accent-accent"
+                />
+                只看自选
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="过滤 ST/*ST 风险警示股票">
+                <input
+                  type="checkbox"
+                  checked={excludeSt}
+                  onChange={e => setExcludeSt(e.target.checked)}
+                  className="h-[12px] w-[12px] accent-accent"
+                />
+                过滤ST
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-secondary" title="接近度下限 (|偏离|/阈值)">
+                接近度 ≥ {(minCloseness * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min={30}
+                  max={100}
+                  step={5}
+                  value={minCloseness * 100}
+                  onChange={e => setMinCloseness(Number(e.target.value) / 100)}
+                  className="h-1 w-24 accent-accent"
+                />
+              </label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-muted" />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="搜索代码/名称"
+                  className="ctl ctl-md ctl-input w-40 rounded-none pl-7 pr-2 bg-base"
+                />
+              </div>
             </div>
           </div>
 
-          {/* 主表: 剩余空间内滚动 (页面本身不滚动) */}
-          <div className="min-h-0 flex-1 overflow-auto leaf-cell">
-            <table className="w-full min-w-[860px] text-xs">
-              <thead className="sticky top-0 z-10 bg-surface">
-                <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted">
-                  <th className="w-10 px-2 py-2 text-right">#</th>
-                  <th className="px-2 py-2 text-left">代码 / 名称</th>
-                  <th className="px-2 py-2 text-right">现价</th>
-                  <th className="px-2 py-2 text-right">今日</th>
+          {/* 设计稿 18 主区: 触发/临界两张榜 + 右栏判定阈值/竞价基准 */}
+          <div className="grid shrink-0 grid-cols-1 gap-x-5 gap-y-0 xl:grid-cols-[1.35fr_1fr]">
+            <div>
+              <div className="sec-h !mt-0">
+                已 触 发 · 前 10
+                <span className="sp" />
+                <span className="tb-note">任一窗口达到阈值</span>
+              </div>
+              <DeviationRankTable rows={triggeredTop} onPreview={handlePreviewRow} />
+              <div className="sec-h">临 界 · 前 8</div>
+              <DeviationRankTable rows={edgeTop} onPreview={handlePreviewRow} />
+            </div>
+            <div>
+              <div className="sec-h !mt-0">判 定 阈 值</div>
+              <RulesTable rules={view.rules} />
+              <p className="mt-2 text-[10px] leading-[1.75] text-secondary">
+                3日±20% 异常波动; 严重异常波动 10日+100%(-50%) / 30日+200%(-70%), 负向更严;
+                2026-07-06 起风险警示(ST)股票同口径 (原±15%特别规定已废止)。
+                偏离值 = 个股 N 日累计涨跌幅 − 对应指数同期涨跌幅。
+              </p>
+              <div className="sec-h">竞 价 基 准 · 前 6</div>
+              <AuctionBenchmarkTable />
+            </div>
+          </div>
+
+          {/* v2 保留: 完整混排表 (筛选/搜索/接近度滑杆的全量视图) */}
+          <div className="sec-h">全 部 上 榜 标 的</div>
+          <div className="min-h-[200px] flex-1 overflow-auto">
+            <table className="dt min-w-[860px]">
+              <thead>
+                <tr>
+                  <th className="w-10 text-right">#</th>
+                  <th className="text-left">代码 / 名称</th>
+                  <th className="text-right">现价</th>
+                  <th className="text-right">当日</th>
                   {WINDOW_KEYS.map(w => (
-                    <th key={w} className="px-2 py-2 text-right">
+                    <th key={w} className="text-right">
                       {WINDOW_LABELS[w]}
                       <span className="ml-1 normal-case text-muted/60">(阈值)</span>
                     </th>
                   ))}
                   <th
-                    className="w-36 px-2 py-2 text-left"
-                    title="取 3日/10日/30日 三档中最高的 |偏离值|÷对应档阈值; ≥100% 已触发, ≥70% 边缘, ≥50% 观察"
+                    className="w-36 text-left"
+                    title="取 3日/10日/30日 三档中最高的 |偏离值|÷对应档阈值; ≥100% 触发, ≥70% 临界, ≥50% 观察"
                   >
                     接近度
                     <span className="ml-1 normal-case text-muted/60">(最高档)</span>
                   </th>
-                  <th className="px-2 py-2 text-center">状态</th>
+                  <th className="text-center">状态</th>
                 </tr>
               </thead>
               <tbody>
                 {overview.isLoading ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-muted">
+                    <td colSpan={9} className="py-10 text-center text-muted">
                       正在计算全市场偏离值…
                     </td>
                   </tr>
-                ) : enabled && overview.isError ? (
+                ) : overview.isError ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center">
+                    <td colSpan={9} className="py-10 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <span className="text-xs text-secondary">偏离计算请求失败，请重试</span>
                         <button
                           type="button"
                           onClick={() => overview.refetch()}
                           disabled={overview.isFetching}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-accent transition-colors hover:bg-elevated disabled:opacity-50"
+                          className="ctl-btn ctl-sm"
                         >
-                          <RefreshCw className="h-3 w-3" />
+                          <RefreshCw className="h-[12px] w-[12px]" />
                           重试
                         </button>
                       </div>
@@ -949,7 +990,7 @@ function DeviationView({ onPreview }: {
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-muted">
+                    <td colSpan={9} className="py-10 text-center text-muted">
                       {view ? '当前没有满足条件的标的' : '暂无数据'}
                     </td>
                   </tr>
@@ -966,9 +1007,10 @@ function DeviationView({ onPreview }: {
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       )}
     </div>
+
   )
 
   function ruleChips() {
@@ -980,7 +1022,7 @@ function DeviationView({ onPreview }: {
         return `${w.replace('d', '日')}${s}`
       }).join(' / ')
       return (
-        <div key={i} className="rounded border border-border bg-base px-2.5 py-2">
+        <div key={i} className="border border-border bg-elevated/40 px-2.5 py-2">
           <div className="text-[11px] font-medium text-foreground">
             {rule.board}
             {rule.st && <span className="ml-1 text-danger">ST</span>}
@@ -1023,9 +1065,9 @@ const AbnormalRowView = memo(function AbnormalRowView({ row, rank, onPreview }: 
   const dominant = dominantWindow(row)
   const meta = STATUS_META[row.status]
   return (
-    <tr className="group border-b border-border/40 transition-colors last:border-0 hover:bg-elevated/50">
-      <td className="px-2 py-1.5 text-right font-mono text-[10px] text-muted/70">{rank}</td>
-      <td className="px-2 py-1.5">
+    <tr className="group">
+      <td className="text-right font-mono text-[10px] text-muted/70">{rank}</td>
+      <td>
         {/* 仅代码/名称可点击打开详情 (与自选列表一致), 其余单元格不可点 */}
         <button
           type="button"
@@ -1033,22 +1075,22 @@ const AbnormalRowView = memo(function AbnormalRowView({ row, rank, onPreview }: 
           title="查看个股详情"
           className="flex min-w-0 items-center gap-1.5 text-left"
         >
-          <span className="shrink-0 font-mono text-xs text-foreground group-hover:text-accent transition-colors duration-150">{row.symbol}</span>
-          <span className="min-w-0 max-w-40 truncate text-xs text-secondary group-hover:text-foreground transition-colors duration-150">{row.name ?? '—'}</span>
+          <span className="shrink-0 font-mono text-[11.5px] text-foreground group-hover:text-accent transition-colors duration-150">{row.symbol}</span>
+          <span className="min-w-0 max-w-40 truncate text-[11.5px] text-secondary group-hover:text-foreground transition-colors duration-150">{row.name ?? '—'}</span>
           {board && (
-            <span className={`shrink-0 rounded px-1 text-[9px] font-bold leading-tight border ${board.color}`}>
+            <span className={`shrink-0 border px-1 text-[9px] font-bold leading-tight ${board.color}`}>
               {board.label}
             </span>
           )}
           {row.st && (
-            <span className="shrink-0 rounded border border-danger/30 bg-danger/10 px-1 text-[9px] font-bold text-danger">
+            <span className="shrink-0 border border-danger/40 px-1 text-[9px] font-bold text-danger">
               ST
             </span>
           )}
         </button>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-xs text-secondary">{fmtPrice(row.close)}</td>
-      <td className={`px-2 py-1.5 text-right font-mono text-xs font-medium ${priceColorClass(row.rt_pct)}`}>
+      <td className="text-right font-mono text-[11px] text-secondary">{fmtPrice(row.close)}</td>
+      <td className={`text-right font-mono text-[11px] font-medium ${priceColorClass(row.rt_pct)}`}>
         {fmtPct(row.rt_pct)}
       </td>
       {WINDOW_KEYS.map(w => {
@@ -1058,10 +1100,10 @@ const AbnormalRowView = memo(function AbnormalRowView({ row, rank, onPreview }: 
         // 后端 threshold 已按偏离方向取对应侧 (严重异动负向阈值更严)
         const sign = info && info.value >= 0 ? '+' : '−'
         return (
-          <td key={w} className="px-2 py-1.5 text-right">
+          <td key={w} className="text-right">
             {info ? (
               <span
-                className={`font-mono text-xs tabular-nums ${priceColorClass(info.value)} ${isDominant ? 'font-semibold' : 'opacity-45'}`}
+                className={`font-mono text-[11px] tabular-nums ${priceColorClass(info.value)} ${isDominant ? 'font-semibold' : 'opacity-45'}`}
                 title={`阈值 ${sign}${fmtThreshold(info.threshold)} · 接近度 ${(info.closeness * 100).toFixed(0)}%${isDominant ? ' · 本行接近度来源' : ''}`}
               >
                 {fmtPct(info.value)}
@@ -1073,14 +1115,14 @@ const AbnormalRowView = memo(function AbnormalRowView({ row, rank, onPreview }: 
           </td>
         )
       })}
-      <td className="px-2 py-1.5">
+      <td>
         <div
           className="flex items-center gap-1.5"
           title="取 3日/10日/30日 三档中最高的 |偏离值|÷对应档阈值; ≥100% 已触发, ≥70% 边缘, ≥50% 观察"
         >
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-elevated">
+          <div className="h-1.5 w-20 overflow-hidden bg-elevated">
             <div
-              className={`h-full rounded-full transition-all ${meta.bar}`}
+              className={`h-full transition-all ${meta.bar}`}
               style={{ width: `${Math.min(100, (dominant?.closeness ?? 0) * 100)}%` }}
             />
           </div>
@@ -1089,27 +1131,12 @@ const AbnormalRowView = memo(function AbnormalRowView({ row, rank, onPreview }: 
           </span>
         </div>
       </td>
-      <td className="px-2 py-1.5 text-center">
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+      <td className="text-center">
+        <span className={`text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
       </td>
     </tr>
   )
 })
-
-function StatusChip({ label, count, tone }: { label: string; count?: number; tone: 'danger' | 'warning' | 'muted' }) {
-  const toneCls =
-    tone === 'danger'
-      ? 'border-danger/30 bg-danger/8 text-danger'
-      : tone === 'warning'
-        ? 'border-warning/30 bg-warning/8 text-warning'
-        : 'border-border bg-elevated text-secondary'
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${toneCls}`}>
-      <span className="font-mono text-sm font-semibold tabular-nums">{count ?? '—'}</span>
-      {label}
-    </span>
-  )
-}
 
 function SegmentedControl<T extends string>({ value, onChange, options }: {
   value: T
@@ -1117,14 +1144,14 @@ function SegmentedControl<T extends string>({ value, onChange, options }: {
   options: Array<{ value: T; label: string }>
 }) {
   return (
-    <div className="inline-flex h-7 overflow-hidden rounded border border-border bg-base">
+    <div className="inline-flex h-7 items-stretch overflow-hidden border border-border">
       {options.map(o => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`px-2.5 text-[11px] transition-colors ${
+          className={`border-l border-border px-2.5 text-[11px] transition-colors first:border-l-0 ${
             value === o.value ? 'bg-accent/10 text-accent' : 'text-muted hover:text-foreground'
           }`}
         >
@@ -1132,6 +1159,154 @@ function SegmentedControl<T extends string>({ value, onChange, options }: {
         </button>
       ))}
     </div>
+  )
+}
+
+/** 设计稿 18 榜单表: 标的 / 当日 / 3日 / 10日 / 30日 / 接近度 / 状态 (行点击开详情) */
+function DeviationRankTable({ rows, onPreview }: {
+  rows: AbnormalRow[]
+  onPreview: (row: AbnormalRow) => void
+}) {
+  return (
+    <table className="dt">
+      <thead>
+        <tr>
+          <th className="text-left">标的</th>
+          <th className="text-right">当日</th>
+          <th className="text-right">3 日</th>
+          <th className="text-right">10 日</th>
+          <th className="text-right">30 日</th>
+          <th className="text-right" title="|偏离值| ÷ 对应档阈值, 取三档最高">接近度</th>
+          <th className="text-center">状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 ? (
+          <tr><td colSpan={7} className="py-6 text-center text-muted">暂无标的</td></tr>
+        ) : rows.map((r, i) => {
+          const dominant = dominantWindow(r)
+          const meta = STATUS_META[r.status]
+          return (
+            <tr key={r.symbol} className="group cursor-pointer" onClick={() => onPreview(r)} {...keyboardActivate(() => onPreview(r))}>
+              <td>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-6 shrink-0 font-mono text-[9px] text-muted/70">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="min-w-0 max-w-24 truncate">{r.name ?? r.symbol}</span>
+                  <span className="shrink-0 font-mono text-[9px] text-muted/80">{r.symbol}</span>
+                  {r.st && <span className="shrink-0 border border-danger/40 px-1 text-[8px] font-bold text-danger">ST</span>}
+                </span>
+              </td>
+              <td className={priceColorClass(r.rt_pct)}>{fmtPct(r.rt_pct)}</td>
+              {WINDOW_KEYS.map(w => {
+                const info = r.windows[w]
+                const isDominant = dominant?.key === w
+                return (
+                  <td key={w} className={info ? `${priceColorClass(info.value)} ${isDominant ? 'font-semibold' : 'opacity-50'}` : 'text-muted/40'}>
+                    {info ? fmtPct(info.value) : '—'}
+                  </td>
+                )
+              })}
+              <td className="font-semibold">{dominant ? `${(dominant.closeness * 100).toFixed(0)}%` : '—'}</td>
+              <td className="text-center">
+                <span
+                  className={
+                    r.status === 'triggered'
+                      ? 'bg-bull px-1.5 py-px text-[9px] tracking-wider text-white'
+                      : r.status === 'edge'
+                        ? 'border border-warning px-1.5 py-px text-[9px] tracking-wider text-warning'
+                        : 'px-1.5 py-px text-[9px] tracking-wider text-muted'
+                  }
+                >
+                  {meta.label}
+                </span>
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+/** 设计稿 18 右栏「判定阈值」表: 板块 / 3日 / 10日 / 30日 (rules 为空时兜底 FALLBACK_RULES) */
+function RulesTable({ rules }: {
+  rules: AbnormalOverview['rules'] | null | undefined
+}) {
+  const list = (rules?.length ? rules : FALLBACK_RULES) as NonNullable<AbnormalOverview['rules']>
+  return (
+    <table className="dt">
+      <thead>
+        <tr>
+          <th className="text-left">板块</th>
+          <th className="text-right">3 日</th>
+          <th className="text-right">10 日</th>
+          <th className="text-right">30 日</th>
+        </tr>
+      </thead>
+      <tbody>
+        {list.map(rule => (
+          <tr key={rule.board}>
+            <td>
+              <span className="flex items-center gap-1.5">
+                {rule.board}
+                {rule.st && <span className="border border-danger/40 px-1 text-[8px] font-bold text-danger">ST</span>}
+              </span>
+            </td>
+            {WINDOW_KEYS.map(w => {
+              const t = rule.thresholds[w]
+              const s = t && t.up === t.down ? `±${fmtThreshold(t.up)}` : `+${fmtThreshold(t?.up)}/−${fmtThreshold(t?.down)}`
+              return <td key={w}>{s}</td>
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** 设计稿 18 右栏「竞 价 基 准 · 前 6」: 同花顺盘前风向标 (与竞价 tab 同接口, 静默降级) */
+function AuctionBenchmarkTable() {
+  const q = useQuery({
+    queryKey: ['auction-benchmark', 'latest'],
+    queryFn: () => api.auctionBenchmark(),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  })
+  const items = (q.data?.items ?? []).slice(0, 6)
+  if (q.isLoading || q.isError || items.length === 0) {
+    return (
+      <p className="py-3 text-[11px] text-muted">
+        {q.isLoading ? '正在加载竞价基准…' : '竞价基准暂不可用 (需配置 fuyao 数据源)'}
+      </p>
+    )
+  }
+  return (
+    <table className="dt">
+      <thead>
+        <tr>
+          <th className="text-left">标的</th>
+          <th className="text-right">竞价涨幅</th>
+          <th className="text-right">当日</th>
+          <th className="text-right">标签</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((i: AuctionBenchmarkItem, idx) => (
+          <tr key={i.thscode}>
+            <td>
+              <span className="flex items-center gap-1.5">
+                <span className="w-6 shrink-0 font-mono text-[9px] text-muted/70">{String(idx + 1).padStart(2, '0')}</span>
+                <span className="min-w-0 max-w-24 truncate">{i.name ?? i.thscode}</span>
+              </span>
+            </td>
+            {/* auction_pct 为百分数原值 (9.97 = +9.97%), day0_pct 为小数制 */}
+            <td className={priceColorClass(i.auction_pct)}>{i.auction_pct == null ? '—' : fmtPct(i.auction_pct / 100)}</td>
+            <td className={priceColorClass(i.day0_pct)}>{i.day0_pct == null ? '—' : fmtPct(i.day0_pct)}</td>
+            <td className="text-muted">{(i.tags ?? []).slice(0, 2).join(' · ') || '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 

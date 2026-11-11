@@ -130,7 +130,7 @@ def repair_integrity(body: IntegrityRepairIn, request: Request) -> dict:
     from app.data_providers import custom
     from app.services import preferences
     from app.services.integrity_check import latest_report, run_repair
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
 
     state = request.app.state
     report = latest_report(state.repo.store.data_dir)
@@ -139,7 +139,7 @@ def repair_integrity(body: IntegrityRepairIn, request: Request) -> dict:
     if not report.get("repairable_count"):
         raise HTTPException(status_code=400, detail="当前没有可自动修补的问题")
     provider = preferences.get_daily_data_provider()
-    custom_daily = provider != "tickflow" and custom.provider_has_dataset(provider, "daily")
+    custom_daily = custom.provider_has_dataset(provider, "daily")
     if not custom_daily and not state.capabilities.has(Cap.KLINE_DAILY_BATCH):
         raise HTTPException(status_code=403, detail="当前日K数据源不可用, 请先检查数据源配置")
     return _start_integrity_job(request, lambda progress: run_repair(
@@ -848,7 +848,7 @@ _TABLE_FIELD_DESC: dict[str, dict[str, str]] = {
         "symbol": "股票代码",
         "trade_date": "除权除息日",
         "ex_factor": "单事件等比因子 = 除权前收盘价 / 除权参考价, 按日期连乘得累计复权因子",
-        # 事件明细列: 表结构固定 8 列, 明细由提供事件的数据源(扶摇)回填, TickFlow 源为 null
+        # 事件明细列: 表结构固定 8 列, 明细由提供事件的数据源(扶摇)回填, 其余源为 null
         "dividend": "每股现金分红(税前, 元)。可空, 仅事件明细数据源回填",
         "bonus": "每股送转比例(10送3 = 0.3)。可空, 仅事件明细数据源回填",
         "allot": "每股配股比例。可空, 仅事件明细数据源回填",
@@ -941,7 +941,7 @@ def get_version(request: Request) -> dict:
     """
     from app import __version__
 
-    # 1. 优先用 app.__version__ (唯一权威版本, 运行时从 frontend/package.json 加载)
+    # 1. 优先用 app.__version__ (唯一权威版本, 运行时从 frontend_v2/package.json 加载)
     if __version__:
         v = __version__.strip()
         return {"version": v if v.startswith("v") else f"v{v}"}

@@ -75,17 +75,26 @@ function render(ui: React.ReactNode) {
   )
 }
 
+/** 轮询等信号列表异步落地, 避免用固定等待猜 query resolve 的时机。 */
+async function waitForText(text: string, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (container!.textContent?.includes(text)) return
+    await new Promise(r => setTimeout(r, 20))
+  }
+  throw new Error(`等待文本超时: ${text}`)
+}
+
 it('信号库页: 数字右值条件不再触发错误边界, 正常渲染', async () => {
   render(
     <ExtensionBoundary extensionId="official.signals">
       <Signals />
     </ExtensionBoundary>,
   )
-  await new Promise(r => setTimeout(r, 120))
-  expect(container!.textContent).not.toContain('暂时不可用')
-  expect(container!.textContent).toContain('信号库')
   // 数字右值条件正常显示 (不再因 .startsWith 崩溃)
-  expect(container!.textContent).toContain('0.6')
+  await waitForText('0.6')
+  expect(container!.textContent).toContain('信号库')
+  expect(container!.textContent).not.toContain('暂时不可用')
 })
 
 it('条件编辑器: 数字右值不抛错, 常量输入正常挂载', async () => {

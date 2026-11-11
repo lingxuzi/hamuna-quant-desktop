@@ -520,7 +520,7 @@ def _mining_runtime_services(data_dir):
     from app.backtest.strategy import StrategyBacktestService
     from app.strategy import config as strategy_config
     from app.strategy.engine import StrategyEngine
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     store = DataStore(data_dir)
     repo = KlineRepository(store)

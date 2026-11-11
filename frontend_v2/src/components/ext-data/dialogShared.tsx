@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { INPUT_LG, INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cn } from '@/lib/cn'
 
 /** 扩展数据弹窗共用的分节标题: mono 序号 + 标题 + 发丝线 + 右侧动作区 */
 export function SectionHead({ num, title, children }: {
@@ -16,5 +18,8 @@ export function SectionHead({ num, title, children }: {
   )
 }
 
-export const INPUT_CLS = 'w-full h-9 px-3 rounded-lg bg-base border border-border text-xs text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/30 focus:border-accent/50 transition-shadow'
-export const INPUT_SM_CLS = 'w-full h-8 px-2.5 rounded-lg border border-border bg-base text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow'
+export const INPUT_CLS = cn(INPUT_LG, 'w-full bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30 focus:border-accent/50 transition-shadow')
+export const INPUT_SM_CLS = cn(INPUT_MD, 'w-full bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow')
+/** md 档字段: 调度表单等密集行的输入/下拉 (bg-base 与弹层纸面对比) */
+export const FIELD_MD_CLS = cn(INPUT_MD, 'bg-base focus:ring-1 focus:ring-accent/25')
+export const SELECT_MD_CLS = cn(SELECT_MD, 'bg-base focus:ring-1 focus:ring-accent/25')

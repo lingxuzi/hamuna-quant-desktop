@@ -70,9 +70,8 @@ from app.services.mining_process_lock import MiningProcessLock, MiningProcessLoc
 from app.services.quote_service import QuoteService
 from app.services.shared_work import WorkBusyError
 from app.startup_diagnostics import startup_phase
-from app.tickflow import client as tf_client
-from app.tickflow.policy import detect_capabilities
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import detect_capabilities
+from app.data_providers.repository import DataStore, KlineRepository
 
 logging.basicConfig(
     level=settings.log_level,
@@ -94,8 +93,8 @@ if not getattr(sys, "frozen", False):
 @asynccontextmanager
 async def _application_lifespan(app: FastAPI):
     logger.info(
-        "Tick Stock Panel v%s starting (mode=%s)",
-        __version__, tf_client.current_mode(),
+        "Tick Stock Panel v%s starting",
+        __version__,
     )
 
     # 同步路由线程池容量: Starlette 默认 40, 本地多标签页/自动刷新与长计算
@@ -191,7 +190,6 @@ async def _application_lifespan(app: FastAPI):
     # instruments/index/ETF 仍同步 (毫秒级)。应用立即 ready, 指标算完后自动替换。
     repo.refresh_cache(background=True)
 
-    # 自定义数据源配置(可选): 失败只记录错误, 不影响 TickFlow 基准路径。
     try:
         from app.data_providers import custom as custom_sources
         custom_sources.load_all()
@@ -563,7 +561,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Tick Stock Panel",
     version=__version__,
-    description="A 股策略 + 回测面板 — TickFlow 适配",
+    description="A 股策略 + 回测面板",
     lifespan=lifespan,
 )
 
@@ -740,7 +738,7 @@ app.state.extension_load_errors = extension_load_errors
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.tickflow.capabilities import CapabilityDenied
+from app.data_providers.capabilities import CapabilityDenied
 
 
 @app.get("/api/openapi.json", include_in_schema=False)

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trash2, RefreshCw, Star, X, Search, LayoutGrid, List, Rows3, BarChart3, Settings2, Plus, Check, Filter, Eye, EyeOff, Minus, ChevronsUp, Clock, RotateCcw, FileUp, FolderOpen, FolderMinus, FolderPlus } from 'lucide-react'
+import { Trash2, RefreshCw, Star, X, Filter, Eye, EyeOff, Minus, ChevronsUp, Clock, FolderOpen, FolderMinus } from 'lucide-react'
 import { api, type KlineRow, type MinuteKlineRow, type WatchlistGroup, type WatchlistGroupColor } from '@/lib/api'
 import { ExtSparkChart } from '@/components/screener/ExtSparkChart'
 import { fetchMinuteBatchIncremental, MINUTE_SEED_MAX } from '@/lib/minuteBatchIncremental'
@@ -15,7 +15,6 @@ import { reuseUnchangedSeries, EMPTY_ROWS } from '@/lib/series-identity'
 import { QK } from '@/lib/queryKeys'
 import { storage } from '@/lib/storage'
 import { fmtPrice, fmtPct, fmtBigNum, priceColorClass, formatExtNumber, fmtAssetPrice } from '@/lib/format'
-import { cn } from '@/lib/cn'
 import { computeGroupPcts, loadGroupStatsConfig, type GroupStatsConfigPatch } from '@/lib/watchlistGroupStats'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
@@ -27,7 +26,6 @@ import {
   type DimensionMembersTarget,
 } from '@/components/DimensionMembersDialog'
 import { WatchlistImportDialog } from '@/components/WatchlistImportDialog'
-import { WatchlistAddMenu } from '@/components/WatchlistAddMenu'
 import {
   WatchlistGroupBar,
   WatchlistGroupPicker,
@@ -253,191 +251,81 @@ function renderExtCell(
   )
 }
 
-// ===== 搜索框组件（紧凑内联式）=====
+// ===== 工具条「更多」下拉 (design/v2/02-watchlist.html 工具条外的次要动作) =====
 
-function StockSearchBox({
-  onPreview,
-  existingBySymbol,
-  groups,
-  onAdd,
-  onToggleMember,
-  preferredGroupId,
-  addPending,
-  memberPending,
+function WatchlistMoreMenu({
+  viewMode, onToggleView, groupCardsOpen, onToggleGroupCards, groupStatsOpen,
+  onToggleGroupStats, onResetFilters, canReset, onClear, canClear,
+  filterOpen, onToggleFilter, onImport, children,
 }: {
-  onPreview: (symbol: string, name: string) => void
-  /** symbol -> 该标的当前所属分组 id 列表; 不在 Map 中 = 未加自选 */
-  existingBySymbol: Map<string, string[]>
-  groups: WatchlistGroup[]
-  onAdd: (symbol: string, groupId: string | null) => void
-  onToggleMember: (symbol: string, groupId: string, member: boolean) => void
-  preferredGroupId: string | null
-  addPending: boolean
-  memberPending: boolean
+  viewMode: string
+  onToggleView: () => void
+  groupCardsOpen: boolean
+  onToggleGroupCards: () => void
+  groupStatsOpen: boolean
+  onToggleGroupStats: () => void
+  onResetFilters: () => void
+  canReset: boolean
+  onClear: () => void
+  canClear: boolean
+  filterOpen: boolean
+  onToggleFilter: () => void
+  onImport: () => void
+  children: React.ReactNode
 }) {
-  const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [activeIdx, setActiveIdx] = useState(-1)
-
-  const search = useQuery({
-    queryKey: QK.instrumentSearch(query, 'stock,etf,index'),
-    queryFn: () => api.instrumentSearch(query, 20, 'stock,etf,index'),
-    enabled: query.trim().length > 0,
-    staleTime: 30_000,
-  })
-
-  const results = search.data?.results ?? []
-
+  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (e.target instanceof Element && e.target.closest('[data-watchlist-group-menu]')) return
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Escape') { setOpen(false); return }
-    if (!open || results.length === 0) return
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setActiveIdx(i => Math.min(i + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActiveIdx(i => Math.max(i - 1, -1))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (activeIdx >= 0) handleSelect(results[activeIdx])
-      else if (results.length > 0) handleSelect(results[0])
-    }
-  }
-
-  function handleSelect(r: { symbol: string; name: string }) {
-    onPreview(r.symbol, r.name)
-    setQuery('')
-    setOpen(false)
-    setActiveIdx(-1)
-  }
-
+    if (!open) return
+    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  const items: { label: string; onClick: () => void; pressed?: boolean; danger?: boolean; disabled?: boolean }[] = [
+    { label: viewMode === 'table' ? '卡片视图' : '列表视图', onClick: onToggleView },
+    { label: '分组卡片', onClick: onToggleGroupCards, pressed: groupCardsOpen },
+    { label: '分组统计', onClick: onToggleGroupStats, pressed: groupStatsOpen },
+    // 设计稿工具条只有 3 个按钮, 筛选/导入收进此下拉
+    { label: '筛选', onClick: onToggleFilter, pressed: filterOpen },
+    { label: '导入', onClick: onImport },
+    { label: '重置筛选', onClick: onResetFilters, disabled: !canReset },
+    { label: '清空自选', onClick: onClear, danger: true, disabled: !canClear },
+  ]
   return (
-    <div ref={containerRef} className="relative">
-      <div className="relative flex items-center">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted pointer-events-none" />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="搜索…"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); setActiveIdx(-1) }}
-          onFocus={() => { if (query.trim()) setOpen(true) }}
-          onKeyDown={handleKeyDown}
-          className="w-44 h-8 pl-8 pr-2.5 rounded-btn bg-elevated border border-border text-xs text-foreground placeholder:text-muted focus:outline-none focus:border-accent/50 focus:w-56 transition-all duration-200"
-        />
-      </div>
-
-      <AnimatePresence>
-        {open && results.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-1 z-50 w-72 max-h-[320px] overflow-y-auto rounded-card border border-border bg-base shadow-xl"
-          >
-            {results.map((r, i) => {
-              const entryGids = existingBySymbol.get(r.symbol)
-              const inWatchlist = entryGids !== undefined
-              return (
-                <div
-                  key={r.symbol}
-                  className={`flex items-center gap-2.5 px-3 py-2 text-xs transition-colors duration-100 ${
-                    i === activeIdx ? 'bg-accent/10 text-accent' : 'hover:bg-elevated text-foreground'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(r)}
-                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
-                  >
-                    <span className="font-mono shrink-0 w-[80px]">{r.symbol}</span>
-                    {/* 名称+标签组: 标签紧贴名称文字, 而不是被 flex-1 推到行尾 */}
-                    <span className="flex min-w-0 flex-1 items-center gap-1">
-                      <span className="truncate text-secondary">{r.name}</span>
-                      {r.asset_type === 'etf' && (
-                        <span className="shrink-0 px-1 py-0.5 rounded text-[10px] leading-none bg-accent/10 text-accent">ETF</span>
-                      )}
-                      {r.asset_type === 'index' && (
-                        <span className="shrink-0 px-1 py-0.5 rounded text-[10px] leading-none bg-sky-500/10 text-sky-400">指数</span>
-                      )}
-                      {(() => {
-                        const b = boardTag(r.symbol)
-                        return b && (
-                          <span className={`shrink-0 px-1 py-0.5 rounded text-[10px] leading-none border ${b.color}`}>{b.label}</span>
-                        )
-                      })()}
-                    </span>
-                  </button>
-                  {inWatchlist ? (
-                    // 已加自选: 对勾标识 + 分组勾选面板, 可继续加入/移出其他分组
-                    // (走 members 端点, 不重排列表、不覆盖备注)
-                    <span className="flex shrink-0 items-center gap-1">
-                      <span
-                        className="inline-flex p-1 text-accent/70"
-                        title="已加自选"
-                        aria-label="已加自选"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                      <WatchlistGroupPicker
-                        groups={groups}
-                        groupIds={entryGids}
-                        symbol={r.symbol}
-                        disabled={memberPending}
-                        onToggleMember={onToggleMember}
-                      />
-                    </span>
-                  ) : (
-                    // 未加自选: + 一键加入当前分组页签 (全部/未分组页签下加为未分组);
-                    // 文件夹图标展开分组菜单, 显式选择目标分组
-                    <span className="flex shrink-0 items-center gap-0.5">
-                      <button
-                        type="button"
-                        onClick={event => { event.stopPropagation(); onAdd(r.symbol, preferredGroupId ?? null) }}
-                        disabled={addPending}
-                        className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-50 cursor-pointer"
-                        title={
-                          preferredGroupId
-                            ? `加入自选 · 当前分组「${groups.find(g => g.id === preferredGroupId)?.name ?? ''}」`
-                            : '加入自选 (未分组)'
-                        }
-                        aria-label={`快速加入自选 ${r.symbol}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <WatchlistAddMenu
-                        onSelect={groupId => onAdd(r.symbol, groupId)}
-                        preferredGroupId={preferredGroupId}
-                        disabled={addPending}
-                        triggerClassName="shrink-0 rounded p-1 text-muted transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-50"
-                        title="展开分组, 选择要加入的自选分组"
-                      >
-                        <FolderPlus className="h-3.5 w-3.5" />
-                      </WatchlistAddMenu>
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div ref={ref} className="relative">
+      <button type="button" aria-pressed={open} onClick={() => setOpen(v => !v)} className="ctl ctl-md ctl-btn">更多</button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[136px] border border-border bg-base py-1 shadow-xl">
+          {items.map(it => (
+            <button
+              key={it.label}
+              type="button"
+              disabled={it.disabled}
+              onClick={() => { setOpen(false); it.onClick() }}
+              className={`block w-full px-3 py-1.5 text-left text-[12px] disabled:opacity-40 ${
+                it.danger ? 'text-danger hover:bg-danger/10' : 'text-foreground hover:bg-elevated'
+              }`}
+            >
+              {it.label}{it.pressed ? ' · 开' : ''}
+            </button>
+          ))}
+          {/* 扩展插槽: 自选页工具栏二开区 (无注册时不渲染) */}
+          <div>{children}</div>
+        </div>
+      )}
     </div>
   )
+}
+
+/** 设计稿 10 列顺序 (design/v2/02-watchlist.html) */
+const WL_COLUMN_ORDER = ['symbol', 'price', 'pct', 'amount', 'turnover', 'vol_ratio', 'ma5', 'ma20', 'annual_vol', 'high_60d']
+// 设计稿表头文案 (design/v2/02-watchlist.html): 首列「名称 / 代码」, 现价称「最新」
+const WL_DESIGN_HEADERS: Record<string, string> = {
+  symbol: '名称 / 代码',
+  price: '最新',
+  annual_vol: '20日波动',
+  high_60d: '60日高 / 低',
+  low_60d: '60日低',
 }
 
 // ===== 实时监控圆点 =====
@@ -450,13 +338,13 @@ function RealtimeDot({ title = '实时监控中' }: { title?: string }) {
   return (
     <span
       title={title}
-      className="relative inline-flex h-2 w-2 shrink-0"
+      className="relative inline-flex h-[8px] w-[8px] shrink-0"
       aria-label={title}
     >
       {/* 外圈: 扩散晕 (ping 动画) */}
       <span className="absolute inline-flex h-full w-full rounded-full bg-accent/60 animate-ping motion-reduce:hidden" />
       {/* 内圈: 实心点 + 微辉光 */}
-      <span className="relative inline-flex rounded-full h-2 w-2 bg-accent shadow-[0_0_5px_rgba(61,214,140,0.6)]" />
+      <span className="relative inline-flex rounded-full h-[8px] w-[8px] bg-accent shadow-[0_0_5px_rgba(61,214,140,0.6)]" />
     </span>
   )
 }
@@ -560,12 +448,12 @@ const StockCard = React.memo(function StockCard({
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => onConfirmRemove(r.symbol)}
-              className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors"
+              className="ctl ctl-sm ctl-btn soft px-1.5 hover:bg-danger/20"
             >
               确认
             </button>
-            <button onClick={() => onCancelRemove()} className="p-0.5 text-muted hover:text-foreground transition-colors">
-              <X className="h-3 w-3" />
+            <button onClick={() => onCancelRemove()} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground">
+              <X className="h-[12px] w-[12px]" />
             </button>
           </div>
         ) : (
@@ -579,7 +467,7 @@ const StockCard = React.memo(function StockCard({
             />
             <button
               onClick={() => onRequestRemove(r.symbol)}
-              className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all duration-150 p-0.5 rounded hover:bg-elevated"
+              className="ctl ctl-sm ctl-ghost ctl-icon opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all duration-150 hover:bg-elevated"
               aria-label="移除"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -778,7 +666,13 @@ export function Watchlist() {
 
   // 计算可见列（列是否出现只由自定义列配置决定）
   const visibleColumns = useMemo(() => {
-    return columns.filter(c => c.visible)
+    // 设计稿 10 列顺序 (design/v2/02-watchlist.html); 用户额外开启的列/扩展列排在后面
+    const order = (c: ColumnConfig) => {
+      if (c.source.type !== 'builtin') return 99
+      const i = WL_COLUMN_ORDER.indexOf(c.source.key)
+      return i < 0 ? 99 : i
+    }
+    return columns.filter(c => c.visible).sort((a, b) => order(a) - order(b))
   }, [columns])
 
   // 计算 ext 列参数
@@ -926,7 +820,7 @@ export function Watchlist() {
 
   // 批量分时数据 (有分钟K批量能力时, 列可见才拉)
   // 刷新策略: 仅当实时行情运行 且 用户在实时监控设置里开启 minute_intraday_refresh 时
-  // 按用户设定的间隔轮询 (不接 SSE 高频, 避免每秒拉 TickFlow 触限流); 与 Screener / 设置卡片描述一致。
+  // 按用户设定的间隔轮询 (不接 SSE 高频, 避免高频拉取触限流); 与 Screener / 设置卡片描述一致。
   const { data: prefsData } = usePreferences()
   const intradayRefreshEnabled = prefsData?.minute_intraday_refresh ?? false
   const intradayRefreshInterval = prefsData?.minute_intraday_refresh_interval ?? 6
@@ -989,18 +883,6 @@ export function Watchlist() {
     prevMinuteSeriesRef.current = merged
     return merged
   }, [intradayVisible, minuteBatch.data, enriched.data])
-
-  const addMutation = useMutation({
-    mutationFn: ({ symbol, groupId }: { symbol: string; groupId: string | null }) =>
-      api.watchlistAdd(symbol, '', groupId),
-    onSuccess: (data) => {
-      qc.setQueryData(QK.watchlist, data)
-      qc.invalidateQueries({ queryKey: QK.watchlist })
-      qc.invalidateQueries({ queryKey: ['watchlist-enriched'] })
-      qc.invalidateQueries({ queryKey: ['kline-batch'] })
-      qc.invalidateQueries({ queryKey: ['minute-batch'] })
-    },
-  })
 
   const remove = useMutation({
     mutationFn: (sym: string) => api.watchlistRemove(sym),
@@ -1175,6 +1057,14 @@ export function Watchlist() {
     if (selectedGroup === 'ungrouped') return rowsWithGroup.filter(row => row.group_ids.length === 0)
     return rowsWithGroup.filter(row => row.group_ids.includes(selectedGroup))
   }, [groupBySymbol, rows, selectedGroup])
+  // `.wl-tools` 搜索: 代码或名称包含关键字 (v2 原先只有带下拉的搜索框, 设计稿是就地过滤)
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleGroupRows = searchQuery.trim()
+    ? rowsInSelectedGroup.filter((row: any) => {
+        const q = searchQuery.trim().toLowerCase()
+        return String(row.symbol).toLowerCase().includes(q) || String(row.name ?? '').toLowerCase().includes(q)
+      })
+    : rowsInSelectedGroup
   const watchlistContentLoading = list.isLoading || (allSymbols.length > 0 && enriched.isLoading)
 
   // 实时监控圆点: 仅 Free/低档 "按自选实时监控" 模式 (mode === 'watchlist') 下显示;
@@ -1266,7 +1156,7 @@ export function Watchlist() {
   // 筛选 + 排序
   const filteredRows = useMemo(() => {
     // 板块筛选（全选时跳过）
-    let result = rowsInSelectedGroup
+    let result = visibleGroupRows
     if (boardFilter.size > 0 && boardFilter.size < BOARD_OPTIONS.length) {
       result = result.filter(r => {
         if (r.asset_type === 'etf') return boardFilter.has(ETF_BOARD)
@@ -1300,7 +1190,7 @@ export function Watchlist() {
       })
     }
     return result
-  }, [rowsInSelectedGroup, filters, columns, boardFilter, excludeST])
+  }, [visibleGroupRows, filters, columns, boardFilter, excludeST])
 
   const activeFilterCount = Object.values(filters).filter(v => v.min || v.max || v.text).length
   const hasBoardFilter = boardFilter.size > 0 && boardFilter.size < BOARD_OPTIONS.length
@@ -1455,7 +1345,25 @@ export function Watchlist() {
 
   // "被筛选条件隐藏" 的个股数: 后端返回的行数 vs 经过前端筛选后的行数.
   // 分组切换不计入筛选隐藏，只比较当前分组内的数据。
-  const hiddenCount = Math.max(0, rowsInSelectedGroup.length - sortedRows.length)
+  const hiddenCount = Math.max(0, visibleGroupRows.length - sortedRows.length)
+
+  // 工具条注 (design/v2/02): 上涨 N · 下跌 N · 分组「X」 — 按当前排序后行集的涨跌幅计
+  const upDownNote = useMemo(() => {
+    let up = 0
+    let down = 0
+    for (const r of sortedRows as any[]) {
+      const pct = r.rt_pct ?? r.change_pct
+      if (pct == null) continue
+      if (pct > 0) up += 1
+      else if (pct < 0) down += 1
+    }
+    const groupLabel = selectedGroup === 'all'
+      ? '全部'
+      : selectedGroup === 'ungrouped'
+        ? '未分组'
+        : groups.find(g => g.id === selectedGroup)?.name ?? selectedGroup
+    return `上涨 ${up} · 下跌 ${down} · 分组「${groupLabel}」`
+  }, [sortedRows, selectedGroup, groups])
 
   const renderStockCard = (r: any) => (
     <StockCard
@@ -1481,25 +1389,21 @@ export function Watchlist() {
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-full">
       <PageHeader seal="选"
         title="自选"
+        subtitle="WATCHLIST"
         titleExtra={
-          <span className="inline-flex items-center gap-1.5">
-            {/* 计数胶囊: 显示数/总数, mono 字体突出数字 */}
-            <span className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-elevated/70 text-[11px]">
-              <span className="font-mono font-semibold text-secondary tabular-nums">{sortedRows.length}</span>
-              <span className="text-muted/50">/</span>
-              <span className="font-mono text-muted tabular-nums">{rowsInSelectedGroup.length}</span>
-              <span className="text-muted/60 ml-0.5">只</span>
-            </span>
+          <span className="inline-flex items-center gap-[9px]">
+            <span className="tb-chip">{sortedRows.length} 只</span>
+            <span className="tb-note">{upDownNote}</span>
             {/* 数据未就绪提示: 自选了但 enriched 缓存未覆盖 (新股/冷门/新用户未同步), 指标全为 null */}
             {pendingCount > 0 && (
               <button
                 type="button"
                 disabled={preparation.isFetching}
                 onClick={() => { void preparation.refetch() }}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted/15 text-muted border border-border/50 whitespace-nowrap disabled:cursor-wait"
+                className="ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5 bg-muted/15 border-border/50 whitespace-nowrap disabled:cursor-wait"
                 title={preparation.isFetching ? '正在按需补齐自选日K，已有数据仍可查看' :
                   `${preparation.data?.filter(r => r.status !== 'ready').map(r => `${r.symbol}：${r.message}`).join('\n') || '日K暂未就绪，请检查数据源配置'}\n点击重试补齐`}
               >
@@ -1520,123 +1424,39 @@ export function Watchlist() {
           </span>
         }
         right={
+          // 设计稿工具条 3 个按钮: 日期 / 列设置 / + 添加; 筛选与导入收进「更多」下拉
           <div className="flex items-center gap-2">
-            {/* 筛选 / 重置 / 搜索 */}
-            <button
-              onClick={() => setFilterOpen(v => !v)}
-              className={`inline-flex items-center justify-center h-8 w-8 rounded-btn transition-colors duration-150 ease-smooth ${
-                filterOpen || hasActiveFilters
-                  ? 'bg-accent/15 text-accent hover:bg-accent/25'
-                  : 'bg-elevated text-secondary hover:bg-elevated/80'
-              }`}
-              title={`筛选${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}`}
-            >
-              <Filter className="h-4 w-4" />
+            <button type="button" onClick={() => enriched.refetch()} disabled={enriched.isFetching} className="ctl ctl-md ctl-btn num" title="刷新行情">
+              {enriched.data?.as_of ?? '—'}
             </button>
-            {hasActiveFilters && (
-              <button
-                onClick={resetAllFilters}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated text-secondary hover:bg-danger/10 hover:text-danger transition-colors duration-150 ease-smooth"
-                title="重置全部筛选"
-                aria-label="重置全部筛选"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </button>
-            )}
-            <StockSearchBox
-              onPreview={(sym, name) => { setPreviewSymbol(sym); setPreviewName(name) }}
-              existingBySymbol={groupBySymbol}
-              groups={groups}
-              onAdd={(symbol, groupId) => addMutation.mutate({ symbol, groupId })}
-              onToggleMember={handleToggleMember}
-              preferredGroupId={activeGroupId}
-              addPending={addMutation.isPending}
-              memberPending={addGroupMember.isPending || removeGroupMember.isPending}
-            />
-            <button
-              onClick={() => setImportOpen(true)}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth"
-              title="批量导入自选（截图 / CSV / 粘贴代码）"
-              aria-label="批量导入自选"
+            <button type="button" onClick={() => setCustomizerOpen(true)} className="ctl ctl-md ctl-btn">列设置</button>
+            <WatchlistMoreMenu
+              viewMode={viewMode} onToggleView={toggleView}
+              groupCardsOpen={groupCardsOpen} onToggleGroupCards={toggleGroupView}
+              groupStatsOpen={groupStatsOpen} onToggleGroupStats={toggleGroupStats}
+              onResetFilters={resetAllFilters} canReset={hasActiveFilters}
+              onClear={() => setConfirmClear(true)} canClear={allSymbols.length > 0}
+              filterOpen={filterOpen} onToggleFilter={() => setFilterOpen(v => !v)}
+              onImport={() => setImportOpen(true)}
             >
-              <FileUp className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-border" />
-            {/* 视图 */}
+              <ExtensionSlot
+                name="watchlist.toolbar"
+                context={{
+                  symbols: sortedRows.map((row: any) => row.symbol),
+                  viewMode,
+                  selectedGroup,
+                  refresh: () => enriched.refetch(),
+                }}
+              />
+            </WatchlistMoreMenu>
+            {/* 设计稿「+ 添加」→ 聚焦 `.wl-tools` 搜索框输入代码 */}
             <button
-              onClick={toggleView}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth"
-              title={viewMode === 'table' ? '卡片视图' : '列表视图'}
+              type="button"
+              onClick={() => document.querySelector<HTMLInputElement>('.wl-search')?.focus()}
+              className="ctl ctl-md ctl-btn pri"
             >
-              {viewMode === 'table' ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+              + 添加
             </button>
-            {/* 分组卡片视图 */}
-            <button
-              onClick={toggleGroupView}
-              aria-pressed={groupCardsOpen}
-              className={`inline-flex items-center justify-center h-8 w-8 rounded-btn transition-colors duration-150 ease-smooth ${
-                groupCardsOpen
-                  ? 'bg-accent/15 text-accent hover:bg-accent/25'
-                  : 'bg-elevated text-secondary hover:bg-elevated/80 hover:text-foreground'
-              }`}
-              title={groupCardsOpen ? '退出分组卡片' : '分组卡片视图'}
-              aria-label={groupCardsOpen ? '退出分组卡片' : '分组卡片视图'}
-            >
-              <Rows3 className="h-4 w-4" />
-            </button>
-            {/* 分组统计条 */}
-            <button
-              onClick={toggleGroupStats}
-              aria-pressed={groupStatsOpen}
-              className={`inline-flex items-center justify-center h-8 w-8 rounded-btn transition-colors duration-150 ease-smooth ${
-                groupStatsOpen
-                  ? 'bg-accent/15 text-accent hover:bg-accent/25'
-                  : 'bg-elevated text-secondary hover:bg-elevated/80 hover:text-foreground'
-              }`}
-              title={groupStatsOpen ? '收起分组统计' : '分组统计'}
-              aria-label={groupStatsOpen ? '收起分组统计' : '分组统计'}
-            >
-              <BarChart3 className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-border" />
-            {/* 自定义列 / 刷新 */}
-            <button
-              onClick={() => setCustomizerOpen(true)}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth"
-              title="自定义列"
-            >
-              <Settings2 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => enriched.refetch()}
-              disabled={enriched.isFetching}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth disabled:opacity-50"
-              title="刷新"
-            >
-              <RefreshCw className={`h-4 w-4 ${enriched.isFetching ? 'animate-spin' : ''}`} />
-            </button>
-            {allSymbols.length > 0 && (
-              <>
-                <div className="w-px h-5 bg-border" />
-                <button
-                  onClick={() => setConfirmClear(true)}
-                  className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-danger/10 text-danger hover:bg-danger/20 transition-colors duration-150 ease-smooth"
-                  title="清空自选"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </>
-            )}
-            {/* 扩展插槽: 自选页工具栏二开区 (无注册时不渲染) */}
-            <ExtensionSlot
-              name="watchlist.toolbar"
-              context={{
-                symbols: sortedRows.map((row: any) => row.symbol),
-                viewMode,
-                selectedGroup,
-                refresh: () => enriched.refetch(),
-              }}
-            />
           </div>
         }
       />
@@ -1665,6 +1485,8 @@ export function Watchlist() {
         onDelete={groupId => deleteGroup.mutateAsync(groupId).then(() => undefined)}
         onClearGroup={groupId => clearGroup.mutateAsync(groupId).then(() => undefined)}
         onReorder={orderedIds => reorderGroup.mutateAsync(orderedIds).then(() => undefined)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {/* 筛选栏 */}
@@ -1680,7 +1502,7 @@ export function Watchlist() {
                   <button
                     key={board}
                     onClick={() => toggleBoard(board)}
-                    className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                    className={`ctl ctl-sm ctl-ghost px-1.5 ${
                       active
                         ? 'bg-accent/15 text-accent'
                         : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -1698,7 +1520,7 @@ export function Watchlist() {
             <div className="flex flex-wrap gap-1">
               <button
                 onClick={toggleExcludeST}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                className={`ctl ctl-sm ctl-ghost px-1.5 ${
                   excludeST
                     ? 'bg-accent/15 text-accent'
                     : 'bg-elevated text-secondary hover:text-foreground hover:bg-elevated/80'
@@ -1727,7 +1549,7 @@ export function Watchlist() {
                           value={f.min ?? ''}
                           onChange={e => updateFilter(item.id, { min: e.target.value })}
                           placeholder="min"
-                          className={`w-12 h-5 rounded border text-[10px] px-1 placeholder:text-muted focus:outline-none ${
+                          className={`ctl ctl-sm ctl-input w-12 px-1.5 placeholder:text-muted ${
                             hasFilter ? 'border-accent/30 bg-accent/5' : 'border-border bg-elevated'
                           } text-foreground focus:border-accent/50`}
                         />
@@ -1737,7 +1559,7 @@ export function Watchlist() {
                           value={f.max ?? ''}
                           onChange={e => updateFilter(item.id, { max: e.target.value })}
                           placeholder="max"
-                          className={`w-12 h-5 rounded border text-[10px] px-1 placeholder:text-muted focus:outline-none ${
+                          className={`ctl ctl-sm ctl-input w-12 px-1.5 placeholder:text-muted ${
                             hasFilter ? 'border-accent/30 bg-accent/5' : 'border-border bg-elevated'
                           } text-foreground focus:border-accent/50`}
                         />
@@ -1758,7 +1580,8 @@ export function Watchlist() {
 
       {/* 可滚动列表区 — 占满剩余高度，内部独立滚动，表头 sticky 固定 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-3">
+        {/* 设计稿表格直接落在 44px 页边距上, 不再套内层 padding */}
+        <div>
           {/* 列表 */}
           {watchlistContentLoading ? (
             <div className="text-sm text-muted">加载中…</div>
@@ -1770,13 +1593,13 @@ export function Watchlist() {
             <EmptyState
               icon={Star}
               title="自选为空"
-              hint="点击右上角搜索添加标的，或用导入按钮从券商自选 CSV / 截图批量导入、粘贴代码。"
+              hint="点击右上角搜索添加标的，或用「更多」里的导入从券商自选 CSV / 截图批量导入、粘贴代码。"
             />
-          ) : rowsInSelectedGroup.length === 0 ? (
+          ) : visibleGroupRows.length === 0 ? (
             <EmptyState
               icon={FolderOpen}
               title="该分组暂无标的"
-              hint="使用右上角搜索添加、通过股票旁的分组按钮移入，或用导入弹窗把整批标的并入本组。"
+              hint="使用右上角搜索添加、通过股票旁的分组按钮移入，或用「更多」里的导入弹窗把整批标的并入本组。"
             />
           ) : groupCardsOpen ? (
             <WatchlistGroupCards
@@ -1799,7 +1622,8 @@ export function Watchlist() {
               extraSortableKeys={INTRADAY_SORTABLE_KEYS}
               onVisibleRowsChange={handleTableVisibleRows}
               rowKey={(r: any) => r.symbol}
-              rowClassName={(r: any) => cn('border-b border-dotted border-border transition-colors duration-150 ease-smooth hover:bg-elevated/50', r.symbol === previewSymbol && 'bg-accent/10 hover:bg-accent/15')}
+              // 设计稿 .wl-table td 高 30px; 头部↕指示器只在悬停时出现
+              className="wl-table overflow-x-auto wl-hide-sort-ind"
               // 日k列表头：标签 + 显示/隐藏眼睛按钮
               renderHeaderContent={(col) => {
                 if (col.source.type === 'builtin' && col.source.key === 'candle') {
@@ -1809,7 +1633,7 @@ export function Watchlist() {
                       <button
                         type="button"
                         onClick={(event) => { event.stopPropagation(); toggleDailyKChart() }}
-                        className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                        className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-[24px] px-0 ${
                           dailyKChartVisible
                             ? 'text-accent bg-accent/10 hover:bg-accent/20'
                             : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -1830,7 +1654,7 @@ export function Watchlist() {
                       <button
                         type="button"
                         onClick={(event) => { event.stopPropagation(); toggleIntradayChart() }}
-                        className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                        className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-[24px] px-0 ${
                           intradayChartVisible
                             ? 'text-accent bg-accent/10 hover:bg-accent/20'
                             : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -1846,7 +1670,7 @@ export function Watchlist() {
                           type="button"
                           onClick={(event) => { event.stopPropagation(); minuteBatch.refetch() }}
                           disabled={minuteBatch.isFetching}
-                          className="inline-flex items-center justify-center w-5 h-5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-40"
+                          className="ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-[24px] px-0 hover:text-accent hover:bg-accent/10 disabled:opacity-40"
                           title="刷新分时数据"
                           aria-label="刷新分时数据"
                         >
@@ -1855,14 +1679,14 @@ export function Watchlist() {
                       )}
                       {/* 自动轮询中: 显示旋转图标提示正在实时刷新 */}
                       {intradayChartVisible && intradayAutoRefresh && (
-                        <RefreshCw className="h-3 w-3 text-accent/60 animate-spin" aria-label="实时刷新中" />
+                        <RefreshCw className="h-[12px] w-[12px] text-accent/60 animate-spin" aria-label="实时刷新中" />
                       )}
                       {/* 纵轴模式切换: 自适应区间 ⇄ 涨跌停带 */}
                       {intradayChartVisible && (
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); toggleIntradayYMode() }}
-                          className={`inline-flex items-center justify-center h-5 px-1 rounded text-[10px] whitespace-nowrap transition-colors ${
+                          className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center px-1.5 whitespace-nowrap ${
                             intradayYMode === 'limit'
                               ? 'text-accent bg-accent/10 hover:bg-accent/20'
                               : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -1876,9 +1700,18 @@ export function Watchlist() {
                     </span>
                   )
                 }
+                if (col.source.type === 'builtin') return WL_DESIGN_HEADERS[col.source.key]
                 return undefined
               }}
               renderCell={(r: any, col: ColumnConfig) => {
+                // 设计稿「20日波动」= 20日年化波动率 (1 位小数, 与设计稿 43.0% 同口径)
+                if (col.source.type === 'builtin' && col.source.key === 'annual_vol') {
+                  return <td className="num">{r.annual_vol_20d == null ? '—' : `${(r.annual_vol_20d * 100).toFixed(1)}%`}</td>
+                }
+                // 设计稿「60日高 / 低」= 高/低合一列, 优先于下方 low_60d 内置列
+                if (col.source.type === 'builtin' && col.source.key === 'high_60d') {
+                  return <td className="num">{r.high_60d == null || r.low_60d == null ? '—' : `${r.high_60d.toFixed(2)} / ${r.low_60d.toFixed(2)}`}</td>
+                }
                 // ext 列
                 if (col.source.type === 'ext') {
                   return renderExtCell(r, col, expandedCells, handleToggleExpand, setDimensionTarget, extSeriesData)
@@ -1891,21 +1724,20 @@ export function Watchlist() {
                 if (key === 'symbol') {
                   const board = boardTag(r.symbol)
                   return (
-                    <td className="px-1.5 py-1.5">
+                    <td>
                       <div className="flex items-center gap-1 w-full">
                         <button
                           type="button"
                           onClick={() => { setPreviewSymbol(r.symbol); setPreviewName(name ?? '') }}
                           className="flex items-center gap-1 text-left min-w-0"
                         >
-                          <span className="font-mono text-foreground text-xs group-hover:text-accent transition-colors duration-150">
-                            {r.symbol}
-                          </span>
-                          {name && (
-                            <span className="text-xs text-secondary truncate group-hover:text-foreground transition-colors duration-150">
-                              {name}
+                          {/* 账簿名录: 名称在上作主行, 代码在下作小字 */}
+                          <span className="flex min-w-0 flex-col leading-tight">
+                            <span className="truncate text-xs text-foreground group-hover:text-accent transition-colors duration-150">
+                              {name || r.symbol}
                             </span>
-                          )}
+                            {name && <span className="wl-sym">{r.symbol}</span>}
+                          </span>
                           {board ? (
                             <span className={`shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded text-[9px] font-bold leading-none border ${board.color}`}>
                               {board.label}
@@ -1914,20 +1746,20 @@ export function Watchlist() {
                           {monitoredSymbols.has(r.symbol) && <span className="ml-2"><RealtimeDot /></span>}
                         </button>
                         {/* 删除入口：从分组移除 + 从自选移除(二次确认) + 移到顶部 */}
-                        <div className="ml-auto pl-1 shrink-0">
+                        <div className="ml-auto pl-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                           {confirmRemove === r.symbol ? (
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => { remove.mutate(r.symbol); setConfirmRemove(null) }}
-                                className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors"
+                                className="ctl ctl-sm ctl-btn soft px-1.5 hover:bg-danger/20"
                               >
                                 确认
                               </button>
                               <button
                                 onClick={() => setConfirmRemove(null)}
-                                className="p-0.5 text-muted hover:text-foreground transition-colors"
+                                className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground"
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-[12px] w-[12px]" />
                               </button>
                             </div>
                           ) : (
@@ -1943,7 +1775,7 @@ export function Watchlist() {
                                 <button
                                   onClick={() => handleToggleMember(r.symbol, selectedGroup, false)}
                                   disabled={addGroupMember.isPending || removeGroupMember.isPending}
-                                  className="p-0.5 text-muted hover:text-warning transition-colors duration-150 ease-smooth disabled:opacity-50"
+                                  className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-warning duration-150 ease-smooth disabled:opacity-50"
                                   aria-label="移出当前分组"
                                   title="移出当前分组（仍保留在自选中）"
                                 >
@@ -1952,7 +1784,7 @@ export function Watchlist() {
                               )}
                               <button
                                 onClick={() => setConfirmRemove(r.symbol)}
-                                className="p-0.5 text-muted hover:text-danger transition-colors duration-150 ease-smooth"
+                                className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger duration-150 ease-smooth"
                                 aria-label="移除"
                                 title="从自选移除"
                               >
@@ -1961,7 +1793,7 @@ export function Watchlist() {
                               <button
                                 onClick={() => moveToTop.mutate(r.symbol)}
                                 disabled={moveToTop.isPending || allSymbols[0] === r.symbol}
-                                className="p-0.5 text-muted hover:text-accent transition-colors duration-150 ease-smooth disabled:opacity-30 disabled:hover:text-muted"
+                                className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent duration-150 ease-smooth disabled:opacity-30 disabled:hover:text-muted"
                                 aria-label="移到顶部"
                                 title="移到顶部"
                               >
@@ -1992,7 +1824,7 @@ export function Watchlist() {
                 if (key === 'signals') {
                   const signals = getSignals(r)
                   return (
-                    <td className="px-2 py-1.5">
+                    <td>
                       {signals.length > 0 && (
                         <div className="flex flex-wrap gap-0.5">
                           {signals.slice(0, 3).map((s) => (
@@ -2061,7 +1893,17 @@ export function Watchlist() {
                 // 其余纯数据列 → 共享原语
                 return renderBuiltinDataCell(r, col)
               }}
-              className="rounded-card overflow-x-auto"
+              footer={
+                <td colSpan={visibleColumns.length + 1}>
+                  <div className="wl-foot">
+                    <span>
+                      读取用时 <span className="num">{enriched.data?.elapsed_ms != null ? `${Math.round(enriched.data.elapsed_ms)} ms` : '—'}</span>
+                      {' · '}数据日 <span className="num">{enriched.data?.as_of ?? '—'}</span>
+                    </span>
+                    <span>点击行打开个股预览 · 支持自选扩展列</span>
+                  </div>
+                </td>
+              }
             />
           ) : !virtualizeCards ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
@@ -2119,14 +1961,14 @@ export function Watchlist() {
               <div className="flex items-center justify-end gap-2">
                 <button
                   onClick={() => setConfirmClear(false)}
-                  className="px-3 py-1.5 rounded-btn bg-elevated text-secondary hover:bg-elevated/80 text-sm transition-colors"
+                  className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80"
                 >
                   取消
                 </button>
                 <button
                   onClick={() => clearAll.mutate()}
                   disabled={clearAll.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:opacity-50"
+                  className="ctl ctl-md ctl-btn soft px-2.5 hover:bg-danger/25 disabled:opacity-50"
                 >
                   {clearAll.isPending ? '清除中...' : '确认清空'}
                 </button>

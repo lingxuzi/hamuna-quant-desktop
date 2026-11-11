@@ -175,8 +175,6 @@ def _guard_streams() -> None:
     修法: console=False 下把 stdout/stderr 换成丢弃写入的空对象 (devnull),
     让 logging / reconfigure / 任何 print 都安全落地。console=True 不动 (有真控制台)。
     """
-    import os
-
     class _NullStream:
         """丢弃所有写入的空流 (替代 None 的 stdout/stderr)。"""
         def write(self, _s): return 0
@@ -333,8 +331,8 @@ def _wait_for_server(
     调用方抛异常, 只表现为 server.run() 正常返回) —— 此时不可能出现就绪,
     立即返回 False, 不再傻等满 timeout 把「启动失败」伪装成「超时」。
     """
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     url = f"http://127.0.0.1:{port}/health"
     deadline = time.monotonic() + timeout
@@ -407,13 +405,6 @@ def main() -> int:
     # 追加文件日志: console=False 下 stderr 被吞, 必须落盘否则查无对证。
     # 放在 basicConfig 之后 (它先建好 root logger 的格式), 这里只追加 handler。
     _setup_logging()
-
-    # TdxQuant 探测 worker 哨兵 (见 probe.run): 打包版以「重执行自身 + 哨兵」
-    # 拉起独立探测进程, 必须先于单实例锁/后端/窗口等任何桌面启动动作分发。
-    if os.environ.get("TDX_PROBE_WORKER") == "1":
-        from app.plugins.tdxquant.probe import run_worker
-
-        return run_worker()
 
     instance_acquired = False
     try:

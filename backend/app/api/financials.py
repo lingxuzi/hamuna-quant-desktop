@@ -8,11 +8,11 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.services.financial_sync import FINANCIAL_TABLES, get_financial_df
-from app.services.financial_analyzer import analyze_financials_stream
+from app.data_providers.capabilities import Cap
 from app.services import ai_reports
+from app.services.financial_analyzer import analyze_financials_stream
+from app.services.financial_sync import FINANCIAL_TABLES, get_financial_df
 from app.services.ndjson_heartbeat import with_heartbeat
-from app.tickflow.capabilities import Cap
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +20,14 @@ router = APIRouter(prefix="/api/financials", tags=["financials"])
 
 
 def _financial_allowed(capset) -> bool:
-    """是否有财务数据访问权限 (TickFlow FINANCIAL 套餐 或 custom 财务源)。"""
-    if capset.has(Cap.FINANCIAL):
-        return True
-    from app.services.financial_sync import _financial_is_custom
-    return _financial_is_custom()
-
+    """是否有财务数据访问权限 (生效财务源声明 financial 数据集)。"""
+    from app.services.financial_sync import _financial_available
+    return _financial_available()
 
 def _require_financial(capset) -> None:
-    """_require_financial(capset) 的 custom 感知版本。"""
+    """财务数据不可用时拒绝请求。"""
     if not _financial_allowed(capset):
-        from app.tickflow.capabilities import CapabilityDenied
+        from app.data_providers.capabilities import CapabilityDenied
         raise CapabilityDenied(Cap.FINANCIAL)
 
 

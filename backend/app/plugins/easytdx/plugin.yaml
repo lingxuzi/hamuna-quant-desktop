@@ -12,7 +12,7 @@ runtime: python
 entry: app.plugins.easytdx.provider:EasyTdxProvider
 check: app.plugins.easytdx.provider:availability
 datasets: [daily, adj_factor, realtime, minute, depth5, full_minute]
-description: "easy-tdx-plus 通达信 MAC 协议直连: 日K(原始价)、除权因子、全市场实时快照、分钟K、五档盘口、全量分钟六项能力; 覆盖沪深京 A 股与指数, 无需 Key 与计费。未接入财务, 自动回退 TickFlow/扶摇。"
+description: "easy-tdx-plus 通达信 MAC 协议直连: 日K(原始价)、除权因子、全市场实时快照、分钟K、五档盘口、全量分钟六项能力; 覆盖沪深京 A 股与指数, 无需 Key 与计费。未接入财务, 财务能力自动回退扶摇 (fuyao)。"
 usage_notes:
   - "实时快照: 全市场一次拉取(约 5600 只 / 6 秒), 含北交所与 ETF"
   - "日K: 单标的每页 700 根自动翻页, 深度仅受服务端历史长度限制(实测回溯 2014 年)"

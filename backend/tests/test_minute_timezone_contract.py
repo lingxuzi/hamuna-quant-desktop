@@ -151,6 +151,8 @@ def test_guard_string_datetimes_classified_after_parse():
 
 def _setup_custom_provider(monkeypatch, provider: object) -> None:
     monkeypatch.setattr(kline_sync.preferences, "get_minute_data_provider", lambda: "mock_src")
+    # 存量值与生效值一致, 否则被判成「源已失效」而 fail-closed。
+    monkeypatch.setattr(kline_sync.preferences, "load", lambda: {"minute_data_provider": "mock_src"})
     provider.config = MagicMock(datasets={"minute": {}})
     monkeypatch.setattr("app.data_providers.custom.names", lambda: {"mock_src"})
     monkeypatch.setattr("app.data_providers.custom.get_provider", lambda name: provider)
@@ -169,7 +171,7 @@ def test_custom_provider_utc_frame_selfhealed(monkeypatch):
         ["600519.SH"], datetime(2026, 1, 15, 9, 25), datetime(2026, 1, 15, 15, 5),
         asset_type="stock",
     )
-    assert fallback is False
+    assert fallback is True
     assert df["datetime"].to_list() == [datetime(2026, 1, 15, 9, 30), datetime(2026, 1, 15, 13, 0)]
 
 
@@ -184,7 +186,7 @@ def test_custom_provider_normalizes_column_order_and_price_types(monkeypatch):
     df, fallback = kline_sync._try_custom_minute(
         ["600519.SH"], datetime(2026, 1, 15, 9, 25), datetime(2026, 1, 15, 15, 5), asset_type="stock",
     )
-    assert fallback is False
+    assert fallback is True
     assert df.columns == kline_sync.CANONICAL_MINUTE_COLS
     assert df.schema["volume"] == pl.Float64
 
@@ -200,5 +202,5 @@ def test_custom_provider_garbage_datetime_fails_closed(monkeypatch):
         ["600519.SH"], datetime(2026, 1, 15, 9, 25), datetime(2026, 1, 15, 15, 5),
         asset_type="stock",
     )
-    assert fallback is False
+    assert fallback is True  # 源已调用但帧不合规 → 空 df, 不跨源
     assert df is not None and df.is_empty()

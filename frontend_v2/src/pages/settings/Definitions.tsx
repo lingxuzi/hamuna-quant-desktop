@@ -11,9 +11,9 @@ import { PositionPoliciesPanel } from '@/components/settings/PositionPoliciesPan
 
 export function SettingsDefinitionsPanel() {
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-3xl space-y-6">
       <PositionPoliciesPanel />
-      <section className="leaf-cell">
+      <section>
         <SectionHead
           kicker="目录"
           title="统一定义目录"

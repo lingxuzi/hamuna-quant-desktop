@@ -578,6 +578,16 @@ export const REGIME_STATE_COLORS: Record<RegimeState, string> = {
   weak: '#10b981',        // 绿(弱)
 }
 
+/** 状态芯片上的字色 — 填色是写死的亮色, 白字在其中三个上低于 AA
+ *  (橙 2.80:1 / 绿 2.54:1 / 红 3.76:1), 亮色块上压近黑字, 暗色块上留白字。 */
+export const REGIME_STATE_TEXT_COLORS: Record<RegimeState, string> = {
+  strong: '#0a0a0b',
+  lean_strong: '#0a0a0b',
+  range: '#ffffff',
+  lean_weak: '#ffffff',
+  weak: '#0a0a0b',
+}
+
 export interface RegimeRow {
   date: string
   state: RegimeState
@@ -2012,27 +2022,6 @@ export interface StrategyBacktestResult {
 
 // ===== Settings =====
 
-/** 端点发现清单 —— 对应 tickflow.org/endpoints.json */
-export interface EndpointItem {
-  id: string
-  url: string
-  label: string
-  region?: string
-  description?: string
-  premium?: boolean
-}
-
-export interface EndpointManifest {
-  version?: number
-  description?: string
-  healthPath?: string
-  /** 每端点测试轮数,用于 /health 多轮探测取中位数 */
-  testRounds?: number
-  endpoints: EndpointItem[]
-  /** 数据来源:remote=远程拉取 / fallback=内置回退列表 */
-  source?: 'remote' | 'fallback'
-}
-
 /** 赞助商模型条目 — /v1/models 的 pricing/context_length 精简视图 */
 export interface SponsorModelItem {
   id: string
@@ -2053,14 +2042,6 @@ export interface SponsorModelItem {
 }
 
 export interface SettingsState {
-  mode: 'none' | 'free' | 'api_key'
-  tickflow_api_key_masked: string
-  has_tickflow_key: boolean
-  tier_label: string
-  current_endpoint: string
-  probe_log: string[]
-  missing_caps: string[]
-  extras_caps: string[]
   // 首次使用引导
   onboarding_completed: boolean
   // 配置文件位置 (secrets.json: AI 与数据源 Key 统一存放)
@@ -2082,19 +2063,6 @@ export interface SettingsState {
   ai_max_output_tokens?: number
   ai_context_window?: number
   ai_round_checkpoint?: number
-}
-
-/** 保存 TickFlow Key 的响应(先探后存) */
-export interface SaveTickflowKeyResult {
-  ok: boolean
-  /** ok=false 且 key 无效时的原因标识,前端据此提示「Key 无效」 */
-  reason?: 'invalid'
-  error?: string
-  mode?: 'none' | 'free' | 'api_key'
-  tier_label?: string
-  current_endpoint?: string
-  tickflow_api_key_masked?: string
-  capabilities_count?: number
 }
 
 export interface DataSourceItem {
@@ -2167,7 +2135,7 @@ export interface PluginDataSourceItem {
   homepage?: string        // 插件官网/申请地址 (manifest 可选声明)
   homepage_label?: string  // 官网入口文案，缺省使用「显示名 官网」
   api_key_env?: string     // 声明后设置页提供 Key 输入框 (先探后存)
-  api_key_masked?: string  // 当前生效 Key 的脱敏串 (secrets.json 优先, .env 兜底; 与 TickFlow Key 同一展示契约)
+  api_key_masked?: string  // 当前生效 Key 的脱敏串 (secrets.json 优先, .env 兜底)
   billing?: string         // 计费标识 (可选): "points" → 能力芯片/适配行标注「积分」
   billing_note?: string    // 计费提示 (可选): 积分消耗与频率/范围的关系, 按警示样式展示
   usage_notes?: string[]   // 使用要点 (可选): 各能力规模/节奏, 详情卡以列表展示
@@ -2200,21 +2168,19 @@ export interface CapabilityRoute {
   id: string
   label: string
   desc: string
-  field: ProviderField | null                    // null = 不可路由能力 (仅 TickFlow 提供)
+  field: ProviderField | null                    // null = 不可路由能力 (无偏好字段)
   default: string
-  tf_tier: string                                  // TickFlow 所需最低订阅档位
-  tf_available: boolean                            // 当前 TickFlow 档位是否提供该能力
   usable: boolean                                  // 生效源当前能否真正提供 (各页能力门控的统一判定)
   current: string                                  // 原始偏好值
   current_display: string
   effective: string                                // 当前生效源 (独立路由, current 即生效)
   effective_display: string
-  candidates: CapabilityCandidate[]                // 当前可用候选 (按当前 TickFlow 档位过滤)
+  candidates: CapabilityCandidate[]                // 当前可用候选 (生效源声明该能力且已就绪)
   pending: CapabilityCandidate[]                   // 声明了该能力但未就绪的源 (置灰提示)
+  api_key_masked?: string  // 当前生效 Key 的脱敏串 (secrets.json 优先, .env 兜底)
 }
 
 export interface CapabilityMatrix {
-  tickflow_tier?: string                           // TickFlow 当前档位基础名 (none/free/...)
   capabilities: CapabilityRoute[]
 }
 
@@ -2411,9 +2377,9 @@ export interface Preferences {
   daily_data_provider?: string
   adj_factor_provider?: string
   minute_data_provider?: string
-  /** 全量分钟 (盘中全市场分钟落盘) 生效源; 默认 tickflow (需 Expert 档) */
+  /** 全量分钟 (盘中全市场分钟落盘) 生效源 */
   full_minute_data_provider?: string
-  /** 分钟源 1 分钟历史深度(交易日); null/缺省 = 深历史 (如 tickflow)。分时档位据此收窄 */
+  /** 分钟源 1 分钟历史深度(交易日); null/缺省 = 深历史。分时档位据此收窄 */
   minute_history_days?: number | null
   depth5_data_provider?: string
   realtime_data_provider?: string
@@ -2452,11 +2418,11 @@ export interface Preferences {
   sse_refresh_pages: Record<string, boolean>
   strategy_monitor_enabled: boolean
   strategy_monitor_ids: string[]
-  system_notify_enabled: boolean
+  custom_webhook_url?: string
   feishu_webhook_url?: string
   feishu_webhook_secret?: string
   wecom_webhook_url?: string
-  custom_webhook_url?: string
+  /** 全量分钟 (盘中全市场分钟落盘) 生效源 */
   custom_webhook_secret_set?: boolean
   email_smtp_config?: EmailSmtpConfig
   email_smtp_password_set?: boolean
@@ -2770,14 +2736,6 @@ export const api = {
     }),
 
   settings: () => request<SettingsState>('/api/settings'),
-  saveTickflowKey: (api_key: string) =>
-    request<SaveTickflowKeyResult>('/api/settings/tickflow-key', {
-      method: 'POST',
-      body: JSON.stringify({ api_key }),
-    }),
-  clearTickflowKey: () =>
-    request<any>('/api/settings/tickflow-key', { method: 'DELETE' }),
-
   /** 标记首次使用向导完成（持久化到后端 preferences） */
   completeOnboarding: () =>
     request<{ ok: boolean; onboarding_completed: boolean }>(
@@ -2967,7 +2925,7 @@ export const api = {
       }),
     }),
 
-  /** 全量分钟 (盘中全市场分钟落盘) 服务状态 (按能力路由: TickFlow Expert 或声明 full_minute 的插件/自定义源) */
+  /** 全量分钟 (盘中全市场分钟落盘) 服务状态 (按能力路由: 声明 full_minute 的插件/自定义源) */
   minuteRefreshStatus: () =>
     request<{
       available: boolean
@@ -3994,38 +3952,6 @@ export const api = {
   dataClear: () => request<{ deleted_files: number }>('/api/data/clear', { method: 'POST' }),
   refreshCache: () => request<{ ok: boolean }>('/api/data/refresh-cache', { method: 'POST' }),
   enrichedSchema: (table: string) => request<EnrichedField[]>(`/api/data/schema/${table}`),
-
-  testEndpoint: (url: string, rounds?: number) =>
-    request<{
-      ok: boolean
-      url: string
-      rounds: number
-      success: number
-      median_ms: number | null
-      min_ms?: number | null
-      max_ms?: number | null
-      /** 兼容旧字段,等于 median_ms */
-      latency_ms?: number | null
-      error?: string
-    }>(
-      '/api/settings/test_endpoint', {
-        method: 'POST',
-        body: JSON.stringify({ url, rounds }),
-      },
-    ),
-
-  // 端点发现 —— 后端代理拉取 tickflow.org/endpoints.json(前端无法跨域直连)
-  listEndpoints: () =>
-    request<EndpointManifest>('/api/settings/endpoints'),
-
-  switchEndpoint: (url: string) =>
-    request<{ ok: boolean; current_endpoint: string; error?: string }>(
-      '/api/settings/switch_endpoint', {
-        method: 'POST',
-        body: JSON.stringify({ url }),
-      },
-    ),
-
   // ===== 扩展数据 =====
   extDataList: () =>
     request<{ items: ExtDataConfig[] }>('/api/ext-data'),
@@ -5137,7 +5063,7 @@ export interface IntegrityReport {
   }[]
 }
 
-interface TableStats {
+export interface TableStats {
   rows: number
   earliest_date: string | null
   latest_date: string | null

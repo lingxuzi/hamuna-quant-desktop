@@ -22,7 +22,8 @@ vi.mock('echarts', () => ({
   getInstanceByDom: () => null,
   connect: vi.fn(),
 }))
-vi.mock('@/lib/theme', () => ({
+vi.mock('@/lib/theme', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/theme')>()),
   useChartTheme: () => ({
     tooltipBg: '#101318', tooltipBorder: '#2a2f38', tooltipText: '#e5e7eb',
     text: '#8b93a1', textStrong: '#d7dbe2', grid: '#1b1f27', border: '#3a4150',

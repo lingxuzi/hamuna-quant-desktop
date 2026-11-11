@@ -15,7 +15,7 @@ interface ScopeItem {
 const ITEMS: ScopeItem[] = [
   { key: 'pipeline_pull_a_share', label: 'A股', desc: '沪深京 A 股日K(约 5500 只)', defaultOn: true },
   { key: 'pipeline_pull_index', label: '指数', desc: '主要市场指数(默认全量约 600 只)', defaultOn: true },
-  { key: 'pipeline_pull_etf', label: 'ETF', desc: '场内交易基金(约 1500 只,首次较慢)', defaultOn: false },
+  { key: 'pipeline_pull_etf', label: 'ETF', desc: '场内交易基金(约 1500 只，首次较慢)', defaultOn: false },
 ]
 
 export function PipelineScopeConfig() {
@@ -35,7 +35,7 @@ export function PipelineScopeConfig() {
   return (
     <div className="space-y-2.5">
       <p className="text-xs text-secondary leading-relaxed">
-        勾选盘后管道每次自动拉取的数据类型。仅影响后续同步,已存储的历史数据不受影响。
+        勾选盘后管道每次自动拉取的数据类型。仅影响后续同步，已存储的历史数据不受影响。
       </p>
       <div className="space-y-1.5">
         {ITEMS.map((item) => {
@@ -51,13 +51,13 @@ export function PipelineScopeConfig() {
                   type="button"
                   onClick={() => updateToggle.mutate({ [item.key]: !on } as never)}
                   disabled={updateToggle.isPending}
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                  className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded border transition-colors ${
                     on ? 'bg-accent border-accent' : 'bg-base border-border'
                   }`}
                   role="checkbox"
                   aria-checked={on}
                 >
-                  {on && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+                  {on && <Check className="h-[12px] w-[12px] text-on-solid" strokeWidth={3} />}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
@@ -72,11 +72,11 @@ export function PipelineScopeConfig() {
       </div>
       {updateToggle.isPending && (
         <div className="flex items-center gap-1.5 text-[10px] text-muted">
-          <Loader2 className="h-3 w-3 animate-spin" />保存中…
+          <Loader2 className="h-[12px] w-[12px] animate-spin" />保存中…
         </div>
       )}
       <div className="text-[10px] text-muted leading-relaxed pt-1">
-        数据通道基于免费接口,所有档位均可拉取。
+        数据通道基于免费接口，所有档位均可拉取。
       </div>
     </div>
   )

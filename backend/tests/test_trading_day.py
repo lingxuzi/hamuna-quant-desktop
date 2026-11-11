@@ -1,15 +1,15 @@
 """交易日探针 (trading_day oracle) 与两个消费方接入的测试。
 
-不依赖真实网络: 探测函数 (_probe_fuyao / _probe_tickflow) 全部 monkeypatch。
-覆盖: 周末零成本直判、探测链优先级 (fuyao 日历权威, 无开盘缓冲问题)、
-tickflow 戳的 OR 语义与开盘缓冲窗、失败/无权限 → None、TTL 缓存、
-实时行情门控与分钟增量 gate_reason 的 holiday 分支。
+不依赖真实网络: 探测函数 (_probe_fuyao / _probe_easytdx) 全部 monkeypatch。
+覆盖: 周末零成本直判、fuyao 日历权威、easytdx 兜底、失败/未知 → None、
+TTL 缓存、实时行情门控与分钟增量 gate_reason 的 holiday 分支。
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime, time as dt_time, timezone, timedelta
 
+import polars as pl
 import pytest
 
 from app.services import trading_day
@@ -25,10 +25,32 @@ def _clean_cache():
     reset_cache()
 
 
+def _boom_probe(now):
+    raise AssertionError("不应探测")
+
+
 def _no_probes(monkeypatch):
     """探测函数替换为爆炸 — 用于验证未被打到。"""
-    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: (_ for _ in ()).throw(AssertionError("不应探测")))
-    monkeypatch.setattr(trading_day, "_probe_tickflow", lambda now: (_ for _ in ()).throw(AssertionError("不应探测")))
+    monkeypatch.setattr(trading_day, "_probe_fuyao", _boom_probe)
+    monkeypatch.setattr(trading_day, "_probe_easytdx", _boom_probe)
+
+
+def _easytdx_bars(monkeypatch, rows, *, exc: Exception | None = None) -> list:
+    """把 easytdx provider 的分钟 K 换成假实现, 返回调用记录。"""
+    from app.data_providers import custom as custom_sources
+
+    calls: list = []
+
+    class _Provider:
+        def get_minute(self, symbols, start_time=None, end_time=None,
+                       asset_type="stock", freq="1m", on_chunk_done=None):
+            calls.append((symbols, start_time, end_time))
+            if exc is not None:
+                raise exc
+            return pl.DataFrame({"datetime": list(rows)})
+
+    monkeypatch.setattr(custom_sources, "get_provider", lambda name: _Provider())
+    return calls
 
 
 # ---- 周末零成本直判 ----
@@ -47,24 +69,60 @@ def test_fuyao_calendar_is_authoritative_even_before_open(monkeypatch):
     """fuyao 日历结论无时段依赖: 开盘缓冲窗内也直接生效。"""
     holiday_mon = datetime(2026, 9, 7, 9, 31, tzinfo=CN)  # 周一 (缓冲窗内)
     monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: False)
-    monkeypatch.setattr(
-        trading_day, "_probe_tickflow",
-        lambda now: (_ for _ in ()).throw(AssertionError("fuyao 已有结论不应继续探测")),
-    )
     assert is_trading_day(holiday_mon) is False
 
-
-def test_chain_falls_through_to_tickflow_when_fuyao_unknown(monkeypatch):
-    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
-    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
-    monkeypatch.setattr(trading_day, "_probe_tickflow", lambda now: True)
-    assert is_trading_day(monday) is True
 
 
 def test_all_probes_unknown_returns_none(monkeypatch):
     monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
     monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
-    monkeypatch.setattr(trading_day, "_probe_tickflow", lambda now: None)
+    monkeypatch.setattr(trading_day, "_probe_easytdx", lambda now: None)
+    assert is_trading_day(monday) is None
+
+
+# ---- easytdx 兜底 (未配 fuyao 时) ----
+
+def test_fuyao_available_skips_easytdx_fallback(monkeypatch):
+    """fuyao 日历可用时不打 easytdx: 权威日历无需兜底, 省一次网络请求。"""
+    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: True)
+    monkeypatch.setattr(trading_day, "_probe_easytdx", _boom_probe)
+    assert is_trading_day(monday) is True
+
+
+def test_easytdx_fallback_trading_day_has_minute_bar(monkeypatch):
+    """今天窗口内有 1m K → 开过盘 → 交易日。"""
+    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
+    calls = _easytdx_bars(monkeypatch, [datetime(2026, 9, 7, 9, 31)])
+    assert is_trading_day(monday) is True
+    symbols, start, end = calls[0]
+    assert symbols == [trading_day._CALENDAR_SYMBOL]
+    assert start.hour == 0 and start.minute == 0  # 窗口从今天零点起
+    assert end == monday
+
+
+def test_easytdx_fallback_no_minute_bar_after_open_is_holiday(monkeypatch):
+    """过了开盘缓冲仍无 1m K → 今天没交易 → 休市。"""
+    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
+    _easytdx_bars(monkeypatch, [])
+    assert is_trading_day(monday) is False
+
+
+def test_easytdx_fallback_no_minute_bar_before_open_is_unknown(monkeypatch):
+    """开盘缓冲期内无 1m K 无法区分「未开盘」与「休市」→ 未知 (不误停轮询)。"""
+    monday = datetime(2026, 9, 7, 9, 31, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
+    _easytdx_bars(monkeypatch, [])
+    assert is_trading_day(monday) is None
+
+
+def test_easytdx_fallback_failure_is_unknown(monkeypatch):
+    """easytdx 拉取失败 → 未知, 不上抛 (错误结论会停掉全市场轮询)。"""
+    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
+    _easytdx_bars(monkeypatch, [], exc=RuntimeError("网络不通"))
     assert is_trading_day(monday) is None
 
 
@@ -83,7 +141,6 @@ def test_concurrent_cold_oracle_requests_share_one_upstream_probe(monkeypatch):
         return False
 
     monkeypatch.setattr(trading_day, "_probe_fuyao", probe)
-    monkeypatch.setattr(trading_day, "_probe_tickflow", lambda now: None)
 
     def request(_):
         barrier.wait(3)
@@ -121,73 +178,6 @@ def test_slow_oracle_followers_degrade_to_unknown_without_duplicate_probes(monke
     assert is_trading_day(monday) is False
 
 
-# ---- tickflow 戳语义 ----
-
-def test_tickflow_stale_stamp_before_buffer_is_unknown(monkeypatch):
-    """开盘缓冲窗内戳停在昨日: 可能是集合竞价未翻新, 保守判未知。"""
-    monday_935 = datetime(2026, 9, 7, 9, 35, tzinfo=CN)
-    import app.tickflow.client as tf_client_mod
-
-    class _FakeQuotes:
-        def get(self, symbols):
-            # 周一 9:35 拉到上周五 15:30 的戳
-            return [{"symbol": s, "timestamp": 1787902251001} for s in symbols]
-
-    class _FakeClient:
-        quotes = _FakeQuotes()
-
-    monkeypatch.setattr(tf_client_mod, "get_client", lambda: _FakeClient())
-    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
-    assert trading_day._probe_tickflow(monday_935) is None
-
-
-def test_tickflow_stale_stamp_after_buffer_is_holiday(monkeypatch):
-    monday_1041 = datetime(2026, 9, 7, 10, 41, tzinfo=CN)
-    import app.tickflow.client as tf_client_mod
-
-    class _FakeQuotes:
-        def get(self, symbols):
-            return [{"symbol": s, "timestamp": 1787902251001} for s in symbols]  # 上周五
-
-    class _FakeClient:
-        quotes = _FakeQuotes()
-
-    monkeypatch.setattr(tf_client_mod, "get_client", lambda: _FakeClient())
-    assert trading_day._probe_tickflow(monday_1041) is False
-
-
-def test_tickflow_fresh_stamp_is_trading_anytime(monkeypatch):
-    """缓冲窗内只要戳是今天就判交易日 (OR 语义, 任一翻新即可)。"""
-    monday_920 = datetime(2026, 9, 7, 9, 20, tzinfo=CN)
-    import app.tickflow.client as tf_client_mod
-
-    class _FakeQuotes:
-        def get(self, symbols):
-            # 一只翻新 + 其余停在周五 → max 为今日
-            fresh_ms = int(monday_920.timestamp() * 1000)
-            return [
-                {"symbol": "000001.SZ", "timestamp": fresh_ms},
-                {"symbol": "600519.SH", "timestamp": 1787902251001},
-            ]
-
-    class _FakeClient:
-        quotes = _FakeQuotes()
-
-    monkeypatch.setattr(tf_client_mod, "get_client", lambda: _FakeClient())
-    assert trading_day._probe_tickflow(monday_920) is True
-
-
-def test_tickflow_error_returns_none(monkeypatch):
-    monday = datetime(2026, 9, 7, 10, 41, tzinfo=CN)
-    import app.tickflow.client as tf_client_mod
-
-    def _boom():
-        raise RuntimeError("无实时权限 (free 档)")
-
-    monkeypatch.setattr(tf_client_mod, "get_client", _boom)
-    assert trading_day._probe_tickflow(monday) is None
-
-
 # ---- TTL 缓存 ----
 
 def test_verdict_cached_within_ttl(monkeypatch):
@@ -214,7 +204,7 @@ def test_unknown_verdict_retries_after_short_ttl(monkeypatch):
         return None
 
     monkeypatch.setattr(trading_day, "_probe_fuyao", _counting_probe)
-    monkeypatch.setattr(trading_day, "_probe_tickflow", lambda now: None)  # 隔离真实网络
+    monkeypatch.setattr(trading_day, "_probe_easytdx", lambda now: None)
     assert is_trading_day(monday) is None
     # 手动把缓存时间拨回 10 分钟前 (超过 unknown TTL 300s) → 重探
     with trading_day._CACHE_LOCK:
@@ -312,20 +302,16 @@ def test_fuyao_provider_trading_days_conversion(monkeypatch):
 def test_unknown_verdict_is_cached_within_short_ttl(monkeypatch):
     """未知结论也要按 _TTL_UNKNOWN_S 缓存: 轮询每拍重探会重复打 tickflow 请求。"""
     monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
-    calls = {"fuyao": 0, "tickflow": 0}
+    calls = {"fuyao": 0}
 
     def _fuyao(now):
         calls["fuyao"] += 1
         return None
 
-    def _tickflow(now):
-        calls["tickflow"] += 1
-        return None
-
     monkeypatch.setattr(trading_day, "_probe_fuyao", _fuyao)
-    monkeypatch.setattr(trading_day, "_probe_tickflow", _tickflow)
+    monkeypatch.setattr(trading_day, "_probe_easytdx", lambda now: None)
 
     assert is_trading_day(monday) is None
     assert is_trading_day(monday) is None
     assert is_trading_day(monday) is None
-    assert calls == {"fuyao": 1, "tickflow": 1}
+    assert calls == {"fuyao": 1}

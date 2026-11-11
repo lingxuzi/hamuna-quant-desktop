@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from pathlib import Path
 from typing import Literal
 
@@ -15,22 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app import secrets_store
 from app.data_providers.custom.config import MAX_TIMEOUT
-from app.tickflow import client as tf_client
-from app.tickflow.policy import (
-    detect_capabilities,
-    extras_caps,
-    missing_caps,
-    probe_log,
-    tier_label,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-
-# 默认端点 —— endpoints.json 列表第一项,UI"当前使用"始终对齐此项。
-# 注意:Free 模式 SDK 实际走 free-api(免费数据通道),但 UI 显示统一用默认节点。
-DEFAULT_PAID_ENDPOINT = "https://api.tickflow.org"
 
 
 def _sync_financial_scheduler_caps(app_state, capset) -> None:
@@ -46,10 +33,6 @@ def _sync_financial_scheduler_caps(app_state, capset) -> None:
         fs.update_capabilities(capset)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("update financial_scheduler capabilities failed: %s", e)
-
-
-class TickflowKeyIn(BaseModel):
-    api_key: str
 
 
 @router.get("")
@@ -71,17 +54,8 @@ def get_settings() -> dict:
         current_openai_reasoning_effort,
     )
 
-    key = secrets_store.get_tickflow_key()
     ai_provider = secrets_store.get_ai_config("ai_provider", settings.ai_provider)
     return {
-        "mode": tf_client.current_mode(),
-        "tickflow_api_key_masked": secrets_store.mask(key),
-        "has_tickflow_key": bool(key),
-        "tier_label": tier_label(),
-        "current_endpoint": tf_client.current_endpoint(),
-        "probe_log": probe_log(),
-        "missing_caps": missing_caps(),
-        "extras_caps": extras_caps(),
         # 首次使用引导
         "onboarding_completed": preferences.get_onboarding_completed(),
         # 配置文件位置 (AI 与数据源 Key 统一存放, 支持外部编辑后热加载)
@@ -103,143 +77,6 @@ def get_settings() -> dict:
         "ai_max_output_tokens": current_ai_max_output_tokens(),
         "ai_context_window": current_ai_context_window(),
         "ai_round_checkpoint": current_ai_round_checkpoint(),
-    }
-
-
-class SwitchEndpointIn(BaseModel):
-    url: str
-
-
-@router.post("/switch_endpoint")
-def switch_endpoint(req: SwitchEndpointIn, request: Request) -> dict:
-    """切换 TickFlow 端点并立即生效。
-
-    端点切换仅对付费档(starter+,走 api.tickflow.org)有意义;
-    none/free 档运行在 free-api 服务器,无付费端点权限,禁止切换。
-    """
-    # none/free 档没有付费端点权限,禁止切换
-    if tf_client.current_mode() != "api_key":
-        return {"ok": False, "error": "当前档位无法切换端点,仅付费套餐(Starter+)支持"}
-
-    url = req.url.strip().rstrip("/")
-    if not url.startswith("https://"):
-        return {"ok": False, "error": "仅支持 HTTPS 端点"}
-
-    # 持久化到 secrets.json
-    secrets_store.save({"tickflow_base_url": url})
-    # 重置客户端，下次调用自动用新端点
-    tf_client.reset_clients()
-
-    return {
-        "ok": True,
-        "current_endpoint": tf_client.current_endpoint(),
-    }
-
-
-@router.post("/tickflow-key")
-def save_tickflow_key(req: TickflowKeyIn, request: Request) -> dict:
-    """保存 TickFlow API Key 并立即重新探测能力。
-
-    先探后存(关键改动,修复乱填 key 也会被持久化的问题):
-      1. 临时用新 key 探测(付费端点),判定档位
-      2. 判定为 none(连单只日K都拿不到)→ key 无效:不存,清除已存的,
-         返回 {ok: false, reason: "invalid"},前端提示「Key 无效」
-      3. 判定为 free(免费有效 key)→ 存 key,客户端切到 free-api 服务器
-      4. 判定为 starter+ → 存 key,切到付费端点(现有逻辑)
-
-    端点联动:从无 key 升级到付费 key 时,残留的 free-api 端点不可用,
-    故自动切到默认付费端点(api.tickflow.org);free 档则清除自定义端点。
-    """
-    from app.tickflow.policy import (
-        base_tier_name,
-        is_invalid_key,
-    )
-
-    key = req.api_key.strip()
-    if not key:
-        return {"ok": False, "error": "key empty"}
-
-    # ===== 1) 临时存 key + 重置客户端,让探测走付费端点 =====
-    secrets_store.save({"tickflow_api_key": key})
-    tf_client.reset_clients()
-
-    # 立即重新探测(此时 client 已按档位判定,但首次探测必然走付费端点验证)
-    capset = detect_capabilities(force=True)
-    request.app.state.capabilities = capset
-    _sync_financial_scheduler_caps(request.app.state, capset)
-
-    # ===== 2) 判定为无效 key(连单只日K都拿不到)→ 不存,清除 =====
-    if is_invalid_key() or base_tier_name() == "none":
-        # 无效 key:清除刚存的,避免乱填被持久化;退回 none 档
-        secrets_store.clear("tickflow_api_key", "tickflow_base_url")
-        tf_client.reset_clients()
-        capset = detect_capabilities(force=True)
-        request.app.state.capabilities = capset
-        _sync_financial_scheduler_caps(request.app.state, capset)
-        return {
-            "ok": False,
-            "reason": "invalid",
-            "error": "Key 无效或已过期,请检查后重试",
-            "mode": "none",
-            "tier_label": tier_label(),
-            "current_endpoint": tf_client.current_endpoint(),
-            "probe_log": [],
-            "capabilities_count": len(capset.all()),
-        }
-
-    # ===== 3) free 档(免费有效 key)→ 存 key,切到 free-api 服务器 =====
-    if base_tier_name() == "free":
-        # 免费档运行时走 free-api 服务器,清除付费端点的自定义配置
-        secrets_store.clear("tickflow_base_url")
-        tf_client.reset_clients()
-        return {
-            "ok": True,
-            "tickflow_api_key_masked": secrets_store.mask(key),
-            "mode": "free",
-            "tier_label": tier_label(),
-            "current_endpoint": tf_client.current_endpoint(),
-            "probe_log": [],
-            "capabilities_count": len(capset.all()),
-        }
-
-    # ===== 4) starter+ 付费档 → 确保走付费端点(现有逻辑) =====
-    # 若之前是 none/free(无自定义付费端点),切到默认付费端点
-    base = secrets_store.load().get("tickflow_base_url")
-    if not base:
-        secrets_store.save({"tickflow_base_url": DEFAULT_PAID_ENDPOINT})
-    tf_client.reset_clients()
-
-    return {
-        "ok": True,
-        "tickflow_api_key_masked": secrets_store.mask(key),
-        "mode": "api_key",
-        "tier_label": tier_label(),
-        "current_endpoint": tf_client.current_endpoint(),
-        "probe_log": [],
-        "capabilities_count": len(capset.all()),
-    }
-
-
-@router.delete("/tickflow-key")
-def clear_tickflow_key(request: Request) -> dict:
-    """清除 Key,退回无档(none)。
-
-    同时清除 tickflow_base_url(测速切换的自定义端点),使客户端走 free-api
-    服务器取历史日K;档位标签为 None(无档)。
-    """
-    secrets_store.clear("tickflow_api_key", "tickflow_base_url")
-    tf_client.reset_clients()
-
-    capset = detect_capabilities(force=True)
-    request.app.state.capabilities = capset
-    _sync_financial_scheduler_caps(request.app.state, capset)
-
-    return {
-        "ok": True,
-        "mode": "none",
-        "tier_label": tier_label(),
-        "current_endpoint": tf_client.current_endpoint(),
-        "capabilities_count": len(capset.all()),
     }
 
 
@@ -529,16 +366,16 @@ def _realtime_allowed() -> bool:
 
 
 def _minute_history_days() -> int | None:
-    """当前分钟源的 1 分钟历史深度(交易日); None = 深历史(tickflow 基准)。
+    """当前分钟源的 1 分钟历史深度(交易日); None = 深历史(基准)。
 
     provider 可选类属性 minute_history_days 声明 (如浅源 = 5,
-    免费分时接口只保留最近 5 个交易日); 未声明或走 tickflow 时视为深历史。
+    免费分时接口只保留最近 5 个交易日); 未声明时视为深历史。
     前端分时档位/默认值据此收窄。
     """
-    from app.services import kline_sync, preferences
-    provider_name = preferences.get_minute_data_provider()
-    provider, fallback, _err = kline_sync._resolve_minute_provider(provider_name)
-    if fallback or provider is None:
+    from app.services import kline_sync
+    provider_name = kline_sync._selected_minute_provider_name()
+    provider, _err = kline_sync._resolve_minute_provider(provider_name)
+    if provider is None:
         return None
     return getattr(provider, "minute_history_days", None)
 
@@ -719,7 +556,11 @@ def list_data_sources() -> dict:
     """列出已加载的数据源 (内置 / 插件 / 用户自定义)。"""
     from app.data_providers import custom as custom_sources
     return {
-        "builtin": [{"name": "tickflow", "display_name": "TickFlow", "datasets": ["daily", "adj_factor", "realtime", "minute"]}],
+        "builtin": [{
+            "name": "easytdx",
+            "display_name": "通达信直连 (easy-tdx-plus)",
+            "datasets": ["daily", "adj_factor", "realtime", "minute", "depth5", "full_minute"],
+        }],
         "plugins": custom_sources.list_plugins(),
         "custom": custom_sources.list_sources(),
         "errors": custom_sources.errors(),
@@ -732,12 +573,10 @@ def get_capability_matrix() -> dict:
     """能力 x 源路由矩阵: 能力注册表 + 各源能力声明 + 当前路由偏好, 设置页一次拉全。
 
     偏好值经 preferences getters 注入 (自带合法源校验, 非法值回退默认),
-    TickFlow 当前档位由 tickflow policy 注入 (候选按档位过滤),
     组装逻辑在 data_providers.capabilities, 本层保持薄。
     """
     from app.data_providers.capabilities import build_capability_matrix
     from app.services import preferences
-    from app.tickflow import policy
 
     return build_capability_matrix(
         {
@@ -749,13 +588,12 @@ def get_capability_matrix() -> dict:
             "adj_factor_provider": preferences.get_adj_factor_provider(),
             "financial_data_provider": preferences.get_financial_provider(),
         },
-        tickflow_tier=policy.base_tier_name(),
     )
 
 
 @router.post("/plugin-key")
 def save_plugin_key(req: PluginKeyIn) -> dict:
-    """保存插件 API Key(先探后存, 对齐 /tickflow-key 语义)。
+    """保存插件 API Key(先探后存, 探测通过才落盘)。
 
     流程: probe_plugin_key 用候选 Key 实探 → 有效才写 secrets.json
     ({plugin}_api_key, 优先级高于 .env) → 定向刷新当前插件。
@@ -847,23 +685,26 @@ def install_plugin(name: str) -> dict:
 def uninstall_plugin(name: str) -> dict:
     """卸载指定插件的依赖 (删除 node_modules / pip uninstall), 完成后重新扫描。
 
-    如果该插件当前正被使用, 自动回退到 tickflow。
+    如果该插件当前正被使用, 自动回退到该能力的默认源。
     """
     from app.data_providers import custom as custom_sources
+    from app.data_providers.capabilities import default_for_field
     from app.services import preferences
     if not custom_sources.is_builtin(name):
         raise HTTPException(status_code=404, detail=f"插件 '{name}' 不存在")
     ok, message = custom_sources.uninstall_plugin(name)
-    # 卸载后若该插件正被使用, 回退 tickflow
-    for getter, key, default in [
-        (preferences.get_daily_data_provider, "daily_data_provider", "tickflow"),
-        (preferences.get_minute_data_provider, "minute_data_provider", "tickflow"),
-        (preferences.get_realtime_data_provider, "realtime_data_provider", "tickflow"),
-        (preferences.get_financial_provider, "financial_data_provider", "tickflow"),
-    ]:
-        if getter() == name:
-            preferences.save({key: default})
+    # 先记下哪些能力在用它: 重新扫描后 getter 已回退, 再判就判不出来了
+    stale = [
+        key for getter, key in [
+            (preferences.get_daily_data_provider, "daily_data_provider"),
+            (preferences.get_minute_data_provider, "minute_data_provider"),
+            (preferences.get_realtime_data_provider, "realtime_data_provider"),
+            (preferences.get_financial_provider, "financial_data_provider"),
+        ] if getter() == name
+    ]
     custom_sources.load_all()
+    for key in stale:
+        preferences.save({key: default_for_field(key)})
     result = list_data_sources()
     result["uninstall_ok"] = ok
     result["uninstall_message"] = message
@@ -912,29 +753,30 @@ def save_data_source(req: CustomSourceIn) -> dict:
 def delete_data_source(name: str, request: Request) -> dict:
     """删除一个自定义数据源 yaml, 保存后自动 reload。
 
-    若当前总开关选中的就是被删的源, 回退到 tickflow。
+    若当前总开关选中的就是被删的源, 回退到该能力的默认源。
     """
     from app.data_providers import custom as custom_sources
+    from app.data_providers import capabilities as _capabilities_mod
+    from app.data_providers.capabilities import default_for_field
     from app.services import preferences
     try:
         custom_sources.delete_config(name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    # 先记下哪些能力在用它: 重新扫描后 getter 已回退, 再判就判不出来了
+    stale = [
+        key for getter, key in [
+            (preferences.get_daily_data_provider, "daily_data_provider"),
+            (preferences.get_realtime_data_provider, "realtime_data_provider"),
+            (preferences.get_financial_provider, "financial_data_provider"),
+            (preferences.get_adj_factor_provider, "adj_factor_provider"),
+        ] if getter() == name
+    ]
     custom_sources.load_all()
-    # 回退被删源的偏好
-    updates: dict = {}
-    if preferences.get_daily_data_provider() == name:
-        updates["daily_data_provider"] = "tickflow"
-    if preferences.get_realtime_data_provider() == name:
-        updates["realtime_data_provider"] = "tickflow"
-    if preferences.get_financial_provider() == name:
-        updates["financial_data_provider"] = "tickflow"
-    if preferences.get_adj_factor_provider() == name:
-        updates["adj_factor_provider"] = "tickflow"
-    if updates:
-        preferences.save(updates)
-    # 删除源可能触发偏好回退 tickflow, 同步刷新能力快照
-    request.app.state.capabilities = detect_capabilities()
+    for key in stale:
+        preferences.save({key: default_for_field(key)})
+    # 删除源可能触发偏好回退, 同步刷新能力快照
+    request.app.state.capabilities = _capabilities_mod.detect_capabilities()
     return list_data_sources()
 
 
@@ -966,6 +808,7 @@ def test_data_source(req: CustomSourceTestIn) -> dict:
 @router.put("/preferences/data-providers")
 def update_data_providers(req: DataProvidersIn, request: Request) -> dict:
     """保存数据源选择。"""
+    from app.data_providers import capabilities as _capabilities_mod
     from app.services import preferences
     updates = req.model_dump(exclude_none=True)
     with preferences.mutation():
@@ -976,7 +819,7 @@ def update_data_providers(req: DataProvidersIn, request: Request) -> dict:
         if updates:
             preferences.save(updates)
         # 与插件卸载共用写锁，避免并发请求重新引用已移除的数据源。
-        request.app.state.capabilities = detect_capabilities()
+        request.app.state.capabilities = _capabilities_mod.detect_capabilities()
     return {
         "daily_data_provider": preferences.get_daily_data_provider(),
         "adj_factor_provider": preferences.get_adj_factor_provider(),
@@ -1164,8 +1007,8 @@ class RealtimeQuoteScopePrefs(BaseModel):
 def update_realtime_quotes(req: RealtimeQuotesPrefs, request: Request) -> dict:
     """保存全局实时行情开关。
 
-    无实时能力的档位(TickFlow none/free)开关回弹强制关闭;
-    starter+ 或自定义实时源(如 fuyao)为全市场实时。前端据此把开关置灰 / 回弹。
+    生效源不提供 realtime 能力时开关回弹强制关闭;
+    easytdx / fuyao 等自定义实时源为全市场实时。前端据此把开关置灰 / 回弹。
     """
     from app.services import preferences
     qs = getattr(request.app.state, "quote_service", None)
@@ -1820,204 +1663,6 @@ def get_quote_interval(request: Request) -> dict:
     }
 
 
-class TestEndpointIn(BaseModel):
-    url: str
-    # 测试轮数;不传时取 endpoints.json 的 testRounds(默认 5)
-    rounds: int | None = None
-
-
-# 官方端点发现清单 —— 前端浏览器无法直接跨域拉取 tickflow.org/endpoints.json
-# (无 CORS 头),因此由后端代理。缓存 5 分钟,失败时回退到内置列表。
-ENDPOINTS_URL = "https://tickflow.org/endpoints.json"
-ENDPOINTS_TTL = 300.0  # 秒
-
-# 回退列表 —— 与官方 endpoints.json 的 endpoints[] 字段对齐。
-# 当远程拉取失败时使用,保证 UI 永远有内容可显示。
-_FALLBACK_ENDPOINTS: list[dict] = [
-    {
-        "id": "default",
-        "url": "https://api.tickflow.org",
-        "label": "默认端点",
-        "region": "auto",
-        "description": "默认端点",
-        "premium": False,
-    },
-    {
-        "id": "hk",
-        "url": "https://hk-api.tickflow.org",
-        "label": "香港端点",
-        "region": "ap-east-1",
-        "description": "备用端点，部分地区访问更稳定",
-        "premium": False,
-    },
-    {
-        "id": "sg",
-        "url": "https://sg-api.tickflow.org",
-        "label": "新加坡端点",
-        "region": "ap-southeast-1",
-        "description": "备用端点，亚太地区访问更稳定",
-        "premium": False,
-    },
-    {
-        "id": "us",
-        "url": "https://us-api.tickflow.org",
-        "label": "美国端点",
-        "region": "us-east-1",
-        "description": "备用端点，欧美地区访问更稳定",
-        "premium": False,
-    },
-    {
-        "id": "cn",
-        "url": "https://139.196.55.234:50443",
-        "label": "中国大陆端点（Beta）",
-        "region": "cn-east-1",
-        "description": "备用端点，中国大陆地区访问更稳定，目前处于测试阶段，谨慎使用",
-        "premium": False,
-    },
-    {
-        "id": "cn-premium",
-        "url": "https://106.15.238.72:50443",
-        "label": "中国大陆专线端点",
-        "region": "cn-east-1",
-        "description": "专线加速端点，需要专线加速权限（该权限包含在 Expert 及以上套餐中，也可通过自定义组合单独开通）",
-        "premium": True,
-    },
-]
-
-# 进程内缓存:{ "ts": float, "data": dict }
-_endpoints_cache: dict = {"ts": 0.0, "data": None}
-
-
-@router.get("/endpoints")
-def list_endpoints() -> dict:
-    """代理拉取 tickflow.org/endpoints.json 并返回规范化端点列表。
-
-    前端无法跨域直连该 URL(无 CORS 头),故由本接口代理。带 8s 超时、
-    5 分钟内存缓存,远程失败时回退到内置列表,保证 UI 始终有内容。
-    返回结构与原始 endpoints.json 一致(透传 schema/version 等元信息)。
-    """
-    import httpx
-
-    now = time.monotonic()
-    cached = _endpoints_cache.get("data")
-    if cached is not None and (now - _endpoints_cache["ts"]) < ENDPOINTS_TTL:
-        return cached
-
-    source = "remote"
-    data: dict | None = None
-    try:
-        resp = httpx.get(ENDPOINTS_URL, timeout=8.0, follow_redirects=True)
-        if resp.status_code == 200:
-            parsed = resp.json()
-            eps = parsed.get("endpoints")
-            # 校验:必须是列表且每项含必要字段,否则视为无效
-            if isinstance(eps, list) and all(
-                isinstance(e, dict) and "url" in e for e in eps
-            ):
-                data = {
-                    "version": parsed.get("version", 1),
-                    "description": parsed.get(
-                        "description", "TickFlow API 端点配置"
-                    ),
-                    "healthPath": parsed.get("healthPath", "/health"),
-                    "testRounds": parsed.get("testRounds", 5),
-                    "endpoints": eps,
-                }
-    except (httpx.HTTPError, ValueError):
-        logger.warning("拉取 endpoints.json 失败，使用内置回退列表", exc_info=True)
-
-    if data is None:
-        source = "fallback"
-        data = {
-            "version": 1,
-            "description": "TickFlow API 端点配置",
-            "healthPath": "/health",
-            "testRounds": 5,
-            "endpoints": _FALLBACK_ENDPOINTS,
-        }
-
-    # 标记数据来源,便于前端提示(回退时显示"内置列表")。
-    data["source"] = source
-    _endpoints_cache["ts"] = now
-    _endpoints_cache["data"] = data
-    return data
-
-
-async def _http_ping(url: str, timeout: float = 10.0) -> float | None:
-    """单次异步 GET 请求并返回延迟(ms),失败返回 None。
-
-    对齐官方 latency_test.py:用 /health 轻量端点测真实网络延迟,
-    不携带 API Key(/health 公开)。异步实现,保证多端点并行测速不阻塞。
-    """
-    import httpx
-
-    t0 = time.perf_counter()
-    try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            resp = await client.get(url)
-            dt = (time.perf_counter() - t0) * 1000
-            # 只把 <400 视为成功;4xx/5xx 也算"不可达"
-            if resp.status_code < 400:
-                return round(dt, 2)
-            return None
-    except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError, OSError):
-        return None
-
-
-@router.post("/test_endpoint")
-async def test_endpoint(req: TestEndpointIn) -> dict:
-    """测试端点网络延迟:对 /health 多轮探测取中位数。
-
-    参考 TickFlow 官方 latency_test.py:
-    - 路径用 /health(公开、轻量),反映真实网络延迟而非业务接口耗时
-    - 多轮探测(默认 5 轮,取自 endpoints.json 的 testRounds),间隔 0.3s
-    - 返回 median/min/max/success,前端显示中位数
-    - 异步实现,保证"全部测速"时多端点真正并行
-    """
-    import asyncio
-    import statistics
-
-    base = req.url.rstrip("/")
-    # 缓存初值的 "data" 是 None(键存在, get 的默认值不生效), 端点清单未预热时要兜底
-    manifest = _endpoints_cache.get("data") or {}
-    rounds = max(1, min(10, req.rounds or manifest.get("testRounds", 5)))
-    health_url = base + "/health"
-
-    latencies: list[float] = []
-    for _ in range(rounds):
-        ms = await _http_ping(health_url)
-        if ms is not None:
-            latencies.append(ms)
-        # 官方脚本间隔 0.3s;末轮无需等待
-        await asyncio.sleep(0.3)
-
-    success = len(latencies)
-    if success == 0:
-        return {
-            "ok": False,
-            "error": "不可达",
-            "url": req.url,
-            "rounds": rounds,
-            "success": 0,
-            "median_ms": None,
-            "min_ms": None,
-            "max_ms": None,
-        }
-
-    median = round(statistics.median(latencies), 2)
-    return {
-        "ok": True,
-        "url": req.url,
-        "rounds": rounds,
-        "success": success,
-        "median_ms": median,
-        "min_ms": round(min(latencies), 2),
-        "max_ms": round(max(latencies), 2),
-        # 兼容旧字段:取中位数作为代表延迟
-        "latency_ms": median,
-    }
-
-
 class PipelineScheduleIn(BaseModel):
     hour: int
     minute: int
@@ -2146,7 +1791,7 @@ def update_limit_ladder_monitor(req: LimitLadderMonitorIn, request: Request) -> 
 @router.post("/preferences/limit-ladder-monitor/run")
 def run_limit_ladder_fix(request: Request) -> dict:
     """立即手动修正一次真假板(拉取五档盘口 + 更新缓存)。需 Pro+。"""
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
     capset = request.app.state.capabilities
     capset.require(Cap.DEPTH5_BATCH)  # 无能力抛 CapabilityDenied(403)
 
@@ -2168,7 +1813,7 @@ class DepthPollingIntervalIn(BaseModel):
 @router.put("/preferences/depth-polling-interval")
 def update_depth_polling_interval(req: DepthPollingIntervalIn, request: Request) -> dict:
     """保存五档盘口盘中轮询间隔(秒)。需 Pro+。"""
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
     request.app.state.capabilities.require(Cap.DEPTH5_BATCH)
 
     from app.services import preferences
@@ -2184,7 +1829,7 @@ class DepthFinalizeTimeIn(BaseModel):
 @router.put("/preferences/depth-finalize-time")
 def update_depth_finalize_time(req: DepthFinalizeTimeIn, request: Request) -> dict:
     """保存盘后 sealed 定版时间(范围15:01~18:00)并立即 reschedule。需 Pro+。"""
-    from app.tickflow.capabilities import Cap
+    from app.data_providers.capabilities import Cap
     request.app.state.capabilities.require(Cap.DEPTH5_BATCH)
 
     from app.services import preferences

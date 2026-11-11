@@ -4,7 +4,7 @@
 插件被 loader 扫描注册后, 各 service 无需改动即可路由。
 
 实现数据集: daily / adj_factor / realtime / minute / depth5
-未声明 financial / full_minute → provider_has_dataset 为 False, 回退 tickflow。
+未声明 financial / full_minute → provider_has_dataset 为 False, 回退默认源。
 
 ★ 通道: 全部行情走 MAC 协议(MacClient), 只有除权事件走标准协议 TdxClient。
   本机实测(2026-11)标准协议的 K 线/行情命令在可用节点上恒返回 2 字节残缺响应,
@@ -576,7 +576,7 @@ class EasyTdxProvider:
     }
 
     def get_instruments(self, asset_type: str = "stock") -> list[dict]:
-        """标的维表 (tickflow Instrument 形状)。
+        """标的维表 (canonical Instrument 形状)。
 
         asset_type: stock=沪深京 A 股全市场 (含北交所), index=通达信指数, etf=场内基金。
 
@@ -667,7 +667,7 @@ class EasyTdxProvider:
                                 "ask_volumes", "timestamp"],
                     "preview": [{"symbol": c, **d} for c, d in list(depths.items())[:5]]}
         return {"provider": self.name, "dataset": dataset, "rows": 0,
-                "error": f"easytdx 插件未接入 {dataset} 数据集(自动回退 TickFlow)"}
+                "error": f"easytdx 插件未接入 {dataset} 数据集(自动回退默认源)"}
 
     def _preview(self, dataset: str, df: pl.DataFrame) -> dict:
         head = df.head(5).to_dicts()

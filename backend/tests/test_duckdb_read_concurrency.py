@@ -18,7 +18,7 @@ from pathlib import Path
 
 import polars as pl
 
-from app.tickflow.repository import (
+from app.data_providers.repository import (
     DataStore,
     KlineRepository,
     _read_concurrency_env,

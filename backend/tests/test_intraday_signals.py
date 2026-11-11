@@ -317,7 +317,7 @@ def test_engine_skips_injection_without_definitions(tmp_path: Path):
 
 
 def _seed_repo(tmp_path: Path):
-    from app.tickflow.repository import DataStore, KlineRepository
+    from app.data_providers.repository import DataStore, KlineRepository
 
     def minute(day: str, prices: list[float]):
         part = tmp_path / "kline_minute" / f"date={day}" / "part.parquet"

@@ -57,27 +57,27 @@ function ScoringRow({ name, label, weight, direction, editing, onWeightChange, o
     <div className="grid min-h-8 grid-cols-[minmax(4rem,6.5rem)_3.75rem_minmax(3.5rem,1fr)_2.25rem_1.75rem] items-center gap-1.5">
       <span className="truncate text-right text-[11px] text-secondary" title={`${label} · ${name}`}>{label}</span>
       {editing ? (
-        <div className="grid h-6 grid-cols-2 overflow-hidden rounded border border-border bg-base">
+        <div className="grid h-ctl-sm grid-cols-2 overflow-hidden rounded-input border border-border bg-base">
           {([['high', ArrowUp, '偏好高值'], ['low', ArrowDown, '偏好低值']] as const).map(([value, Icon, title]) => (
             <button
               key={value}
               type="button"
               onClick={() => onDirectionChange(value)}
-              className={`flex items-center justify-center transition-colors ${direction === value
-                ? value === 'high' ? 'bg-emerald-400/15 text-emerald-400' : 'bg-cyan-400/15 text-cyan-400'
+              className={`ctl ctl-sm ctl-ghost ${direction === value
+                ? value === 'high' ? 'bg-bull/10 text-bull' : 'bg-bear/10 text-bear'
                 : 'text-muted hover:bg-elevated hover:text-secondary'
               }`}
               title={title}
               aria-label={`${label}${title}`}
               aria-pressed={direction === value}
             >
-              <Icon className="h-3 w-3" />
+              <Icon className="h-[12px] w-[12px]" />
             </button>
           ))}
         </div>
       ) : (
         <span className={`flex items-center justify-center gap-1 text-[10px] ${direction === 'low' ? 'text-cyan-400' : 'text-emerald-400'}`}>
-          {direction === 'low' ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+          {direction === 'low' ? <ArrowDown className="h-[12px] w-[12px]" /> : <ArrowUp className="h-[12px] w-[12px]" />}
           {direction === 'low' ? '低值' : '高值'}
         </span>
       )}
@@ -89,7 +89,7 @@ function ScoringRow({ name, label, weight, direction, editing, onWeightChange, o
           step={1}
           value={weight}
           onChange={event => onWeightChange(Number(event.target.value))}
-          className="h-1 min-w-0 cursor-pointer accent-amber-400"
+          className="h-1 min-w-0 cursor-pointer accent-accent"
           aria-label={`${label}权重`}
         />
       ) : (
@@ -102,7 +102,7 @@ function ScoringRow({ name, label, weight, direction, editing, onWeightChange, o
         <button
           type="button"
           onClick={onRemove}
-          className="flex h-7 w-7 items-center justify-center rounded-btn text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-danger/10 hover:text-danger"
           title={`移除${label}`}
           aria-label={`移除评分因子${label}`}
         >
@@ -189,7 +189,7 @@ export function ScoringEditor({ value, directions, onChange, fallbackLabels = {}
             value={factorToAdd}
             onChange={event => setFactorToAdd(event.target.value)}
             disabled={factors.isLoading || factors.isError}
-            className="h-8 min-w-0 flex-1 rounded-input border border-border bg-base px-2 text-xs text-secondary focus:border-accent focus:outline-none disabled:opacity-50"
+            className="ctl ctl-md ctl-select min-w-0 flex-1"
             aria-label="选择要添加的评分因子"
           >
             <option value="">
@@ -208,7 +208,7 @@ export function ScoringEditor({ value, directions, onChange, fallbackLabels = {}
             type="button"
             onClick={addFactor}
             disabled={!factorToAdd}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn border border-accent/30 bg-accent/10 text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
+            className="ctl ctl-md ctl-btn soft flex w-[28px] px-0 shrink-0 items-center justify-center border-accent/30 hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40 bg-accent/10"
             title="添加评分因子"
             aria-label="添加评分因子"
           >
@@ -250,7 +250,7 @@ export function ScoringEditor({ value, directions, onChange, fallbackLabels = {}
             <button
               type="button"
               onClick={cancelEditing}
-              className="flex h-7 w-7 items-center justify-center rounded-btn text-muted transition-colors hover:bg-elevated hover:text-foreground"
+              className="ctl ctl-md ctl-ghost flex w-7 px-0 items-center justify-center hover:bg-elevated hover:text-foreground"
               title="取消编辑"
               aria-label="取消编辑评分方案"
             >
@@ -260,7 +260,7 @@ export function ScoringEditor({ value, directions, onChange, fallbackLabels = {}
           <button
             type="button"
             onClick={editing ? saveDraft : startEditing}
-            className="inline-flex h-7 items-center gap-1.5 rounded-btn border border-amber-400/40 bg-amber-400/10 px-2.5 text-[11px] text-amber-400 transition-colors hover:bg-amber-400/15"
+            className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 border-amber-400/40 bg-amber-400/10 px-2.5 text-amber-400 hover:bg-amber-400/15"
           >
             {editing ? <Save className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
             {editing ? '保存方案' : '编辑方案'}

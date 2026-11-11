@@ -26,7 +26,7 @@ export function SectionHead({ icon: Icon, kicker, title, desc, right, className 
       {kicker && <div className="text-[11px] uppercase tracking-[0.2em] text-accent/80">{kicker}</div>}
       <div className={`flex items-start justify-between gap-3 ${kicker ? 'mt-2' : ''}`}>
         <div className="flex min-w-0 items-center gap-2">
-          {Icon && <Icon className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.5} />}
+          {Icon && <Icon className="h-[16px] w-[16px] shrink-0 text-accent" strokeWidth={1.5} />}
           <h3 className="truncate font-serif text-[15px] font-semibold tracking-tight text-foreground">{title}</h3>
         </div>
         {right}

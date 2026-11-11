@@ -108,7 +108,7 @@ export function FactorGroupNavChart({ result }: Props) {
       <div className="flex items-center gap-3 px-4 pb-2">
         {groupCols.map((col, i) => (
           <span key={col} className="flex items-center gap-1 text-[10px] text-secondary">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: groupColors[i] }} />
+            <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: groupColors[i] }} />
             {col}
           </span>
         ))}

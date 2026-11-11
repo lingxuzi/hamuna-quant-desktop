@@ -158,7 +158,7 @@ function BubbleItem({ task, isLast, onPointerDown }: {
         onPointerDown={onPointerDown}
         role="button"
         tabIndex={0}
-        title={isWorking ? '个股分析中,点击恢复' : isError ? '分析失败,点击重试' : '点击查看个股分析报告'}
+        title={isWorking ? '个股分析中，点击恢复' : isError ? '分析失败，点击重试' : '点击查看个股分析报告'}
         className={`group relative flex w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border bg-gradient-to-br px-2 py-1.5 backdrop-blur-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.99] ${accent}`}
       >
         {isWorking && (
@@ -166,10 +166,10 @@ function BubbleItem({ task, isLast, onPointerDown }: {
             <div className="h-full w-1/2 bg-gradient-to-r from-transparent via-accent to-transparent animate-sa-bubble-progress" />
           </div>
         )}
-        <span className="flex h-4 w-4 items-center justify-center shrink-0">
-          {isWorking ? <Loader2 className="h-3 w-3 animate-spin" />
-            : isError ? <AlertCircle className="h-3 w-3" />
-            : <Check className="h-3 w-3" />}
+        <span className="flex h-[16px] w-[16px] items-center justify-center shrink-0">
+          {isWorking ? <Loader2 className="h-[12px] w-[12px] animate-spin" />
+            : isError ? <AlertCircle className="h-[12px] w-[12px]" />
+            : <Check className="h-[12px] w-[12px]" />}
         </span>
         <span className="flex-1 min-w-0 text-[11px] font-medium text-foreground leading-none truncate">
           {task.name || task.symbol}

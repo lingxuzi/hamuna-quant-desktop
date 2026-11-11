@@ -1,4 +1,4 @@
-"""实时行情开关的 HTTP 契约: fuyao 独立于 TickFlow 档位, 数据门禁仍生效。"""
+"""实时行情开关的 HTTP 契约: 生效源提供 realtime 即可开启, 数据门禁仍生效。"""
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
@@ -23,6 +23,15 @@ def quote_api(monkeypatch, tmp_path):
     monkeypatch.setattr(preferences, "load", lambda: saved.copy())
     monkeypatch.setattr(preferences, "save", lambda updates: saved.update(updates))
     monkeypatch.setattr(custom, "names", lambda: {"fuyao"})
+    # 源目录也打桩: 实时门禁看的是「生效源是否声明 realtime 且可用」。
+    monkeypatch.setattr(custom, "list_plugins", lambda: [{
+        "name": "fuyao",
+        "display_name": "fuyao",
+        "datasets": ["realtime", "daily", "adj_factor", "financial"],
+        "available": True,
+        "status": "ok",
+    }])
+    monkeypatch.setattr(custom, "list_sources", lambda: [])
     service = QuoteService()
     # 真实运行 enable/disable 与持久化流程, 隔离后台网络和交易日探测。
     monkeypatch.setattr(service, "_poll_loop", lambda: None)
@@ -41,10 +50,8 @@ def quote_api(monkeypatch, tmp_path):
     service.stop()
 
 
-@pytest.mark.parametrize("tier", ["none", "free"])
-def test_fuyao_enables_without_tickflow_paid_key(quote_api, monkeypatch, tier):
+def test_fuyao_enables_realtime(quote_api):
     client, service, saved, _ = quote_api
-    monkeypatch.setattr(QuoteService, "_current_tier", staticmethod(lambda: tier))
 
     response = client.put(ENDPOINT, json={"realtime_quotes_enabled": True})
 

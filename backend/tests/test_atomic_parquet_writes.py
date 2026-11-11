@@ -29,7 +29,6 @@ from app.services import ext_data as ext_svc
 from app.services import financial_sync, instrument_sync, market_mainline, regime_builder
 from app.services.ext_data import ExtConfig, ExtField
 from app.services.fs_utils import atomic_write_parquet
-from app.tickflow import pools
 
 _real_write = pl.DataFrame.write_parquet
 
@@ -274,24 +273,3 @@ def test_regime_phase_relabel_interrupted_keeps_history(tmp_path: Path, crash, m
     assert _no_tmp_left(target)
 
 
-# ---------- 标的池缓存 ----------
-
-
-def test_pool_cache_interrupted_keeps_previous_cache(tmp_path: Path, crash, monkeypatch) -> None:
-    """缓存一旦是半截文件, get_pool 每次先 read_parquet 就抛错, 不会自愈。"""
-    monkeypatch.setattr(pools.settings, "data_dir", tmp_path)
-    monkeypatch.setattr(pools, "_fetch_pool", lambda pool_id: ["600036.SH"])
-    target = tmp_path / "pools" / "CN_Equity_A.parquet"
-    old = pl.DataFrame({"symbol": ["600000.SH"], "as_of": [date(2026, 3, 2)]})
-    _seed(old, target)
-
-    crash.armed = True
-    with pytest.raises(OSError, match="simulated kill"):
-        pools.get_pool("CN_Equity_A", refresh=True)
-    assert_frame_equal(pl.read_parquet(target), old)
-    assert pools.get_pool("CN_Equity_A") == ["600000.SH"]
-
-    crash.armed = False
-    assert pools.get_pool("CN_Equity_A", refresh=True) == ["600036.SH"]
-    assert pools.get_pool("CN_Equity_A") == ["600036.SH"]
-    assert _no_tmp_left(target)

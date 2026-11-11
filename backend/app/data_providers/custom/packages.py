@@ -34,6 +34,12 @@ DATASETS = {"daily", "adj_factor", "minute", "full_minute", "realtime", "depth5"
 _started: set[str] = set()
 
 
+def _cap_default(cap_id: str) -> str:
+    """能力默认源 (注册表实时计算, 不读模块级缓存字段)。"""
+    from app.data_providers.capabilities import default_provider_for
+    return default_provider_for(cap_id)
+
+
 def root() -> Path:
     return settings.data_dir / "plugins"
 
@@ -150,8 +156,10 @@ def inspect_archive(data: bytes) -> tuple[dict, dict[str, bytes]]:
             except (SyntaxError, ValueError) as exc:
                 raise ValueError(f"Python 文件语法错误: {name}") from exc
     errors = compatibility(doc)
+    from app.data_providers import registry
+
     from . import loader
-    if (loader.plugins_dir() / doc["name"]).exists() or doc["name"] == "tickflow" or any(
+    if (loader.plugins_dir() / doc["name"]).exists() or registry.provider_class(doc["name"]) is not None or any(
         (loader.data_sources_dir() / f"{doc['name']}{suffix}").exists() for suffix in (".yaml", ".yml")
     ):
         raise ValueError("插件名称与内置插件或 HTTP 数据源冲突")
@@ -313,7 +321,7 @@ def manage(name: str, action: str, *, reset_routes: bool = False) -> dict:
                 field = cap["field"]
                 if field and str(prefs.get(field, "")).lower() == name:
                     original_routes[field] = prefs[field]
-                    route_updates[field] = cap["default"]
+                    route_updates[field] = _cap_default(cap["id"])
         if action == "rollback":
             if not state.get("previous"):
                 raise ValueError("没有可回退版本")
@@ -390,9 +398,10 @@ def discover():
                             state["error"] = "新版本加载失败，已保留原版本"
                         state.pop("pending", None)
                         write_state(name, state)
+                from app.data_providers import registry
                 doc = manifest(name)
                 # Never let external packages shadow built-in or user YAML providers.
-                if (loader.plugins_dir() / name).exists() or name == "tickflow" or any(
+                if (loader.plugins_dir() / name).exists() or registry.provider_class(name) is not None or any(
                     (loader.data_sources_dir() / f"{name}{suffix}").exists() for suffix in (".yaml", ".yml")
                 ):
                     raise ValueError("插件名称冲突")

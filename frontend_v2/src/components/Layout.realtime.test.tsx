@@ -39,7 +39,7 @@ vi.mock('@/lib/useQuoteStream', () => ({
   useQuoteStream: () => {}, useQuoteStreamStatus: () => 'connected',
 }))
 vi.mock('@/lib/updateCheck', () => ({ useUpdateCheck: () => ({ status: 'latest' }) }))
-vi.mock('@/lib/useMediaQuery', () => ({ useIsDesktop: () => true }))
+vi.mock('@/lib/useMediaQuery', () => ({ useIsDesktop: () => true, useMediaQuery: () => true }))
 vi.mock('@/extensions/registry', () => ({ getFrontendExtensionNavigation: () => [] }))
 vi.mock('@/extensions/ExtensionSlot', () => ({ ExtensionSlot: () => null }))
 vi.mock('@/components/Toast', () => ({ ToastContainer: () => null, toast: vi.fn() }))

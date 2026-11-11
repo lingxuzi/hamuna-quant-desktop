@@ -135,10 +135,8 @@ def test_assistant_can_create_existing_intraday_signal(context):
 @pytest.mark.parametrize("usable", [True, False])
 def test_runtime_capabilities_are_visible_to_ai(monkeypatch, usable):
     from app.data_providers import capabilities
-    from app.tickflow import policy
 
-    monkeypatch.setattr(policy, "base_tier_name", lambda: "none")
-    monkeypatch.setattr(capabilities, "resolve_capability_sources", lambda tier: [
+    monkeypatch.setattr(capabilities, "resolve_capability_sources", lambda: [
         {"id": "minute", "source": "demo", "usable": usable},
     ])
     rows = tool_catalog.list_data_capabilities()["capabilities"]

@@ -62,7 +62,7 @@ export function EnrichedRebuildPanel({
                 type="number"
                 value={draftSize}
                 onChange={e => setDraftSize(e.target.value)}
-                className="w-20 px-2 py-1 text-xs font-mono rounded-btn border border-border bg-surface text-foreground text-right tabular-nums focus:outline-none focus:border-accent"
+                className="ctl ctl-sm ctl-input w-20 px-1.5 font-mono text-right tabular-nums focus:border-accent bg-surface"
                 min={1}
                 max={10000}
                 autoFocus
@@ -74,13 +74,13 @@ export function EnrichedRebuildPanel({
               <button
                 onClick={() => clampAndSave(parseInt(draftSize))}
                 disabled={saveBatch.isPending}
-                className="px-2 py-1 text-[10px] rounded-btn bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50 transition-colors"
+                className="ctl ctl-sm ctl-btn soft px-1.5 hover:bg-accent/25 disabled:opacity-50 bg-accent/15"
               >
                 {saveBatch.isPending ? '…' : '保存'}
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="px-2 py-1 text-[10px] rounded-btn bg-elevated text-muted hover:text-foreground transition-colors"
+                className="ctl ctl-sm ctl-ghost px-1.5 hover:text-foreground bg-elevated"
               >
                 取消
               </button>
@@ -88,7 +88,7 @@ export function EnrichedRebuildPanel({
           ) : (
             <button
               onClick={() => { setDraftSize(String(batchSize)); setEditing(true) }}
-              className="px-2.5 py-1 rounded-btn border border-border bg-surface text-xs font-mono text-foreground hover:border-accent/50 transition-colors tabular-nums"
+              className="ctl ctl-sm ctl-btn px-1.5 font-mono hover:border-accent/50 tabular-nums bg-surface"
             >
               {batchSize} 只/批
             </button>
@@ -126,10 +126,10 @@ export function EnrichedRebuildPanel({
         <button
           onClick={() => rebuild.mutate()}
           disabled={!canRebuild || isRunning || rebuild.isPending}
-          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-btn bg-accent/90 text-white text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:pointer-events-none transition-colors duration-150"
+          className="ctl ctl-md ctl-btn soft w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 disabled:pointer-events-none duration-150 bg-accent/90"
         >
           {rebuild.isPending ? (
-            <><Loader2 className="h-3 w-3 animate-spin" />计算中…</>
+            <><Loader2 className="h-[12px] w-[12px] animate-spin" />计算中…</>
           ) : (
             <>{isTurnoverRebuild ? '重新计算并覆盖' : '全量计算'}</>
           )}

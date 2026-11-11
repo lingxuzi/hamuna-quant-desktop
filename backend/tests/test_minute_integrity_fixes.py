@@ -20,7 +20,7 @@ from fastapi import HTTPException
 
 from app.services import kline_sync
 from app.services.minute_refresh import MinuteRefreshService
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 _BJ = date(2026, 10, 23)
 _SYM = "600519.SH"
@@ -56,17 +56,24 @@ def _round_df() -> pl.DataFrame:
     })
 
 
+class _FakeFullMinuteProvider:
+    """假全量分钟源: 实现了 get_intraday_latest (稳态增量轮可用)。"""
+
+    def get_intraday_latest(self, symbols=None, count=3):
+        return pl.DataFrame()
+
+
 def test_service_write_holds_repo_write_lock(tmp_path, monkeypatch):
     """服务增量轮落盘必须持 repo._write_lock (与端点补拉/盘后同步同一纪律)。"""
     lock = _RecordingLock()
     repo = SimpleNamespace(store=SimpleNamespace(data_dir=tmp_path), _write_lock=lock)
     svc = MinuteRefreshService(repo)
-    monkeypatch.setattr(svc, "_resolve_custom", lambda: (None, "tickflow"))
+    monkeypatch.setattr(svc, "_resolve_custom", lambda: (_FakeFullMinuteProvider(), "mock_src"))
     monkeypatch.setattr(svc, "_select_mode", lambda: "increment")
 
     df = _round_df()
     monkeypatch.setattr(
-        kline_sync, "fetch_intraday_universe_increment", lambda: (df, 1)
+        kline_sync, "fetch_intraday_custom_latest", lambda provider, name: (df, 1)
     )
 
     seen: dict[str, object] = {}
@@ -87,10 +94,10 @@ def test_service_records_minute_basis_state(tmp_path, monkeypatch):
     lock = _RecordingLock()
     repo = SimpleNamespace(store=SimpleNamespace(data_dir=tmp_path), _write_lock=lock)
     svc = MinuteRefreshService(repo)
-    monkeypatch.setattr(svc, "_resolve_custom", lambda: (None, "tickflow"))
+    monkeypatch.setattr(svc, "_resolve_custom", lambda: (_FakeFullMinuteProvider(), "mock_src"))
     monkeypatch.setattr(svc, "_select_mode", lambda: "increment")
     monkeypatch.setattr(
-        kline_sync, "fetch_intraday_universe_increment", lambda: (_round_df(), 1)
+        kline_sync, "fetch_intraday_custom_latest", lambda provider, name: (_round_df(), 1)
     )
     monkeypatch.setattr(kline_sync, "_write_minute_partition", lambda f, d: f.height)
 

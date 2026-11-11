@@ -123,7 +123,7 @@ export function StockMultiDayIntradayChart({
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 text-xs text-muted" style={{ height }}>
-        <Loader2 className="h-4 w-4 animate-spin text-accent" />
+        <Loader2 className="h-[16px] w-[16px] animate-spin text-accent" />
         正在加载近 {days} 日分时…
       </div>
     )
@@ -136,7 +136,7 @@ export function StockMultiDayIntradayChart({
         <button
           type="button"
           onClick={() => { void history.refetch(); void latest.refetch() }}
-          className="inline-flex items-center gap-1.5 rounded-btn border border-border bg-elevated px-3 py-1.5 text-secondary hover:text-foreground"
+          className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 hover:text-foreground bg-elevated"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           重新加载
@@ -150,7 +150,7 @@ export function StockMultiDayIntradayChart({
       <div className="flex flex-col items-center justify-center gap-3 text-xs" style={{ height }}>
         {syncMinute.isPending ? (
           <>
-            <Loader2 className="h-5 w-5 animate-spin text-accent" />
+            <Loader2 className="h-[20px] w-[20px] animate-spin text-accent" />
             <span className="text-secondary">正在获取近 {days} 日分钟 K…</span>
           </>
         ) : (
@@ -160,7 +160,7 @@ export function StockMultiDayIntradayChart({
               <button
                 type="button"
                 onClick={() => syncMinute.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
+                className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90"
               >
                 <Download className="h-3.5 w-3.5" />
                 获取近 {days} 日
@@ -179,7 +179,7 @@ export function StockMultiDayIntradayChart({
         <div className="flex h-8 items-center justify-between gap-3 border-b border-border/60 bg-elevated/40 px-3 text-[11px]">
           {syncMinute.isPending ? (
             <span className="truncate text-accent flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="h-[12px] w-[12px] animate-spin" />
               正在补齐最近 {days} 日分时数据…
             </span>
           ) : syncMinute.isError ? (
@@ -196,7 +196,7 @@ export function StockMultiDayIntradayChart({
               }}
               className="inline-flex shrink-0 items-center gap-1 text-accent hover:text-accent/80"
             >
-              <Download className="h-3 w-3" />
+              <Download className="h-[12px] w-[12px]" />
               重试补齐
             </button>
           )}

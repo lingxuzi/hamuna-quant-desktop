@@ -105,7 +105,7 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 text-accent" />
+          <SlidersHorizontal className="h-[16px] w-[16px] text-accent" />
           <span id="default-strategy-params-title" className="text-sm font-semibold text-foreground">默认基础参数</span>
         </div>
         <button onClick={onClose} className="p-1 rounded hover:bg-elevated text-muted hover:text-foreground transition-colors cursor-pointer" title="关闭">
@@ -130,7 +130,7 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
                 const active = bf.boards.includes(b)
                 return (
                   <button key={b} onClick={() => { const next = active ? bf.boards.filter(x => x !== b) : [...bf.boards, b]; set('boards', next.length === 0 ? [...ALL_BOARDS] : next) }}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${active ? `${color.select.border} ${color.select.bgLight} ${color.select.text}` : `border-border bg-base text-muted ${color.select.borderHover}`}`}>{b}</button>
+                    className={`ctl ctl-sm ctl-btn px-1.5 ${active ? `${color.select.border} ${color.select.bgLight} ${color.select.text}` : `border-border bg-base text-muted ${color.select.borderHover}`}`}>{b}</button>
                 )
               })}
             </div>
@@ -138,7 +138,7 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-secondary w-16 shrink-0 text-right">ST</span>
             <button onClick={() => set('exclude_st', !bf.exclude_st)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${bf.exclude_st ? 'border-danger/40 bg-danger/10 text-danger' : 'border-border bg-base text-muted hover:border-danger/30'}`}>{bf.exclude_st ? '排除' : '包含'}</button>
+              className={`ctl ctl-sm ctl-btn px-1.5 ${bf.exclude_st ? 'border-danger/40 bg-danger/10 text-danger' : 'border-border bg-base text-muted hover:border-danger/30'}`}>{bf.exclude_st ? '排除' : '包含'}</button>
           </div>
         </div>
       </div>
@@ -148,10 +148,8 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
         {applyPhase === 'idle' && (
           <button onClick={() => setApplyPhase('confirm')} disabled={!strategyCount}
             title="把当前参数写入全部股票策略的基础参数（不影响各策略已调的其他配置）"
-            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-btn text-xs font-medium
-              border border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20
-              transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-            <Zap className="h-3 w-3" />
+            className="ctl ctl-md ctl-btn w-full inline-flex items-center justify-center gap-1.5 px-2.5 border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+            <Zap className="h-[12px] w-[12px]" />
             一键应用到全部策略{strategyCount ? `（${strategyCount} 个）` : ''}
           </button>
         )}
@@ -161,14 +159,14 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
               将覆盖全部 <span className="text-amber-500 font-medium">{strategyCount}</span> 个策略的基础参数（只动基础过滤，不碰各策略的参数/评分），重跑后生效。
             </span>
             <button onClick={() => setApplyPhase('idle')}
-              className="px-2.5 py-1.5 rounded-btn text-xs text-secondary border border-border hover:text-foreground transition-colors cursor-pointer shrink-0">取消</button>
+              className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground shrink-0">取消</button>
             <button onClick={applyToAll}
-              className="px-3 py-1.5 rounded-btn text-xs font-medium text-white bg-amber-500 hover:bg-amber-500/90 transition-colors cursor-pointer shrink-0">确认覆盖</button>
+              className="ctl ctl-md ctl-ghost px-2.5 bg-warning hover:bg-warning/90 shrink-0">确认覆盖</button>
           </div>
         )}
         {applyPhase === 'applying' && (
           <div className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-btn text-xs text-muted border border-border/50 bg-elevated/50">
-            <span className="h-3 w-3 rounded-full border-2 border-amber-500/30 border-t-amber-500 animate-spin" />
+            <span className="h-[12px] w-[12px] rounded-full border-2 border-amber-500/30 border-t-amber-500 animate-spin" />
             应用中 {applyProgress.done}/{applyProgress.total}
             {applyProgress.failed > 0 && <span className="text-danger">（{applyProgress.failed} 失败）</span>}
           </div>
@@ -178,15 +176,15 @@ export function DefaultStrategyParamsDialog({ show, onClose }: Props) {
       {/* 底部按钮 */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border/50">
         <button onClick={() => setBf({ ...BUILTIN_DEFAULT_BASIC_FILTER })}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-btn text-xs text-muted border border-border hover:text-foreground hover:border-accent/40 transition-colors cursor-pointer">
-          <RotateCcw className="h-3 w-3" />
+          className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 hover:text-foreground hover:border-accent/40">
+          <RotateCcw className="h-[12px] w-[12px]" />
           恢复默认
         </button>
         <div className="flex items-center gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-btn text-xs text-secondary border border-border hover:text-foreground transition-colors cursor-pointer">取消</button>
+          <button onClick={onClose} className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground">取消</button>
           <button onClick={save}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-btn text-xs font-medium text-white bg-accent hover:bg-accent/90 transition-colors cursor-pointer">
-            <Save className="h-3 w-3" />
+            className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90">
+            <Save className="h-[12px] w-[12px]" />
             保存
           </button>
         </div>

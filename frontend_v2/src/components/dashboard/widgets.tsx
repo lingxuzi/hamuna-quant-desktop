@@ -439,7 +439,7 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
                   {ev.symbol && (() => {
                     const board = boardTag(ev.symbol)
                     return board && (
-                      <span className={`inline-flex items-center justify-center h-3 w-3 rounded text-[7px] font-bold leading-none border ${board.color}`}>
+                      <span className={`inline-flex items-center justify-center h-[12px] w-[12px] rounded text-[7px] font-bold leading-none border ${board.color}`}>
                         {board.label}
                       </span>
                     )

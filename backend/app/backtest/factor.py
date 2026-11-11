@@ -471,7 +471,7 @@ class FactorBacktestService:
         data_dir = getattr(getattr(repo, "store", None), "data_dir", None)
         if data_dir is None:
             return None
-        from app.tickflow.repository import enriched_dirname
+        from app.data_providers.repository import enriched_dirname
 
         values: list[date] = []
         root = data_dir / enriched_dirname(config.asset_type)

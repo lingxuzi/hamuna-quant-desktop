@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpRight, Check, Database, GripVertical, Info, Loader2, Play, RefreshCw, RotateCcw, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Database, Info, Loader2, Play, RefreshCw, Sparkles } from 'lucide-react'
 import { DatePicker } from '@/components/DatePicker'
-import { api, type AlertEvent, type DataStatus } from '@/lib/api'
+import { api, type AlertEvent } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { DimensionMembersDialog, type DimensionMembersTarget } from '@/components/DimensionMembersDialog'
-import { useDataStatus, useCapabilities, useSettings, usePreferences } from '@/lib/useSharedQueries'
+import { useDataStatus, useCapabilities, useSettings, usePreferences, isDataStatusPending, resolveHasNoData } from '@/lib/useSharedQueries'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { dimensionKindForSourceField } from '@/components/DimensionMembersDialog'
 import type { NavItem } from '@/lib/listNav'
@@ -20,35 +21,13 @@ import { AddWidgetPanel } from '@/components/dashboard/AddWidgetPanel'
 import { useDashboardLayout } from '@/components/dashboard/useDashboardLayout'
 import { DEFAULT_LAYOUT, widgetDef, type WidgetCtx } from '@/components/dashboard/registry'
 import { cloneItems, GRID_COLS, widgetInstanceId, type WidgetType } from '@/components/dashboard/layout'
-import { Chronicle, MetricRail, type ChronicleCtx } from '@/components/dashboard/chronicle'
-import { cn } from '@/lib/cn'
+import { Chronicle, Headline, MetricRail, type ChronicleCtx } from '@/components/dashboard/chronicle'
+import { useRailSlot } from '@/components/RailSlot'
+import { PageHeader } from '@/components/PageHeader'
 
-
-/** 兼容旧后端的预热标志; 同步/自动修复也会使统计暂不可用。 */
-export function isDataStatusPending(ds?: DataStatus): boolean {
-  return ds?.stats_pending === true || ds?.indicators_ready === false
-}
-
-/** 无本地数据判定: enriched/daily 交易日均为 0 才算无数据。
- *  预热/同步/修复期间的 null 是未知态, 必须等真实统计就绪再判。 */
-export function resolveHasNoData(ds?: DataStatus): boolean {
-  if (!ds) return false
-  if (isDataStatusPending(ds)) return false
-  return (ds.enriched?.trading_days ?? 0) === 0 && (ds.daily?.trading_days ?? 0) === 0
-}
 
 /** 打开个股预览的来源榜 (用于行高亮与切股导航列表) */
 type PreviewSource = 'gain' | 'loss' | 'amount' | 'active' | 'concept' | 'industry' | 'alert'
-
-const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六']
-
-/** 卷首日期标签 — 2026-11-06 → 「2026 · 11 · 06　周五」 */
-function dateLabel(d: string): string {
-  if (!d || d.length < 10) return '—'
-  const [y, m, dd] = d.split('-')
-  const wd = WEEK_CN[new Date(Number(y), Number(m) - 1, Number(dd)).getDay()]
-  return `${y} · ${m} · ${dd}　周${wd}`
-}
 
 export function Dashboard() {
   const qc = useQueryClient()
@@ -70,6 +49,12 @@ export function Dashboard() {
   const { items: dashItems, setItems: setDashItems } = useDashboardLayout()
   // 布局编辑态: 入口与控制组(添加组件/恢复默认/完成)在头部「重载」右侧
   const [dashEditing, setDashEditing] = useState(false)
+  // 右侧指标栏占用壳层第三栏(编辑态收起指标栏 → 让位给网格)
+  const { host: railHost, setActive: setRailActive } = useRailSlot()
+  useEffect(() => {
+    setRailActive(!dashEditing)
+    return () => setRailActive(false)
+  }, [dashEditing, setRailActive])
   const placedTypes = useMemo(() => new Set(dashItems.map(it => it.t)), [dashItems])
   const resetDashLayout = useCallback(() => {
     setDashItems(cloneItems(DEFAULT_LAYOUT))
@@ -110,16 +95,14 @@ export function Dashboard() {
   const hasDepth = !!caps.data?.capabilities?.['depth5.batch']
   const sealedReady = !!data?.limit?.sealed_ready
   const isSealedDegrade = !hasDepth || !sealedReady
-  // 空态引导文案按当前数据源分流: TickFlow 源提"免费服务器", 其他源提"当前数据源",
-  // 弱化与默认 TickFlow 的隐式绑定 (None 档/免费 Key 等 TickFlow 概念仅在其被选中时出现)
+  // 空态引导文案统一提"当前数据源", 不绑定任何具体来源
   const prefs = usePreferences()
   const dataSourceList = useQuery({
     queryKey: QK.dataSources,
     queryFn: api.dataSources,
     staleTime: 60_000,
   })
-  const activeProvider = prefs.data?.daily_data_provider || 'tickflow'
-  const isTickflowProvider = activeProvider === 'tickflow'
+  const activeProvider = prefs.data?.daily_data_provider || 'easytdx'
   const providerLabel = [
     ...(dataSourceList.data?.builtin ?? []),
     ...(dataSourceList.data?.plugins ?? []),
@@ -200,7 +183,7 @@ export function Dashboard() {
     return (
       <div className="flex h-full items-center justify-center bg-base">
         <div className="flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="h-4 w-4 animate-spin" /> 加载市场看板…
+          <Loader2 className="h-[16px] w-[16px] animate-spin" /> 加载市场看板…
         </div>
       </div>
     )
@@ -209,9 +192,9 @@ export function Dashboard() {
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center bg-base p-6">
-        <div className="leaf-cell text-center">
+        <div className="border-l-2 border-danger pl-3 text-center">
           <div className="text-sm text-danger">看板加载失败</div>
-          <button onClick={() => overview.refetch()} className="mt-3 rounded-btn bg-accent px-3 py-1.5 text-xs font-medium text-white">重试</button>
+          <button onClick={() => overview.refetch()} className="ctl ctl-md ctl-btn pri mt-3 px-2.5">重试</button>
         </div>
       </div>
     )
@@ -220,7 +203,6 @@ export function Dashboard() {
   const score = data.emotion?.score ?? 50
   const latestDate = dataStatus.data?.enriched?.latest_date ?? null
   const currentDate = selectedDate ?? data.as_of ?? ''
-  const quoteRunning = (!selectedDate || selectedDate === latestDate) && data.quote_status?.running
   // 实时模式: none / watchlist / full_market。
   // watchlist 模式仅自选 ≤5 只实时, 看板呈现的大盘数据实为盘后快照, 需提示避免误读。
   const quoteMode = data.quote_status?.mode as ('none' | 'watchlist' | 'full_market') | undefined
@@ -256,7 +238,8 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-full bg-base p-1.5">
+    <div className="min-h-full bg-base">
+      <div className="min-w-0">
       {/* 无本地数据常驻引导卡片 —— 一键触发盘后管道获取数据(无 Key 也可) */}
       {hasNoData && (
         <FetchDataCard
@@ -266,7 +249,6 @@ export function Dashboard() {
           stage={fetchStatus.data?.stage}
           fetchPct={fetchStatus.data?.progress}
           onStart={() => startFetch.mutate()}
-          isTickflowProvider={isTickflowProvider}
           providerLabel={providerLabel}
         />
       )}
@@ -274,7 +256,6 @@ export function Dashboard() {
       <AnimatePresence>
         {showWelcomeModal && (
           <WelcomeFetchModal
-            isTickflowProvider={isTickflowProvider}
             providerLabel={providerLabel}
             onClose={() => setShowWelcomeModal(false)}
             onStart={() => {
@@ -288,7 +269,7 @@ export function Dashboard() {
       </AnimatePresence>
       {/* 无除权因子能力时的同步前置确认 */}
       {adjGate.dialog}
-      <Inscription title="市场看板" subtitle="MARKET BOARD" seal="盘" date={currentDate} running={quoteRunning} />
+      <PageHeader title="市场看板" subtitle="MARKET BOARD" seal="盘" />
 
       <div className="toolbar">
         <div className="tb-left">
@@ -316,26 +297,26 @@ export function Dashboard() {
           <button
             onClick={handleRefresh}
             disabled={manualFetching}
-            className="tb-btn inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="ctl ctl-md ctl-btn disabled:opacity-50"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${manualFetching ? 'animate-spin' : ''}`} />重载
+            {manualFetching && <RefreshCw className="mr-1 inline-block h-[12px] w-[12px] animate-spin align-[-2px]" />}重载
           </button>
           {!dashEditing ? (
             <button
               onClick={() => setDashEditing(true)}
               title="拖拽调整组件位置与宽高"
-              className="tb-btn inline-flex items-center gap-1.5"
+              className="ctl ctl-md ctl-btn"
             >
-              <GripVertical className="h-3.5 w-3.5" />自定义布局
+              自定义布局
             </button>
           ) : (
             <>
               <AddWidgetPanel placedTypes={placedTypes} onAdd={addDashWidget} />
-              <button onClick={resetDashLayout} className="tb-btn inline-flex items-center gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" />恢复默认
+              <button onClick={resetDashLayout} className="ctl ctl-md ctl-btn">
+                恢复默认
               </button>
-              <button onClick={() => setDashEditing(false)} className="tb-btn primary inline-flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5" />完成
+              <button onClick={() => setDashEditing(false)} className="ctl ctl-md ctl-btn pri">
+                完成
               </button>
             </>
           )}
@@ -357,29 +338,31 @@ export function Dashboard() {
       {/* 主栏 = 当日纪事流, 右侧 = 只读指标栏; 卡片网格承载可自定义的研究件。
           编辑态隐藏纪事与右栏, 网格独占宽度 — 否则「添加组件」后新格子被挤到右栏底下。
           索引/分布/雷达/趋势/梯队等已由纪事承载的组件默认不在布局里, 用「添加组件」补回时按普通格子渲染。 */}
-      <div className={cn('dash-body', !dashEditing && 'with-rail')}>
-        <div className="min-w-0">
-          {!dashEditing && <Chronicle ctx={chronicleCtx} />}
-          <DashboardGrid
-            ctx={widgetCtx}
-            items={dashItems}
-            onItemsChange={setDashItems}
-            editing={dashEditing}
-          />
-          <footer className="coda">
-            <span className="coda-mark">卷末</span>
-            <div className="coda-fin">
-              <Link to="/review" className="tb-btn sm">开始复盘</Link>
-              <Link to="/backtest" className="tb-btn sm">查看回测</Link>
-              <span className="coda-meta">
-                本地数据 · {data.breadth?.total ?? '—'} 只 · 最后写入{' '}
-                <span className="num">{currentDate || '—'}</span>
-              </span>
-            </div>
-          </footer>
+      {!dashEditing && <Headline data={data} />}
+      {!dashEditing && <Chronicle ctx={chronicleCtx} />}
+      {/* 默认布局为空 (纪事+右栏已承载) 时不挂网格 — 空容器多出 6px 间距 */}
+      {(dashEditing || dashItems.length > 0) && (
+        <DashboardGrid
+          ctx={widgetCtx}
+          items={dashItems}
+          onItemsChange={setDashItems}
+          editing={dashEditing}
+        />
+      )}
+      <footer className="coda">
+        <span className="coda-mark">卷末</span>
+        <div className="coda-fin">
+          <Link to="/review" className="ctl ctl-md ctl-btn sm">开始复盘</Link>
+          <Link to="/backtest" className="ctl ctl-md ctl-btn sm">查看回测</Link>
+          <span className="coda-meta">
+            本地数据 · {data.breadth?.total ?? '—'} 只 · 最后写入{' '}
+            <span className="num">{currentDate || '—'}</span>
+          </span>
         </div>
-        {!dashEditing && <MetricRail data={data} />}
+      </footer>
       </div>
+      {/* 指标栏挂到壳层第三栏(设计稿 .app.with-rail), 与主栏平级 */}
+      {railHost && !dashEditing && createPortal(<MetricRail data={data} />, railHost)}
 
       <StockPreviewDialog
         symbol={previewStock?.symbol ?? null}
@@ -410,7 +393,7 @@ export function Dashboard() {
 // ===== 无数据常驻引导卡片: 一键触发盘后管道获取行情数据(无 Key 也可) =====
 function FetchDataCard({
   isFetching, isStarting, fetchFailed, stage, fetchPct, onStart,
-  isTickflowProvider, providerLabel,
+  providerLabel,
 }: {
   isFetching: boolean
   isStarting: boolean
@@ -418,22 +401,19 @@ function FetchDataCard({
   stage?: string
   fetchPct?: number
   onStart: () => void
-  isTickflowProvider: boolean
   providerLabel: string
 }) {
   const stageText = stage ? (STAGE_LABELS[stage] ?? stage) : '正在同步行情数据…'
   return (
-    <div className="mb-3 leaf-cell bg-surface/85 p-3.5">
+    <div className="mb-3 border-t border-rule-strong bg-surface/85 p-3.5">
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-accent/10 p-2 shrink-0">
-          <Database className="h-4 w-4 text-accent" />
+          <Database className="h-[16px] w-[16px] text-accent" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-foreground">当前暂无数据</div>
           <p className="mt-1 text-xs text-secondary leading-relaxed">
-            首次使用需获取行情数据后才能查看看板。{isTickflowProvider
-              ? '可通过 TickFlow 免费服务器拉取近 1 年全 A 股日K'
-              : `将从当前数据源「${providerLabel}」拉取近 1 年全 A 股日K`}(约 5500 只),预计 1-3 分钟,期间可继续浏览其他页面。
+            首次使用需获取行情数据后才能查看看板。将从当前数据源「{providerLabel}」拉取近 1 年全 A 股日K(约 5500 只),预计 1-3 分钟,期间可继续浏览其他页面。
           </p>
           <p className="mt-1 text-[11px] text-warning/80 leading-relaxed">
             ⓘ 获取数据后即可进行策略定制、回测验证、策略扫描等本地分析功能。
@@ -447,7 +427,7 @@ function FetchDataCard({
             <div className="mt-3">
               <div className="flex items-center justify-between text-[11px] text-muted mb-1.5">
                 <span className="inline-flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="h-[12px] w-[12px] animate-spin" />
                   {isStarting ? '正在启动同步任务…' : stageText}
                 </span>
                 <span className="font-mono tabular">
@@ -468,7 +448,7 @@ function FetchDataCard({
               <span className="text-xs text-danger">同步失败,请重试</span>
               <button
                 onClick={onStart}
-                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-btn bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+                className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90"
               >
                 <Play className="h-3.5 w-3.5" />重新获取
               </button>
@@ -477,7 +457,7 @@ function FetchDataCard({
             <div className="mt-3 flex items-center gap-3">
               <button
                 onClick={onStart}
-                className="inline-flex items-center gap-1.5 px-4 h-8 rounded-btn bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+                className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90"
               >
                 <Play className="h-3.5 w-3.5" />立即获取数据
               </button>
@@ -486,7 +466,7 @@ function FetchDataCard({
                 className="inline-flex items-center gap-0.5 text-xs text-secondary hover:text-accent transition-colors"
               >
                 前往数据页
-                <ArrowUpRight className="h-3 w-3 self-center" />
+                <ArrowUpRight className="h-[12px] w-[12px] self-center" />
               </Link>
             </div>
           )}
@@ -498,9 +478,8 @@ function FetchDataCard({
 
 // ===== 首次使用自动弹窗: 询问用户后触发盘后管道 =====
 function WelcomeFetchModal({
-  onClose, onStart, isTickflowProvider, providerLabel,
+  onClose, onStart, providerLabel,
 }: {
-  isTickflowProvider: boolean
   providerLabel: string
   onClose: () => void
   onStart: () => void
@@ -514,13 +493,11 @@ function WelcomeFetchModal({
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="mx-auto w-fit rounded-2xl bg-accent/10 p-3.5"
         >
-          <Sparkles className="h-7 w-7 text-accent" />
+          <Sparkles className="h-[28px] w-[28px] text-accent" />
         </motion.div>
         <h3 className="mt-4 text-[16px] leading-6 font-semibold text-foreground">首次使用,需先获取行情数据</h3>
         <p className="mt-2 text-xs text-secondary leading-relaxed">
-          {isTickflowProvider
-            ? '可通过 TickFlow 免费服务器拉取近 1 年全 A 股日K'
-            : `将从当前数据源「${providerLabel}」拉取近 1 年全 A 股日K`}(约 5500 只),预计 1-3 分钟。
+          将从当前数据源「{providerLabel}」拉取近 1 年全 A 股日K(约 5500 只),预计 1-3 分钟。
           同步期间可继续浏览其他页面,完成后看板自动刷新。
         </p>
         <div className="mx-auto mt-4 max-w-md rounded-btn bg-elevated/60 px-4 py-3 text-left">
@@ -536,21 +513,21 @@ function WelcomeFetchModal({
             className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-accent hover:text-accent/80 transition-colors"
           >
             前往设置 → 数据源
-            <ArrowUpRight className="h-3 w-3 self-center" />
+            <ArrowUpRight className="h-[12px] w-[12px] self-center" />
           </Link>
         </div>
         <div className="mt-5 flex items-center justify-center gap-2.5">
           <button
             onClick={onClose}
-            className="px-4 h-9 rounded-btn text-sm text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+            className="ctl ctl-lg ctl-ghost px-3.5 hover:text-foreground hover:bg-elevated"
           >
             稍后再说
           </button>
           <button
             onClick={onStart}
-            className="inline-flex items-center gap-2 px-5 h-9 rounded-xl bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition-colors"
+            className="ctl ctl-lg ctl-btn pri inline-flex items-center gap-2 px-3.5 font-semibold hover:bg-accent/90"
           >
-            <Play className="h-4 w-4" />开始获取
+            <Play className="h-[16px] w-[16px]" />开始获取
           </button>
         </div>
       </div>

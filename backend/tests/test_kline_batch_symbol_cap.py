@@ -12,8 +12,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.services import preferences
-from app.tickflow.capabilities import Cap, CapabilitySet
-from app.tickflow.repository import DataStore, KlineRepository
+from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.repository import DataStore, KlineRepository
 
 _BJ_DATE = _dt.date(2026, 10, 23)  # 周五交易日, 钉死不随跑测试当天漂移
 _BJ_NOW = _dt.datetime(2026, 10, 23, 11, 0)

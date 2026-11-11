@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import { QueryClient, QueryCache } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { initializeFrontendExtensions } from './extensions/bootstrap'
@@ -94,7 +95,12 @@ async function bootstrap() {
           dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
         }}
       >
-        <RouterProvider router={router} />
+        {/* 用户开了「降低动效」时, framer-motion 的位移/缩放动画整体退化为
+            直接呈现 (只保留透明度过渡)。CSS 侧的 @media (prefers-reduced-motion)
+            管不到 JS 驱动的动画, 全局 MotionConfig 是唯一一处开关。 */}
+        <MotionConfig reducedMotion="user">
+          <RouterProvider router={router} />
+        </MotionConfig>
       </PersistQueryClientProvider>
     </React.StrictMode>,
   )

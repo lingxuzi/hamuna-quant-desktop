@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 from app.indicators.pipeline import compute_enriched_today, compute_indicators
-from app.tickflow.repository import DataStore, KlineRepository, _live_agg_window_start
+from app.data_providers.repository import DataStore, KlineRepository, _live_agg_window_start
 
 TODAY = date(2025, 3, 3)
 # 2025 春节休市 1/28~2/4 + 元旦: 2024-12-03 ~ 2025-02-28 只有 58 个交易日

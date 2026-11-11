@@ -12,7 +12,7 @@ from app.backtest.mining import (
     required_trading_bars,
     validation_config_for_profile,
 )
-from app.tickflow.repository import enriched_dirname
+from app.data_providers.repository import enriched_dirname
 
 
 @dataclass(frozen=True)

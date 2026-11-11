@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from app.api import kline as kline_api
 from app.market_time import CN_TZ
 from app.services import preferences, trading_day
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
+from app.data_providers.capabilities import Cap, CapabilityLimits, CapabilitySet
 
 HOLIDAY = date(2026, 10, 1)          # 周四, 国庆休市
 LAST_SESSION = date(2026, 9, 30)      # 节前最后一个交易日
@@ -42,7 +42,7 @@ def _session(day: date, symbol: str = SYMBOL) -> pl.DataFrame:
 @pytest.fixture
 def market(monkeypatch: pytest.MonkeyPatch):
     """北京时间钉在国庆当天上午 10:00; 返回设置探针结论的函数。"""
-    monkeypatch.setattr(kline_api, "cn_now", lambda: MORNING)
+    monkeypatch.setattr(kline_api, "cn_now", lambda: datetime(2026, 10, 1, 10, 0, tzinfo=CN_TZ))
     monkeypatch.setattr(kline_api, "cn_today", lambda: HOLIDAY)
     monkeypatch.setattr(kline_api, "in_continuous_session", lambda: True)
     monkeypatch.setattr(preferences, "get_minute_batch_compress", lambda: False)

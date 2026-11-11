@@ -22,7 +22,7 @@ from pathlib import Path
 
 from app.config import settings
 
-# 与 frontend/src/extensions/runtime.tsx ICON_ALLOWLIST 的键逐字一致 (大小写敏感)
+# 与 frontend_v2/src/extensions/runtime.tsx ICON_ALLOWLIST 的键逐字一致 (大小写敏感)
 _ICON_ALLOWLIST = [
     "Activity", "BarChart3", "Bell", "BookOpen", "Brain", "Calendar",
     "Database", "Globe", "LineChart", "PieChart", "Shield", "Sparkles",
@@ -112,7 +112,7 @@ def find_esbuild() -> Path | None:
 
 
 def namespace_source_path(namespace: str) -> Path:
-    """frontend/src/custom/<ns>/extension.tsx, 带命名空间与穿越校验。"""
+    """frontend_v2/src/custom/<ns>/extension.tsx, 带命名空间与穿越校验。"""
     if not _NS_RE.match(namespace) or namespace == "_template":
         raise ValueError(f"非法的扩展命名空间: {namespace}")
     p = (custom_root() / namespace / "extension.tsx").resolve()

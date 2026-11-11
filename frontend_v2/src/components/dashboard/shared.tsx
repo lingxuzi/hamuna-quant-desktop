@@ -43,6 +43,16 @@ export function pctClass(v: number | null | undefined) {
   return x > 0 ? 'text-bull' : 'text-bear'
 }
 
+/** 金额拆成「数值 + 单位」两段, 便于大字数值配小字单位 */
+export function fmtParts(v: number | null | undefined): { v: string; u: string } {
+  const x = n(v)
+  if (x == null) return { v: '—', u: '' }
+  if (x >= 1_000_000_000_000) return { v: (x / 1_000_000_000_000).toFixed(2), u: '万亿' }
+  if (x >= 100_000_000) return { v: (x / 100_000_000).toFixed(2), u: '亿' }
+  if (x >= 10_000) return { v: (x / 10_000).toFixed(0), u: '万' }
+  return { v: x.toFixed(0), u: '' }
+}
+
 export function quoteAge(ms?: number | null) {
   if (ms == null) return '—'
   if (ms < 1000) return `${Math.round(ms)}ms`
@@ -81,7 +91,7 @@ export function SectionTitle({ icon: Icon, title, hint, onConfig, configTitle }:
             onClick={onConfig}
             title={configTitle ?? '配置计算方式'}
             aria-label={configTitle ?? '配置计算方式'}
-            className="rounded p-0.5 text-muted transition-colors hover:bg-elevated hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:bg-elevated hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <Settings2 className="h-3.5 w-3.5" />
           </button>

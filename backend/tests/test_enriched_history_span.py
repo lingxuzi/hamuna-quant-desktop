@@ -10,7 +10,7 @@ from datetime import date
 
 import polars as pl
 
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 
 def _bare_repo(cache=None, start=None, cache_date=None) -> KlineRepository:

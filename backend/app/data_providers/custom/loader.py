@@ -15,6 +15,7 @@ import yaml
 
 from app import secrets_store
 from app.config import settings
+from app.data_providers import registry
 from app.data_providers.base import ProviderRequestError
 from app.data_providers.custom.config import (
     DEFAULT_TIMEOUT,
@@ -105,7 +106,7 @@ def list_plugins() -> list[dict]:
 def _plugin_key_masked(name: str, api_key_env: str) -> str:
     """插件当前生效 Key 的脱敏串 (secrets.json 优先, .env 兜底), 未配置返回空。
 
-    与 TickFlow Key 的展示契约一致 (settings API 的 tickflow_api_key_masked):
+    与设置页 API Key 的展示契约一致 (masked 输出):
     完整 Key 永不出后端, 只出 mask() 结果, 供设置页常驻显示。
     """
     env = str(api_key_env or "").strip()
@@ -346,12 +347,29 @@ def is_custom_provider(name: str) -> bool:
 def provider_has_dataset(name: str, dataset: str) -> bool:
     """判断某个 custom 源是否配置了指定数据集。
 
-    用于主流程分流: 总开关选了 custom, 但某个数据集未启用时, 该数据集回退 TickFlow。
+    用于主流程分流: 生效源没提供某数据集时, 该数据集回退默认源 (内置 easytdx)。
     """
     provider = _PROVIDERS.get((name or "").lower())
     if provider is None:
         return False
     return dataset in provider.config.datasets
+
+
+def resolve_provider(name: str, dataset: str) -> tuple[object | None, str]:
+    """生效源 → (provider 实例, 源名); 生效源不提供该数据集时回退默认源。
+
+    回退链只有一跳: 该数据集的默认源 (内置 easytdx)。默认源也拿不到 →
+    (None, 生效源名), 调用方按「能力不可用」处理, 不静默换源。
+    """
+    from app.data_providers.capabilities import default_provider_for
+
+    if name and provider_has_dataset(name, dataset):
+        return get_provider(name), name
+    fallback = default_provider_for(dataset)
+    if fallback and fallback != name and provider_has_dataset(fallback, dataset):
+        logger.warning("数据源 %s 未提供 %s 能力, 回退 %s", name, dataset, fallback)
+        return get_provider(fallback), fallback
+    return None, name
 
 
 def get_config_dict(name: str) -> dict | None:
@@ -628,9 +646,10 @@ def _register_one_plugin(manifest: dict) -> None:
         if old is not None:
             old.close()
         return  # 不就绪时撤下旧实例，避免旧凭据继续生效
-    # 可用 → 动态加载 provider 类并实例化
+    # 可用 → 取 provider 类并实例化。内置源以注册表为类的唯一来源
+    # (插件清单只留元数据与安装信息), 插件源从清单 entry 动态加载。
     try:
-        provider_cls = _load_entry(manifest["entry"])
+        provider_cls = registry.provider_class(name) or _load_entry(manifest["entry"])
         provider = provider_cls() if isinstance(provider_cls, type) else provider_cls
         provider.builtin = True  # 标记为内置 (list_sources 过滤, 不可被用户编辑/删除)
         old = _PROVIDERS.get(name)

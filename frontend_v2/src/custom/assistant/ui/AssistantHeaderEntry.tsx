@@ -18,7 +18,7 @@ export function AssistantHeaderEntry() {
       title="AI 助手 (⌘K)"
       aria-label="打开 AI 助手"
       className={cn(
-        'group flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md border transition-colors duration-150',
+        'ctl ctl-md ctl-btn group flex flex-1 items-center justify-center gap-1.5 duration-150',
         open
           ? 'border-accent/40 bg-accent/10 text-accent'
           : 'border-border/60 bg-elevated/25 text-secondary hover:border-border hover:bg-elevated hover:text-foreground',
@@ -26,7 +26,7 @@ export function AssistantHeaderEntry() {
     >
       <MessagesSquare
         className={cn(
-          'h-3 w-3 shrink-0 transition-colors',
+          'h-[12px] w-[12px] shrink-0 transition-colors',
           open ? 'text-accent' : 'text-muted group-hover:text-foreground',
         )}
       />

@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (如 v0.1.33, 用作 Release tag 和标题; 必须与 frontend/package.json 的 version 一致, 否则流水线直接失败)'
+        description: '版本号 (如 v0.1.33, 用作 Release tag 和标题; 必须与 frontend_v2/package.json 的 version 一致, 否则流水线直接失败)'
         required: true
         default: 'v0.3.17'
       platforms:
@@ -40,17 +40,17 @@ jobs:
       ver: ${{ steps.filter.outputs.ver }}
     steps:
       - name: 检出代码
-        # 仅为校验版本一致性 (读 frontend/package.json), 浅检出足够
+        # 仅为校验版本一致性 (读 frontend_v2/package.json), 浅检出足够
         uses: actions/checkout@v4
 
       - id: filter
         run: |
-          # 版本号唯一权威 = frontend/package.json (安装包、页面显示、更新检查同源)。
+          # 版本号唯一权威 = frontend_v2/package.json (安装包、页面显示、更新检查同源)。
           # 发版输入与它不一致直接失败, 防止 tag/安装包/页面三处版本漂移。
-          PKG_VER=$(python3 -c "import json; print(json.load(open('frontend/package.json'))['version'])")
+          PKG_VER=$(python3 -c "import json; print(json.load(open('frontend_v2/package.json'))['version'])")
           REQ_VER='${{ github.event.inputs.version }}'
           if [ "v$PKG_VER" != "$REQ_VER" ]; then
-            echo "::error::版本不一致: 发版输入 $REQ_VER, frontend/package.json 为 v$PKG_VER。请以 frontend/package.json 为准, 统一版本号后再发版。"
+            echo "::error::版本不一致: 发版输入 $REQ_VER, frontend_v2/package.json 为 v$PKG_VER。请以 frontend_v2/package.json 为准, 统一版本号后再发版。"
             exit 1
           fi
 
@@ -99,8 +99,8 @@ jobs:
         uses: actions/checkout@v4
 
       # issue #513: 构建产物内的 VERSION / pyproject / _FALLBACK_VERSION 从
-      # frontend/package.json 派生, 防止发版只改 package.json 时版本漂移。
-      - name: 同步版本号 (从 frontend/package.json 派生)
+      # frontend_v2/package.json 派生, 防止发版只改 package.json 时版本漂移。
+      - name: 同步版本号 (从 frontend_v2/package.json 派生)
         run: python3 scripts/sync_versions.py
 
       - name: 安装 pnpm
@@ -113,10 +113,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          cache-dependency-path: frontend_v2/pnpm-lock.yaml
 
       - name: 构建前端
-        working-directory: frontend
+        working-directory: frontend_v2
         run: |
           pnpm install --frozen-lockfile
           pnpm build
@@ -153,7 +153,7 @@ jobs:
         # 产物输出到 backend/dist/ (PyInstaller 默认路径), 与 packaging/tsp.iss
         # 的 Source 路径 (..\backend\dist\TSP\*) 保持一致。
         # SPECPATH 由 spec 文件位置决定 (packaging/tsp.spec → 项目根),
-        # 与 cwd 无关, 故 frontend/dist、tiers.yaml 等相对路径仍正确。
+        # 与 cwd 无关, 故 frontend_v2/dist 等相对路径仍正确。
         working-directory: backend
         run: uv run pyinstaller ../packaging/tsp.spec --noconfirm
 
@@ -162,12 +162,12 @@ jobs:
         # 相对路径与运行时 _MEIPASS 布局一致, 清单落 _internal/app/ 后随
         # Inno/DMG/tar 一起分发, 运行时由 upgrade_guard 读取。
         # uv run --no-project: 跨平台用 uv 管的 Python; 版本号唯一权威 =
-        # frontend/package.json (与 app/__init__._load_version 同源)。
+        # frontend_v2/package.json (与 app/__init__._load_version 同源)。
         # shell: bash —— Windows runner 默认是 pwsh, 不认识 FOO=$(...) 语法;
         # 三平台 runner 均自带 bash, 显式指定即可统一。
         shell: bash
         run: |
-          APP_VER=$(node -p "require('./frontend/package.json').version")
+          APP_VER=$(node -p "require('./frontend_v2/package.json').version")
           uv run --no-project python scripts/generate_manifest.py --root backend/dist/TSP/_internal --output backend/dist/TSP/_internal/app/upgrade_manifest.json --version "$APP_VER"
 
       - name: 检查 Polars 兼容内核 (仅 Windows)
@@ -193,9 +193,9 @@ jobs:
 
       - name: 生成 Windows 安装包 (Inno Setup)
         if: matrix.platform == 'windows'
-        # 从 frontend/package.json 读版本号传给 ISCC, 保持与 Release tag 一致
+        # 从 frontend_v2/package.json 读版本号传给 ISCC, 保持与 Release tag 一致
         run: |
-          $ver = (Get-Content frontend/package.json | ConvertFrom-Json).version
+          $ver = (Get-Content frontend_v2/package.json | ConvertFrom-Json).version
           echo "版本号: $ver"
           ISCC.exe "/DMyAppVersion=$ver" packaging/tsp.iss
           # 把生成的 Setup.exe 移到工作区根 (Release 上传用)

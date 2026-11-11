@@ -7,10 +7,9 @@ import { WatchlistAddMenu } from '@/components/WatchlistAddMenu'
 import { INFO_GROUPS, type ColumnConfig } from '@/lib/stock-info-fields'
 import { storage } from '@/lib/storage'
 import { buildStockExternalUrl, loadStockExternalTemplate } from '@/lib/stock-external-link'
+import { chartTheme, getTheme } from '@/lib/theme'
 
-const BULL = '#C74040'
-const BEAR = '#2D9B65'
-
+// 涨跌色随主题走 (与表格里的涨跌数字同源); 写死色值时暗底/纸底对不上。
 interface Props {
   symbol: string
   assetType?: 'stock' | 'etf' | 'index'
@@ -165,7 +164,8 @@ export function StockInfoBar({
   const chg = prev ? close - Number(prev.close) : 0
   const chgPct = prev ? chg / Number(prev.close) * 100 : 0
   const isUp = chg >= 0
-  const clr = isUp ? BULL : BEAR
+  const ct = chartTheme(getTheme())
+  const clr = isUp ? ct.bull : ct.bear
 
   const totalShares = stockInfo?.total_shares
   const floatShares = stockInfo?.float_shares
@@ -280,7 +280,7 @@ export function StockInfoBar({
               type="button"
               onClick={onRemoveFromWatchlist}
               disabled={watchlistPending}
-              className="rounded-btn p-1 text-[#FACC15] transition-colors cursor-pointer hover:bg-elevated disabled:opacity-50"
+              className="ctl ctl-sm ctl-ghost ctl-icon text-[#FACC15] hover:bg-elevated disabled:opacity-50"
               title="移出自选"
               aria-label={`将 ${symbol} 移出自选`}
             >
@@ -299,7 +299,7 @@ export function StockInfoBar({
           {onMonitor && (
             <button
               onClick={onMonitor}
-              className="p-1 rounded-btn text-amber-400 hover:bg-amber-400/10 transition-colors cursor-pointer"
+              className="ctl ctl-sm ctl-ghost ctl-icon text-amber-400 hover:bg-amber-400/10"
               title="加监控"
             >
               <RadioTower className="h-3.5 w-3.5" />
@@ -317,7 +317,7 @@ export function StockInfoBar({
           )}
           <button
             onClick={() => setCustomizerOpen(true)}
-            className="p-1 rounded-btn text-muted hover:text-foreground hover:bg-elevated transition-colors"
+            className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground hover:bg-elevated"
             title="自定义信息条"
           >
             <Settings2 className="h-3.5 w-3.5" />

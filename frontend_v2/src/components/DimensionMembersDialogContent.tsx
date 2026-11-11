@@ -169,8 +169,8 @@ export function DimensionMembersDialogContent({ target, onClose, onStockClick }:
       panelClassName="flex h-[86vh] max-h-[760px] w-[94vw] max-w-4xl flex-col overflow-hidden rounded-card border border-border bg-base shadow-2xl"
     >
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-elevated ${accent.iconCls}`}>
-          <AccentIcon className="h-4 w-4" />
+        <div className={`flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md bg-elevated ${accent.iconCls}`}>
+          <AccentIcon className="h-[16px] w-[16px]" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -187,8 +187,8 @@ export function DimensionMembersDialogContent({ target, onClose, onStockClick }:
             <Users className="h-3.5 w-3.5 text-muted" />
             {membersQuery.isLoading ? '—' : total}
           </span>
-          <button onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded text-muted hover:bg-elevated hover:text-foreground" title="关闭">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} className="ctl ctl-md ctl-ghost inline-flex w-[28px] px-0 items-center justify-center hover:bg-elevated hover:text-foreground" title="关闭">
+            <X className="h-[16px] w-[16px]" />
           </button>
         </div>
       </div>
@@ -196,7 +196,7 @@ export function DimensionMembersDialogContent({ target, onClose, onStockClick }:
       {!source ? (
         <div className="grid min-h-64 place-items-center px-6 text-sm text-danger">扩展字段格式无效</div>
       ) : membersQuery.isLoading ? (
-        <div className="grid min-h-64 place-items-center text-muted"><RefreshCw className="h-5 w-5 animate-spin" /></div>
+        <div className="grid min-h-64 place-items-center text-muted"><RefreshCw className="h-[20px] w-[20px] animate-spin" /></div>
       ) : membersQuery.isError ? (
         <div className="grid min-h-64 place-items-center px-6 text-center text-sm text-danger">{String((membersQuery.error as Error).message)}</div>
       ) : (
@@ -225,13 +225,13 @@ export function DimensionMembersDialogContent({ target, onClose, onStockClick }:
                 value={search}
                 onChange={event => setSearch(event.target.value)}
                 placeholder="搜索代码或名称"
-                className="h-8 w-full rounded-input border border-border bg-surface pl-8 pr-3 text-xs text-foreground placeholder:text-muted focus:border-accent/60 focus:outline-none"
+                className="ctl ctl-md ctl-input w-full pl-8 pr-3 placeholder:text-muted focus:border-accent/60 bg-surface"
               />
             </div>
             <select
               value={sortMode}
               onChange={event => setSortMode(event.target.value as SortMode)}
-              className="h-8 rounded-input border border-border bg-surface px-2 text-xs text-secondary focus:border-accent/60 focus:outline-none"
+              className="ctl ctl-md ctl-select"
               aria-label="排序方式"
             >
               <option value="change_desc">涨幅从高到低</option>
@@ -339,7 +339,7 @@ function DimensionIntradaySection({ configId, field, value, date, kind }: {
   return (
     <section className="shrink-0 border-b border-border bg-surface/30">
       <div className="flex items-center gap-2 px-4 pt-2">
-        <Activity className="h-3 w-3 text-muted" />
+        <Activity className="h-[12px] w-[12px] text-muted" />
         <span className="text-[10px] font-medium text-muted">分时走势 · 等权</span>
         {data?.member_count != null && data.members_with_minute != null && (
           <span className="rounded bg-elevated px-1 py-px font-mono text-[9px] text-muted" title="有当日分钟数据的成分股数">
@@ -383,9 +383,9 @@ function DimensionIntradaySection({ configId, field, value, date, kind }: {
         </div>
       ) : data?.status === 'no_data' ? (
         <div className="mx-4 mb-2 mt-1 flex h-[96px] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border">
-          <Database className="h-4 w-4 text-muted" />
+          <Database className="h-[16px] w-[16px] text-muted" />
           <p className="text-[11px] text-muted">分钟数据未落盘, 暂无分时走势</p>
-          <p className="text-[10px] text-muted/70">需 TickFlow Pro+ 盘后分钟同步 / Expert 盘中增量, 或自定义分钟源</p>
+          <p className="text-[10px] text-muted/70">需盘后分钟同步 / 盘中增量能力, 或自定义分钟源</p>
           <Link to="/data" className="text-[10px] text-accent hover:text-accent/80">前往数据页 →</Link>
         </div>
       ) : !data || data.status === 'empty' || data.points.length < 2 ? (

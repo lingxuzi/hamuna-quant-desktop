@@ -310,20 +310,20 @@ export function ScreenerTable({
                     type="button"
                     onClick={() => onRemoveFromWatchlist(r.symbol)}
                     disabled={watchlistPending}
-                    className="shrink-0 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-accent/40 bg-accent/10 text-accent transition-colors disabled:opacity-50"
+                    className="ctl ctl-sm ctl-btn soft shrink-0 inline-flex w-5 px-0 items-center justify-center rounded-full border-accent/40 disabled:opacity-50 bg-accent/10"
                     title="移出自选"
                     aria-label={`将 ${r.symbol} 移出自选`}
                   >
-                    <Check className="h-3 w-3" />
+                    <Check className="h-[12px] w-[12px]" />
                   </button>
                 ) : (
                   <WatchlistAddMenu
                     onSelect={groupId => onAddToWatchlist(r.symbol, groupId)}
                     disabled={watchlistPending}
-                    triggerClassName="shrink-0 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
+                    triggerClassName="shrink-0 inline-flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
                     ariaLabel={`将 ${r.symbol} 加入自选`}
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-[12px] w-[12px]" />
                   </WatchlistAddMenu>
                 )
               )}
@@ -459,7 +459,7 @@ export function ScreenerTable({
               <button
                 type="button"
                 onClick={(event) => { event.stopPropagation(); onToggleDailyKChart() }}
-                className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-5 px-0 ${
                   dailyKChartVisible
                     ? 'text-accent bg-accent/10 hover:bg-accent/20'
                     : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -480,7 +480,7 @@ export function ScreenerTable({
               <button
                 type="button"
                 onClick={(event) => { event.stopPropagation(); onToggleIntradayChart() }}
-                className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-5 px-0 ${
                   intradayChartVisible
                     ? 'text-accent bg-accent/10 hover:bg-accent/20'
                     : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -496,7 +496,7 @@ export function ScreenerTable({
                   type="button"
                   onClick={(event) => { event.stopPropagation(); onRefreshIntraday() }}
                   disabled={intradayRefreshing}
-                  className="inline-flex items-center justify-center w-5 h-5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-40"
+                  className="ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-5 px-0 hover:text-accent hover:bg-accent/10 disabled:opacity-40"
                   title="刷新分时数据"
                   aria-label="刷新分时数据"
                 >
@@ -505,14 +505,14 @@ export function ScreenerTable({
               )}
               {/* 自动轮询中: 显示旋转图标提示正在实时刷新 */}
               {intradayChartVisible && intradayAutoRefresh && (
-                <RefreshCw className="h-3 w-3 text-accent/60 animate-spin" aria-label="实时刷新中" />
+                <RefreshCw className="h-[12px] w-[12px] text-accent/60 animate-spin" aria-label="实时刷新中" />
               )}
               {/* 纵轴模式切换: 自适应区间 ⇄ 涨跌停带 */}
               {intradayChartVisible && onToggleIntradayYMode && (
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); onToggleIntradayYMode() }}
-                  className={`inline-flex items-center justify-center h-5 px-1 rounded text-[10px] whitespace-nowrap transition-colors ${
+                  className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center px-1.5 whitespace-nowrap ${
                     intradayYMode === 'limit'
                       ? 'text-accent bg-accent/10 hover:bg-accent/20'
                       : 'text-muted hover:text-foreground hover:bg-elevated'
@@ -534,7 +534,7 @@ export function ScreenerTable({
               <button
                 type="button"
                 onClick={(event) => { event.stopPropagation(); handleToggleStrategyTags() }}
-                className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                className={`ctl ctl-sm ctl-ghost inline-flex items-center justify-center w-5 px-0 ${
                   strategyTagsExpanded
                     ? 'text-accent bg-accent/10 hover:bg-accent/20'
                     : 'text-muted hover:text-foreground hover:bg-elevated'

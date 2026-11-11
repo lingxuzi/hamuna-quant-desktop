@@ -7,6 +7,7 @@ import type { ChartMarker, ChartPriceLine, ChartRange, ChartRenderer, DailyMarke
 import { OVERLAY_INDICATORS, SUB_CHART_META } from '@/lib/chart-indicators'
 import { CHART_LAYOUT, dailyChartHeight } from '@/lib/chart-layout'
 import { Switch } from '@/components/Switch'
+import { selectCls } from '@/components/controls'
 
 const EChartsCandlestick = lazy(() => import('./EChartsCandlestick').then(m => ({ default: m.EChartsCandlestick })))
 const LightweightDaily = lazy(() => import('./charts/LightweightDaily').then(m => ({ default: m.LightweightDaily })))
@@ -130,7 +131,7 @@ function ChartPill({
       aria-pressed={active}
       onClick={onClick}
       title={title}
-      className={`px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+      className={`ctl ctl-sm ctl-ghost px-1.5 font-mono focus-visible:ring-2 focus-visible:ring-accent/60 ${
         active ? activeClass : 'bg-elevated text-secondary hover:text-foreground'
       }`}
     >
@@ -236,19 +237,20 @@ export function StockDailyKChart({
             />
           ))}
           {activeIndicators.includes('vol') && (
-            <div className="ml-0.5 flex h-5 items-center gap-1.5 border-l border-border/70 pl-2">
+            <div className="ml-0.5 flex h-ctl-sm items-center gap-1.5 border-l border-border/70 pl-2">
               <span className="text-[10px] text-muted">量比</span>
               <Switch
                 checked={volumeCompare.enabled}
                 onChange={next => updateVolumeCompare({ enabled: next })}
                 label={volumeCompare.enabled ? '关闭量能对比' : '开启量能对比'}
+                size="md"
               />
               <select
                 aria-label="量能对比周期"
                 value={volumeCompare.days}
                 disabled={!volumeCompare.enabled}
                 onChange={event => updateVolumeCompare({ days: Number(event.target.value) })}
-                className="h-5 rounded border border-border bg-base px-1 text-[10px] text-secondary outline-none disabled:opacity-40"
+                className={selectCls('sm', 'bg-base text-secondary px-1')}
               >
                 {Array.from({ length: 20 }, (_, index) => index + 1).map(days => (
                   <option key={days} value={days}>前{days}日均量</option>
@@ -272,7 +274,7 @@ export function StockDailyKChart({
                   value={markerStyle}
                   disabled={!showMarkers}
                   onChange={event => updateMarkerStyle(event.target.value as DailyMarkerStyle)}
-                  className="h-5 w-[74px] rounded border border-border bg-base px-1 text-[10px] text-secondary outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
+                  className="ctl ctl-sm ctl-select w-[74px]"
                 >
                   <option value="label">文字标签</option>
                   <option value="candle">颜色柱体</option>

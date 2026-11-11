@@ -67,7 +67,7 @@ export function EnrichedSchemaModal({ table, onClose }: { table: string | null; 
         >
           <div className="absolute inset-0 bg-black/40" {...backdrop} />
           <motion.div
-            className="relative w-full max-w-xl max-h-[70vh] leaf-cell shadow-xl overflow-hidden mx-4"
+            className="relative w-full max-w-xl max-h-[70vh] border border-border bg-surface shadow-xl overflow-hidden mx-4"
             initial={{ opacity: 0, scale: 0.95, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}

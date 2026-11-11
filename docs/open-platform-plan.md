@@ -25,7 +25,7 @@
 
 | 域 | 内容 | 现有承载 |
 |---|---|---|
-| **数据底座** | 日K/除权/分钟/实时/财务的同步管道、TickFlow 与数据源插件路由、enriched 存储、复权与单位口径 | `services/kline_sync` `services/financial_sync`、`plugins/*`、DuckDB/parquet |
+| **数据底座** | 日K/除权/分钟/实时/财务的同步管道、内置源与数据源插件路由、enriched 存储、复权与单位口径 | `services/kline_sync` `services/financial_sync`、`plugins/*`、DuckDB/parquet |
 | **订阅锚点** | 自选与分组（监控范围、持仓提醒、看板的数据订阅范围锚点） | `api/watchlist`、`data/watchlist` |
 | **策略与回测引擎** | 策略注册/运行、回测矩阵引擎、优化器、挖掘运行时、**环境过滤语义**（regime_filter 的 T-1 掩码）、回测候选缓存 | `strategy/`、`backtest/*`、`api/strategies` `api/screener` `api/backtest` |
 | **环境数据生产** | regime_builder 的市场状态计算与盘后增量（回测/挖掘/因子归因/AI 四处消费同一口径） | `services/regime_builder`、盘后管道 |
@@ -41,7 +41,7 @@
 | 无代码 HTTP 数据源 | `data/data_sources/*.yaml` | ✅ 已有 |
 | 用户自注册数据表（含市场级时序） | 扩展数据配置 + 上传/拉取/回补 | ✅ 已有（本方案补齐市场级与查询出口） |
 | 自定义声明式页面 | `analysis_menus` 配置 + 三模板 | ✅ 已有 |
-| 前端页面/导航/插槽 | `frontend/src/custom/<ns>/extension.tsx` | ✅ 已有（AI 助手即范例） |
+| 前端页面/导航/插槽 | `frontend_v2/src/custom/<ns>/extension.tsx` | ✅ 已有（AI 助手即范例） |
 | 后端路由/启动钩子/通知格式化 | `backend/app/custom/<module>.py` | ✅ 已有 |
 | 自定义/AI/叠加策略 | `data/strategies/` 目录 | ✅ 已有 |
 | AI 分析、大盘复盘、概念/行业/个股/财务分析、监控中心/异动/连板/持仓提醒、模拟盘、品牌页等**展示与外围业务页** | 核心数据的消费端; 二开可用扩展页面平行实现替代 UI | 页面可替换; 模拟盘拆分为官方插件的候选（见 §6 V3） |

@@ -99,7 +99,7 @@ def _index_quotes(repo, quote_service, as_of: date | None = None) -> list[dict]:
             db_rows = repo.execute_all(
                 f"""
                 WITH ranked AS (
-                    SELECT symbol, date, close,
+                    SELECT symbol, date, open, high, low, close,
                            row_number() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
                     FROM kline_index_daily
                     WHERE symbol IN ({placeholders})
@@ -108,19 +108,22 @@ def _index_quotes(repo, quote_service, as_of: date | None = None) -> list[dict]:
                     SELECT symbol,
                            max(CASE WHEN rn = 1 THEN date END) AS date,
                            max(CASE WHEN rn = 1 THEN close END) AS last_price,
+                           max(CASE WHEN rn = 1 THEN open END) AS open,
+                           max(CASE WHEN rn = 1 THEN high END) AS high,
+                           max(CASE WHEN rn = 1 THEN low END) AS low,
                            max(CASE WHEN rn = 2 THEN close END) AS prev_close
                     FROM ranked
                     WHERE rn <= 2
                     GROUP BY symbol
                 )
-                SELECT symbol, date, last_price, prev_close
+                SELECT symbol, date, last_price, open, high, low, prev_close
                 FROM latest
                 """,
                 [*CORE_INDEX_SYMBOLS, as_of, as_of],
             )
         except Exception:  # noqa: BLE001
             db_rows = []
-        for symbol, dt, last_price, prev_close in db_rows:
+        for symbol, dt, last_price, open_, high, low, prev_close in db_rows:
             change_amount = None
             change_pct = None
             lp = _finite(last_price)
@@ -134,6 +137,9 @@ def _index_quotes(repo, quote_service, as_of: date | None = None) -> list[dict]:
                 "date": str(dt) if dt else None,
                 "last_price": lp,
                 "close": lp,
+                "open": _finite(open_),
+                "high": _finite(high),
+                "low": _finite(low),
                 "prev_close": pc,
                 "change_amount": change_amount,
                 "change_pct": change_pct,
@@ -143,10 +149,16 @@ def _index_quotes(repo, quote_service, as_of: date | None = None) -> list[dict]:
     out = []
     for symbol in CORE_INDEX_SYMBOLS:
         r = by_symbol.get(symbol, {"symbol": symbol})
+        last_price = r.get("last_price") if r.get("last_price") is not None else r.get("close")
         out.append({
             "symbol": symbol,
             "name": r.get("name") or CORE_INDEX_NAMES[symbol],
-            "last_price": _finite(r.get("last_price") if r.get("last_price") is not None else r.get("close")),
+            "last_price": _finite(last_price),
+            "close": _finite(r.get("close") if r.get("close") is not None else last_price),
+            # 开高低给前端画指数走势小图(设计稿右侧指标栏的 sparkline)
+            "open": _finite(r.get("open")),
+            "high": _finite(r.get("high")),
+            "low": _finite(r.get("low")),
             "change_pct": _finite(r.get("change_pct")),
             "change_amount": _finite(r.get("change_amount")),
         })

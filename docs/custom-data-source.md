@@ -1,6 +1,6 @@
 # 自定义数据源接入
 
-本项目默认使用 TickFlow。自定义数据源是一个可选扩展: 外部 HTTP 服务负责取数和整理, 本项目只把返回结果映射成内部标准字段, 然后复用现有存储、指标、enriched、策略和前端展示逻辑。
+本项目内置 easytdx(通达信直连)作为行情默认源,财务默认走插件源 fuyao。自定义数据源是一个可选扩展: 外部 HTTP 服务负责取数和整理, 本项目只把返回结果映射成内部标准字段, 然后复用现有存储、指标、enriched、策略和前端展示逻辑。
 
 ## 支持范围
 
@@ -8,7 +8,7 @@
 
 | 数据集 | 配置名 | 说明 |
 | --- | --- | --- |
-| 日K | `daily` | 批量返回一组标的在指定区间内的日K。个股、指数与 ETF 的日K同步都会路由到生效源,并按契约传入 `asset_type`(`stock`/`index`/`etf`);仅支持股票的源(如 fuyao/tdxquant/amber)对其他资产类型返回空数据即可,该轮同步会告警并回退 TickFlow,不会写入错误数据 |
+| 日K | `daily` | 批量返回一组标的在指定区间内的日K。个股、指数与 ETF 的日K同步都会路由到生效源,并按契约传入 `asset_type`(`stock`/`index`/`etf`);仅支持股票的源(如 fuyao/amber)对其他资产类型返回空数据即可,该轮同步会告警并回退内置源 easytdx,不会写入错误数据 |
 | 除权因子 | `adj_factor` | 批量返回一组股票的复权因子 |
 | 实时行情 | `realtime` | 返回全市场快照,用于盘中 enriched 增量计算 |
 | 分钟K | `minute` | 返回 1m 分钟K(需映射出 symbol / datetime / OHLC / 量; amount 成交额可缺省, 缺省时均价线降级显示 —) |
@@ -222,7 +222,7 @@ balance_sheet 是资产、在 shares 是股本),无法分别映射,需要上游�
 
 被切为财务生效源后,财务同步走独立调度(每周 metrics + 手动全表),
 报告期合并按 `(symbol, period_end)` 逐列取最新非空值:多源字段可并集
-共存互不覆盖(如 TickFlow 补齐 metrics 历史各期,自定义源提供当期报表),
+共存互不覆盖(如内置源 easytdx 补齐 metrics 历史各期,自定义源提供当期报表),
 但切换生效源后**不再拉取的表不会自动清空**,旧数据会保留到被新数据覆盖。
 声明了 financial 但上游某表无数据时返回空即可,已有存量靠合并写入保留。
 
@@ -311,7 +311,7 @@ cp docs/examples/custom-data-source/mock_source.yaml data/data_sources/mock_sour
 5. 保存数据源选择:
 
 - 日K: `mock_source`
-- 除权因子: `mock_source` (或保持默认 `tickflow`)
+- 除权因子: `mock_source` (或保持默认 `easytdx`)
 - 实时行情: `mock_source`
 
 6. 触发同步或开启实时行情。

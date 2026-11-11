@@ -45,8 +45,8 @@ describe('buildProviderRouting', () => {
       ['realtime', 'depth5', 'daily', 'minute', 'full_minute'],
       CAPS,
     )
-    expect(routing.adj_factor_provider).toBe('tickflow')
-    expect(routing.financial_data_provider).toBe('tickflow')
+    expect(routing.adj_factor_provider).toBe('easytdx')
+    expect(routing.financial_data_provider).toBe('fuyao')
   })
 
   it('每个可路由字段都被覆盖 (防止再漏能力)', () => {
@@ -64,7 +64,7 @@ describe('buildProviderRouting', () => {
       CAPS,
     )
     expect(routing.adj_factor_provider).toBe(DEMO)
-    expect(routing.financial_data_provider).toBe('tickflow')
+    expect(routing.financial_data_provider).toBe('fuyao')
     expect(Object.keys(routing).sort()).toEqual([...ALL_FIELDS].sort())
   })
 
@@ -75,14 +75,17 @@ describe('buildProviderRouting', () => {
   it('不可路由能力 (field=null) 被跳过', () => {
     const routing = buildProviderRouting(DEMO, ['daily'], [
       { id: 'daily', field: 'daily_data_provider' },
-      { id: 'tickflow_only', field: null },
+      { id: 'not_routable', field: null },
     ])
     expect(routing.daily_data_provider).toBe(DEMO)
     expect(Object.keys(routing).sort()).toEqual([...ALL_FIELDS].sort())
   })
 
-  it('默认路由覆盖全部字段且均为 tickflow', () => {
+  it('默认路由覆盖全部字段: 行情跟 easytdx, 财务跟 fuyao', () => {
     expect(Object.keys(DEFAULT_ROUTING).sort()).toEqual([...ALL_FIELDS].sort())
-    expect(new Set(Object.values(DEFAULT_ROUTING))).toEqual(new Set(['tickflow']))
+    expect(DEFAULT_ROUTING.financial_data_provider).toBe('fuyao')
+    for (const field of ALL_FIELDS.filter(f => f !== 'financial_data_provider')) {
+      expect(DEFAULT_ROUTING[field], `field ${field}`).toBe('easytdx')
+    }
   })
 })

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries, LineSeries, AreaSeries, BaselineSeries, HistogramSeries, createSeriesMarkers, ColorType, CrosshairMode,
   type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type SeriesType, type Time, type SeriesMarker, type MouseEventParams } from 'lightweight-charts'
-import { useChartTheme } from '@/lib/theme'
+import { alpha, useChartTheme } from '@/lib/theme'
 import { fmtBigNum } from '@/lib/format'
 import { CHART_LAYOUT } from '@/lib/chart-layout'
 import { formatAxisPercent } from '@/lib/intraday-scale'
@@ -213,9 +213,9 @@ export function FinancialPlot(props: Props) {
         ...(spec.type === 'Baseline' ? { baseValue: { type: 'price' as const, price: spec.baseValue! },
           // 固定到价格 pane；按曲线极值定位渐变会在全日高于昨收时产生绿色矩形。
           topLineColor: spec.color, bottomLineColor: spec.color, relativeGradient: false,
-          topFillColor1: 'rgba(199,64,64,0.32)', topFillColor2: 'rgba(199,64,64,0.02)',
-          bottomFillColor1: 'rgba(45,155,101,0.02)', bottomFillColor2: 'rgba(45,155,101,0.32)' } : {}),
-        ...(spec.type === 'Candlestick' ? { upColor: '#C74040', downColor: '#2D9B65', borderVisible: false, wickUpColor: '#C74040', wickDownColor: '#2D9B65' } : {}),
+          topFillColor1: alpha(ct.bull, 0.32), topFillColor2: alpha(ct.bull, 0.02),
+          bottomFillColor1: alpha(ct.bear, 0.02), bottomFillColor2: alpha(ct.bear, 0.32) } : {}),
+        ...(spec.type === 'Candlestick' ? { upColor: ct.bull, downColor: ct.bear, borderVisible: false, wickUpColor: ct.bull, wickDownColor: ct.bear } : {}),
         ...(spec.range ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: spec.range!.min, maxValue: spec.range!.max } }) } : { autoscaleInfoProvider: undefined }),
       }
       let item = seriesRef.current.get(spec.id)

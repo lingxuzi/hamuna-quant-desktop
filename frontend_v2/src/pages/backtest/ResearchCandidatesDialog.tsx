@@ -40,10 +40,35 @@ function metricSummary(item: ResearchCandidate) {
     sharpe == null ? null : `夏普 ${sharpe.toFixed(2)}`,
   ].filter(Boolean).join(' · ') || '暂无指标摘要'
 }
-
 export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
   onClose: () => void
   /** 策略候选「载入复测」: 把保存的 config 回填到回测表单 (由回测页接线) */
+  onLoadStrategy?: (candidate: ResearchCandidate) => void
+}) {
+  return (
+    <Modal
+      onClose={onClose}
+      labelledBy="research-candidates-title"
+      panelClassName="flex max-h-[82vh] w-[94vw] max-w-4xl flex-col overflow-hidden rounded-card border border-border bg-base shadow-2xl"
+    >
+      <CandidatesBody onClose={onClose} onLoadStrategy={onLoadStrategy} />
+    </Modal>
+  )
+}
+
+/** 列表主体: 弹窗与「回测 · 挖掘与候选」页共用 (design/v2/15 的「候选方案」tab)。 */
+export function CandidatesPanel({ onLoadStrategy }: {
+  onLoadStrategy?: (candidate: ResearchCandidate) => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col border border-border bg-surface">
+      <CandidatesBody onLoadStrategy={onLoadStrategy} />
+    </div>
+  )
+}
+
+function CandidatesBody({ onClose, onLoadStrategy }: {
+  onClose?: () => void
   onLoadStrategy?: (candidate: ResearchCandidate) => void
 }) {
   const queryClient = useQueryClient()
@@ -129,26 +154,28 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
   }
 
   return (
-    <Modal
-      onClose={onClose}
-      labelledBy="research-candidates-title"
-      panelClassName="flex max-h-[82vh] w-[94vw] max-w-4xl flex-col overflow-hidden rounded-card border border-border bg-base shadow-2xl"
-    >
+    <>
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-        <BookmarkCheck className="h-4 w-4 text-accent" />
-        <div className="min-w-0">
-          <h2 id="research-candidates-title" className="text-sm font-semibold text-foreground">候选方案</h2>
-          <div className="mt-0.5 text-[11px] text-muted">仅保存研究定义、配置与指标摘要</div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="ml-auto flex h-8 w-8 items-center justify-center rounded-btn text-muted transition-colors hover:bg-elevated hover:text-foreground"
-          title="关闭"
-          aria-label="关闭候选方案"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {onClose && (
+          <>
+            <BookmarkCheck className="h-[16px] w-[16px] text-accent" />
+            <div className="min-w-0">
+              <h2 id="research-candidates-title" className="text-sm font-semibold text-foreground">候选方案</h2>
+              <div className="mt-0.5 text-[11px] text-muted">仅保存研究定义、配置与指标摘要</div>
+            </div>
+          </>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="ctl ctl-md ctl-ghost ml-auto flex w-[28px] px-0 items-center justify-center hover:bg-elevated hover:text-foreground"
+            title="关闭"
+            aria-label="关闭候选方案"
+          >
+            <X className="h-[16px] w-[16px]" />
+          </button>
+        )}
       </header>
 
       <div className="flex shrink-0 items-center gap-1 border-b border-border bg-surface/50 px-4 py-2">
@@ -158,7 +185,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
             type="button"
             onClick={() => setKind(value)}
             aria-pressed={kind === value}
-            className={`rounded-btn px-3 py-1.5 text-xs font-medium transition-colors ${kind === value
+            className={`ctl ctl-md ctl-ghost px-2.5 ${kind === value
               ? 'bg-accent/15 text-accent'
               : 'text-secondary hover:bg-elevated hover:text-foreground'
             }`}
@@ -180,7 +207,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
         )}
         {!candidates.isLoading && !candidates.isError && visible.length === 0 && (
           <div className="px-4 py-12 text-center">
-            <BookmarkCheck className="mx-auto h-7 w-7 text-muted/50" />
+            <BookmarkCheck className="mx-auto h-[28px] w-[28px] text-muted/50" />
             <div className="mt-3 text-sm font-medium text-secondary">暂无候选方案</div>
           </div>
         )}
@@ -216,7 +243,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                 onChange={event => update.mutate({ id: item.id, status: event.target.value as ResearchCandidateStatus })}
                 disabled={update.isPending}
                 aria-label={`更新 ${item.name} 的状态`}
-                className="h-8 rounded-input border border-border bg-surface px-2 text-xs text-secondary focus:border-accent focus:outline-none disabled:opacity-50"
+                className="ctl ctl-md ctl-select"
               >
                 {STATUS_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -227,7 +254,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                   <button
                     type="button"
                     onClick={() => onLoadStrategy(item)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-btn px-2 text-[11px] text-accent transition-colors hover:bg-accent/10"
+                    className="ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/10"
                     title="把此候选保存的回测配置 (策略/区间/参数/费率/仓位/环境过滤) 回填到回测表单, 可直接复测"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
@@ -239,7 +266,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                     type="button"
                     onClick={() => linking ? setLinkDraft(null) : startLink(item)}
                     disabled={!canLink || strategies.isLoading || factorColumns.isLoading}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-btn px-2 text-[11px] text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:text-muted disabled:opacity-50"
+                    className="ctl ctl-md ctl-ghost inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/10 disabled:cursor-not-allowed disabled:text-muted disabled:opacity-50"
                     title={item.status !== 'validated' ? '验证通过后可加入策略' : factorSupported ? '加入策略评分' : '当前因子不可用于策略评分'}
                   >
                     <Link2 className="h-3.5 w-3.5" />
@@ -252,7 +279,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                     if (window.confirm(`确认删除候选方案“${item.name}”？`)) remove.mutate(item.id)
                   }}
                   disabled={remove.isPending}
-                  className="flex h-8 w-8 items-center justify-center rounded-btn text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                  className="ctl ctl-md ctl-ghost flex w-[28px] px-0 items-center justify-center hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                   title="删除候选"
                   aria-label={`删除候选 ${item.name}`}
                 >
@@ -268,7 +295,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                     value={linkDraft.strategyId}
                     onChange={event => setLinkDraft(current => current ? { ...current, strategyId: event.target.value } : current)}
                     aria-label="目标策略"
-                    className="h-8 w-full rounded-input border border-border bg-base px-2 text-xs text-secondary focus:border-accent focus:outline-none"
+                    className="ctl ctl-md ctl-select w-full"
                   >
                     {options.length === 0 && <option value="">没有兼容策略</option>}
                     {options.map(strategy => (
@@ -278,21 +305,21 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                 </label>
                 <div>
                   <span className="mb-1 block text-[10px] text-muted">评分方向</span>
-                  <div className="grid h-8 grid-cols-2 overflow-hidden rounded-input border border-border bg-base">
+                  <div className="grid h-ctl-md grid-cols-2 overflow-hidden rounded-input border border-border bg-base">
                     {([['high', ArrowUp, '高值'], ['low', ArrowDown, '低值']] as const).map(([value, Icon, label]) => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => setLinkDraft(current => current ? { ...current, direction: value } : current)}
-                        className={`flex items-center justify-center gap-1 text-[11px] transition-colors ${linkDraft.direction === value
-                          ? value === 'high' ? 'bg-emerald-400/15 text-emerald-400' : 'bg-cyan-400/15 text-cyan-400'
+                        className={`ctl ctl-md ctl-ghost gap-1 ${linkDraft.direction === value
+                          ? value === 'high' ? 'bg-bull/10 text-bull' : 'bg-bear/10 text-bear'
                           : 'text-muted hover:bg-elevated'
                         }`}
                         title={`偏好${label}`}
                         aria-label={`评分方向：偏好${label}`}
                         aria-pressed={linkDraft.direction === value}
                       >
-                        <Icon className="h-3 w-3" />
+                        <Icon className="h-[12px] w-[12px]" />
                         {label}
                       </button>
                     ))}
@@ -315,7 +342,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                         ...current,
                         weight: Math.min(100, Math.max(1, Number(event.target.value) || 1)),
                       } : current)}
-                      className="h-8 w-full rounded-input border border-border bg-base px-2 pr-7 text-xs text-foreground focus:border-accent focus:outline-none"
+                      className="ctl ctl-md ctl-input w-full px-2.5 pr-7 focus:border-accent bg-base"
                     />
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted">%</span>
                   </div>
@@ -324,7 +351,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                   <button
                     type="button"
                     onClick={() => setLinkDraft(null)}
-                    className="h-8 rounded-btn px-2.5 text-xs text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+                    className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated hover:text-foreground"
                   >
                     取消
                   </button>
@@ -332,7 +359,7 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
                     type="button"
                     onClick={() => applyFactor.mutate({ candidate: item, draft: linkDraft })}
                     disabled={!linkDraft.strategyId || applyFactor.isPending}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-btn bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {applyFactor.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
                     应用
@@ -344,6 +371,6 @@ export function ResearchCandidatesDialog({ onClose, onLoadStrategy }: {
           )
         })}
       </div>
-    </Modal>
+    </>
   )
 }

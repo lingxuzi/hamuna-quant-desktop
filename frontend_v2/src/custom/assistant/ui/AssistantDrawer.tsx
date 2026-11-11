@@ -13,20 +13,12 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowDown,
-  Bot,
-  Database,
-  FlaskConical,
   History,
   Plus,
-  Puzzle,
-  SendHorizontal,
   Settings2,
   SlidersHorizontal,
-  Sparkles,
   Square,
-  Star,
   Trash2,
-  TrendingUp,
   X,
 } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -81,6 +73,17 @@ function clampWidth(width: number): number {
   return Math.min(Math.max(width, MIN_WIDTH), maxWidth)
 }
 
+/** 独立页「AI 助手」(design/v2/24): 与抽屉同一套会话/流式/工具, 内联铺满主区。 */
+export function AssistantPage() {
+  const { activeId, sending, sessions } = useAssistantStore()
+  const active = sessions.find(s => s.id === activeId) ?? null
+  return (
+    <div className="drv">
+      <DrawerPanel mode="page" sending={sending} messages={active?.messages ?? []} />
+    </div>
+  )
+}
+
 export function AssistantDrawer() {
   const { open, sending, sessions, activeId } = useAssistantStore()
   const { data: prefs } = usePreferences()
@@ -122,13 +125,17 @@ function DrawerBackdrop() {
 function DrawerPanel({
   sending,
   messages,
+  mode = 'drawer',
 }: {
   sending: boolean
   messages: DrawerMessages
+  /** page: 独立页内联铺满 (design/v2/24); drawer: 右缘滑出面板 */
+  mode?: 'drawer' | 'page'
 }) {
   const { sessions, activeId } = useAssistantStore()
   const [status, setStatus] = useState<AssistantStatus | null>(null)
   const [suggests, setSuggests] = useState<QuickSuggest[]>([])
+  const isPage = mode === 'page'
   const [width, setWidth] = useState(() => clampWidth(loadWidth()))
   const panelRef = useRef<HTMLElement>(null)
   const draggingRef = useRef(false)
@@ -169,24 +176,24 @@ function DrawerPanel({
   return (
     <motion.aside
       ref={panelRef}
-      initial={{ x: 32, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 32, opacity: 0 }}
+      initial={isPage ? { opacity: 0 } : { x: 32, opacity: 0 }}
+      animate={isPage ? { opacity: 1 } : { x: 0, opacity: 1 }}
+      exit={isPage ? { opacity: 0 } : { x: 32, opacity: 0 }}
       transition={{ duration: 0.26, ease: EASE_SMOOTH }}
-      style={{ right: 0, width }}
+      style={isPage ? undefined : { right: 0, width }}
       className={cn(
-        'fixed inset-y-0 z-[60] flex min-w-0 flex-col border-l border-border',
-        'bg-surface/95 shadow-2xl backdrop-blur-xl',
+        'flex min-w-0 flex-col',
+        isPage ? 'min-h-0 flex-1' : 'drv fixed inset-y-0 z-[60] shadow-2xl',
       )}
       role="complementary"
       aria-label="AI 助手"
     >
-      <DrawerHeader status={status} sessions={sessions} activeId={activeId} sending={sending} />
+      <DrawerHeader status={status} sessions={sessions} activeId={activeId} sending={sending} hideClose={isPage} />
       <MessageList messages={messages} sending={sending} status={status} suggests={suggests} />
-      <InputArea sending={sending} blocked={status ? !status.supports_tools : false} />
+      <InputArea sending={sending} blocked={status ? !status.supports_tools : false} isPage={isPage} />
 
-      {/* 左缘拖拽调宽 */}
-      <div
+      {/* 左缘拖拽调宽 (抽屉模式) */}
+      {!isPage && <div
         role="separator"
         aria-orientation="vertical"
         aria-label="调整宽度"
@@ -198,7 +205,7 @@ function DrawerPanel({
         title="拖拽调整宽度"
       >
         <span className="absolute left-1/2 top-1/2 h-10 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/50 opacity-0 transition-opacity duration-150 ease-smooth group-hover/handle:opacity-100" />
-      </div>
+      </div>}
     </motion.aside>
   )
 }
@@ -208,47 +215,52 @@ function DrawerHeader({
   sessions,
   activeId,
   sending,
+  hideClose = false,
 }: {
   status: AssistantStatus | null
   sessions: ReturnType<typeof useAssistantStore>['sessions']
   activeId: string
   sending: boolean
+  /** 独立页模式: 没有抽屉可关, 不显示关闭按钮 */
+  hideClose?: boolean
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
-    <div className="relative flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-      <Sparkles className="h-4 w-4 shrink-0 text-accent" />
-      <span className="shrink-0 text-sm font-semibold text-foreground">AI 助手</span>
+    <div className="drv-hd">
+      <b>AI 助手</b>
       {status?.model && (
-        <span
-          className="min-w-0 truncate rounded-btn bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-muted"
-          title={`模型: ${status.model}\n供应商: ${status.provider ?? '-'}`}
-        >
+        <span className="mdl" title={`模型: ${status.model}\n供应商: ${status.provider ?? '-'}`}>
           {status.model}
         </span>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <div className="relative">
           <IconButton title="助手设置" onClick={() => { setSettingsOpen(v => !v); setMenuOpen(false) }} disabled={sending}>
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal className="h-3.5 w-3.5" />
           </IconButton>
           {settingsOpen && <AssistantSettingsMenu onDone={() => setSettingsOpen(false)} />}
         </div>
         <div className="relative">
           <IconButton title="历史会话" onClick={() => { setMenuOpen(v => !v); setSettingsOpen(false) }} disabled={sending}>
-            <History className="h-4 w-4" />
+            <History className="h-3.5 w-3.5" />
           </IconButton>
           {menuOpen && <SessionMenu sessions={sessions} activeId={activeId} onDone={() => setMenuOpen(false)} />}
         </div>
-        <IconButton title="新对话" onClick={() => { newSession(); setMenuOpen(false); setSettingsOpen(false) }} disabled={sending}>
-          <Plus className="h-4 w-4" />
-        </IconButton>
-        <IconButton title="关闭 (Esc)" onClick={closeAssistant}>
-          <X className="h-4 w-4" />
-        </IconButton>
+        {/* 独立页的「新对话」在页头工具条上, 面板内不再重复 */}
+        {!hideClose && (
+          <IconButton title="新对话" onClick={() => { newSession(); setMenuOpen(false); setSettingsOpen(false) }} disabled={sending}>
+            <Plus className="h-3.5 w-3.5" />
+          </IconButton>
+        )}
+        {!hideClose && (
+          <IconButton title="关闭 (Esc)" onClick={closeAssistant}>
+            <X className="h-3.5 w-3.5" />
+          </IconButton>
+        )}
       </div>
+      <span className={`ok${status?.configured ? '' : ' off'}`}>{status?.configured ? '● 已连接' : '● 未连接'}</span>
     </div>
   )
 }
@@ -275,7 +287,7 @@ function AssistantSettingsMenu({ onDone }: { onDone: () => void }) {
   })
 
   return (
-    <div className="absolute right-0 top-9 z-20 w-72 leaf-cell p-3 shadow-xl">
+    <div className="absolute right-0 top-9 z-20 w-72 bg-surface border border-border p-3 shadow-xl">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xs font-medium text-foreground">动作工具免确认</div>
@@ -316,7 +328,7 @@ function AssistantSettingsMenu({ onDone }: { onDone: () => void }) {
         <button
           type="button"
           onClick={onDone}
-          className="cursor-pointer rounded-btn px-2 py-0.5 text-[10px] text-muted transition-colors hover:bg-elevated hover:text-foreground"
+          className="ctl ctl-sm ctl-ghost px-1.5 hover:bg-elevated hover:text-foreground"
         >
           关闭
         </button>
@@ -349,7 +361,7 @@ function SessionMenu({
   return (
     <>
       <div className="fixed inset-0 z-[61]" onClick={onDone} />
-      <div className="absolute right-0 top-full z-[62] mt-1 max-h-72 w-60 overflow-y-auto leaf-cell p-1 shadow-xl">
+      <div className="absolute right-0 top-full z-[62] mt-1 max-h-72 w-60 overflow-y-auto bg-surface border border-border p-1 shadow-xl">
         {sessions.length === 0 && (
           <div className="px-2 py-1.5 text-xs text-muted">暂无历史会话</div>
         )}
@@ -405,7 +417,7 @@ function IconButton({
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-btn text-secondary transition-colors duration-150 ease-smooth hover:bg-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      className="ctl ctl-sm ctl-ghost flex w-[24px] px-0 items-center justify-center duration-150 ease-smooth hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>
@@ -447,7 +459,7 @@ function MessageList({
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scrollRef} onScroll={onScroll} className="h-full space-y-4 overflow-y-auto px-5 py-4">
+      <div ref={scrollRef} onScroll={onScroll} className="drv-bd h-full space-y-4 overflow-y-auto">
         {messages.length === 0 ? (
           <EmptyState status={status} suggests={suggests} />
         ) : (
@@ -465,7 +477,7 @@ function MessageList({
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15, ease: EASE_SMOOTH }}
             onClick={jumpToBottom}
-            className="absolute bottom-3 left-1/2 flex h-7 w-7 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-elevated text-secondary shadow-md transition-colors duration-150 ease-smooth hover:text-foreground"
+            className="absolute bottom-3 left-1/2 flex h-[28px] w-[28px] -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-elevated text-secondary shadow-md transition-colors duration-150 ease-smooth hover:text-foreground"
             title="回到底部"
           >
             <ArrowDown className="h-3.5 w-3.5" />
@@ -476,14 +488,7 @@ function MessageList({
   )
 }
 
-/** 空会话建议分组的图标 (后端 suggests 的 group 字段驱动, 未匹配时兜底)。 */
-const SUGGEST_GROUP_ICONS: Record<string, typeof TrendingUp> = {
-  行情与大盘: TrendingUp,
-  我的与个股: Star,
-  策略与信号: FlaskConical,
-  数据与扩展: Database,
-}
-
+/** 空会话建议分组 (后端 suggests 的 group 字段驱动, 未分组的归入「更多」)。 */
 function EmptyState({ status, suggests }: { status: AssistantStatus | null; suggests: QuickSuggest[] }) {
   const navigate = useNavigate()
 
@@ -491,14 +496,14 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
     return (
       <div className="rounded-card border border-warning/30 bg-warning/5 p-4 text-sm">
         <div className="flex items-center gap-1.5 font-medium text-warning">
-          <Settings2 className="h-4 w-4" />
+          <Settings2 className="h-[16px] w-[16px]" />
           AI 未配置
         </div>
         <p className="mt-1.5 text-secondary">AI 助手需要先配置 AI 供应商和 API Key 才能对话。</p>
         <button
           type="button"
           onClick={() => navigate('/settings?tab=ai')}
-          className="mt-2 cursor-pointer rounded-btn bg-accent px-3 py-1.5 text-xs text-white transition-colors duration-150 ease-smooth hover:bg-accent/90"
+          className="ctl ctl-md ctl-btn pri mt-2 px-2.5 duration-150 ease-smooth hover:bg-accent/90"
         >
           去设置页配置
         </button>
@@ -510,7 +515,7 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
     return (
       <div className="rounded-card border border-warning/30 bg-warning/5 p-4 text-sm">
         <div className="flex items-center gap-1.5 font-medium text-warning">
-          <Settings2 className="h-4 w-4" />
+          <Settings2 className="h-[16px] w-[16px]" />
           当前供应商不支持工具调用
         </div>
         <p className="mt-1.5 text-secondary">
@@ -519,7 +524,7 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
         <button
           type="button"
           onClick={() => navigate('/settings?tab=ai')}
-          className="mt-2 cursor-pointer rounded-btn bg-accent px-3 py-1.5 text-xs text-white transition-colors duration-150 ease-smooth hover:bg-accent/90"
+          className="ctl ctl-md ctl-btn pri mt-2 px-2.5 duration-150 ease-smooth hover:bg-accent/90"
         >
           去设置页调整
         </button>
@@ -543,54 +548,34 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
   }
 
   return (
-    <div className="space-y-4 pb-2 pt-2">
-      <div className="rounded-card border border-border bg-gradient-to-b from-accent/10 to-transparent px-4 py-4 text-center">
-        <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-accent/15 text-accent">
-          <Bot className="h-4.5 w-4.5" />
-        </div>
-        <p className="mt-2 text-sm font-medium text-foreground">有什么可以帮你？</p>
-        <p className="mt-1 text-xs text-muted">基于本地真实数据回答 · 每次取数都可展开核对</p>
-      </div>
+    <div>
+      <p className="hello">问一句，它自己去查。</p>
+      <p className="hello-sub">
+        助手能调用本地数据与工具：拉行情、查财务、跑回测、看数据完整性。执行有副作用的操作（下单、建策略）会先弹确认卡，你点了才动。
+      </p>
 
-      {[...groups.entries()].map(([group, items]) => {
-        const GroupIcon = SUGGEST_GROUP_ICONS[group] ?? Sparkles
-        return (
-          <div key={group} className="space-y-2">
-            <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-medium text-muted">
-              <GroupIcon className="h-3.5 w-3.5" />
-              {group}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {items.map(suggest => (
-                <button
-                  key={suggest.id}
-                  type="button"
-                  onClick={() => sendMessage(suggest.prompt)}
-                  className="max-w-full shrink-0 cursor-pointer rounded-card border border-border bg-base/60 px-3 py-2 text-left text-xs text-secondary transition-all duration-150 ease-smooth hover:border-accent/40 hover:bg-elevated hover:text-foreground"
-                >
-                  {suggest.label}
-                </button>
-              ))}
-            </div>
+      {[...groups.entries()].map(([group, items]) => (
+        <div key={group} className="sg-g">
+          <h4>{group}</h4>
+          <div className="sg-list">
+            {items.map(suggest => (
+              <button
+                key={suggest.id}
+                type="button"
+                title={suggest.prompt}
+                onClick={() => sendMessage(suggest.prompt)}
+              >
+                {suggest.label}
+              </button>
+            ))}
           </div>
-        )
-      })}
-
-      <div className="rounded-card border border-dashed border-border bg-base/40 px-3.5 py-3 text-xs">
-        <div className="flex items-center gap-1.5 font-medium text-foreground">
-          <Puzzle className="h-3.5 w-3.5 text-accent" />
-          扩展内容同样可以问
         </div>
-        <p className="mt-1 leading-relaxed text-secondary">
-          扩展数据表、自定义策略与信号等扩展内容都能问答互动, 比如「我的扩展数据表里有什么」「看看最新一张的数据」。
-          AI 助手本身也是一个 custom 扩展模块。
-        </p>
-      </div>
+      ))}
     </div>
   )
 }
 
-function InputArea({ sending, blocked }: { sending: boolean; blocked: boolean }) {
+function InputArea({ sending, blocked, isPage }: { sending: boolean; blocked: boolean; isPage: boolean }) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -618,62 +603,36 @@ function InputArea({ sending, blocked }: { sending: boolean; blocked: boolean })
   }
 
   return (
-    <div className="shrink-0 border-t border-border/60 bg-surface px-4 pb-3 pt-3">
-      <div
-        className={cn(
-          'flex items-end gap-1.5 rounded-card border bg-base/60 p-1.5',
-          'transition-[border-color,background-color,box-shadow] duration-200 ease-smooth',
-          'focus-within:border-accent/50 focus-within:bg-base focus-within:ring-[3px] focus-within:ring-accent/10',
-          blocked ? 'border-warning/30' : 'border-border',
-        )}
-      >
-        <textarea
-          ref={textareaRef}
-          value={text}
-          rows={1}
-          disabled={blocked}
-          placeholder={blocked ? '请先在设置页配置 AI' : '问点什么…'}
-          onChange={e => { setText(e.target.value); autoGrow() }}
-          onKeyDown={onKeyDown}
-          className="max-h-36 min-h-[40px] flex-1 resize-none rounded-btn bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/80 disabled:cursor-not-allowed"
-        />
-        {sending ? (
-          <button
-            type="button"
-            onClick={stopSending}
-            title="停止生成"
-            aria-label="停止生成"
-            className="mr-0.5 mb-0.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-elevated text-secondary transition-all duration-150 ease-smooth hover:border-danger/40 hover:text-danger active:scale-95"
-          >
-            <Square className="h-3 w-3 fill-current" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSend}
-            title="发送"
-            aria-label="发送"
-            className={cn(
-              'mr-0.5 mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-150 ease-smooth active:scale-95',
-              canSend
-                ? 'cursor-pointer bg-accent text-white shadow-sm hover:bg-accent/90'
-                // 空输入时退为幽灵态而非褪色实心块, 视觉重心不被锁死在右下角
-                : 'cursor-default bg-elevated/60 text-muted',
-            )}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2 px-1">
-        <p className="text-[10px] leading-relaxed text-muted">
-          回答基于本地数据, 不构成投资建议
-        </p>
-        <span className="shrink-0 text-[10px] text-muted/70">
-          Enter 发送 · ⌘K 呼出 · 左缘拖拽调宽
-        </span>
-      </div>
+    <div className="drv-ft">
+      <textarea
+        ref={textareaRef}
+        value={text}
+        rows={1}
+        disabled={blocked}
+        placeholder={blocked ? '请先在设置页配置 AI' : '问点什么，或者选上面一条'}
+        onChange={e => { setText(e.target.value); autoGrow() }}
+        onKeyDown={onKeyDown}
+        className="inp max-h-36"
+      />
+      {sending ? (
+        <button
+          type="button"
+          onClick={stopSending}
+          title="停止生成"
+          aria-label="停止生成"
+          className="send flex shrink-0 items-center justify-center px-3"
+        >
+          <Square className="h-[12px] w-[12px] fill-current" />
+        </button>
+      ) : (
+        <button type="button" onClick={submit} disabled={!canSend} className="send shrink-0">
+          发 送
+        </button>
+      )}
+      <kbd className="shrink-0">⌘K</kbd>
+      <p className="basis-full text-[10px] leading-relaxed text-muted">
+        回答基于本地数据, 不构成投资建议{isPage ? '' : ' · 左缘拖拽调宽'}
+      </p>
     </div>
   )
 }

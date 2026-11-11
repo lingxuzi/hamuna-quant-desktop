@@ -1,14 +1,18 @@
 import type { CapabilityRoute, ProviderField } from '@/lib/api'
 
-/** 全部可路由偏好字段的默认生效源。 */
+/** 全部可路由偏好字段的默认生效源。
+ *
+ *  行情类 (日K/除权/分钟/全量分钟/五档/实时) 跟随内置源 easytdx,
+ *  财务跟随 fuyao 插件 —— 与后端 capabilities 注册表同口径。
+ */
 export const DEFAULT_ROUTING: Record<ProviderField, string> = {
-  daily_data_provider: 'tickflow',
-  adj_factor_provider: 'tickflow',
-  minute_data_provider: 'tickflow',
-  full_minute_data_provider: 'tickflow',
-  depth5_data_provider: 'tickflow',
-  realtime_data_provider: 'tickflow',
-  financial_data_provider: 'tickflow',
+  daily_data_provider: 'easytdx',
+  adj_factor_provider: 'easytdx',
+  minute_data_provider: 'easytdx',
+  full_minute_data_provider: 'easytdx',
+  depth5_data_provider: 'easytdx',
+  realtime_data_provider: 'easytdx',
+  financial_data_provider: 'fuyao',
 }
 
 /**
@@ -32,7 +36,7 @@ export function buildProviderRouting(
   const supported = new Set(datasets)
   const routing: Record<ProviderField, string> = { ...DEFAULT_ROUTING }
   for (const cap of capabilities) {
-    if (!cap.field) continue // 不可路由能力 (仅 TickFlow 提供) 没有偏好字段
+    if (!cap.field) continue // 不可路由能力 (无偏好字段)
     routing[cap.field] = supported.has(cap.id) ? provider : DEFAULT_ROUTING[cap.field]
   }
   return routing

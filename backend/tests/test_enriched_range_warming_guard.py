@@ -11,7 +11,7 @@ from datetime import date
 import polars as pl
 import pytest
 
-from app.tickflow.repository import KlineRepository
+from app.data_providers.repository import KlineRepository
 
 
 def _bare_repo() -> KlineRepository:

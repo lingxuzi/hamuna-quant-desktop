@@ -94,7 +94,7 @@
 ### 3.5 API 与前端
 
 - `backend/app/api/guardian.py`：`GET /api/backtest/guardian/overview`（全部守护策略：状态、基线 vs 最近、退化、曲线端点）、`POST /{sid}/adopt|drop|rerun`、`GET|PATCH /config`（阈值、objective、K、开关走 preferences）。
-- 前端：回测页"稳健性"域新增子 tab **守护** → `frontend/src/pages/backtest/StrategyGuardian.tsx`（`RobustnessValidation.tsx` 加一个子 tab，路由不动）。表格 + 状态徽章 + 基线/近期对比 + 各段分数；rerun 走轮询（同 `miningTask` 模式），不需要 SSE 镜像。
+- 前端：回测页"稳健性"域新增子 tab **守护** → `frontend_v2/src/pages/backtest/StrategyGuardian.tsx`（`RobustnessValidation.tsx` 加一个子 tab，路由不动）。表格 + 状态徽章 + 基线/近期对比 + 各段分数；rerun 走轮询（同 `miningTask` 模式），不需要 SSE 镜像。
 
 ---
 

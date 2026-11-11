@@ -37,23 +37,23 @@ export function QuoteConfigCard({ enabled, running, isTrading, lastFetchMs, inte
     : null
 
   return (
-    <div className="leaf-cell relative">
+    <div className="px-4 py-3 relative">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-secondary" />
-          <h3 className="text-sm font-medium text-foreground">实时行情</h3>
+          <Activity className="h-[16px] w-[16px] text-secondary" />
+          <h3 className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">实时行情</h3>
         </div>
         <button
           onClick={() => onToggle(!enabled)}
           disabled={toggling}
-          className={`relative inline-flex h-4 w-7 items-center rounded-full shrink-0 transition-colors duration-200 ${
+          className={`relative inline-flex h-[20px] w-[36px] items-center rounded-full shrink-0 transition-colors duration-200 ${
             enabled
               ? 'bg-accent shadow-[0_0_6px_rgba(59,130,246,0.3)]'
               : 'bg-elevated'
           } ${toggling ? 'opacity-50' : 'cursor-pointer'}`}
         >
-          <span className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-            enabled ? 'translate-x-[14px]' : 'translate-x-0.5'
+          <span className={`inline-block h-[16px] w-[16px] rounded-full bg-white shadow-sm transition-transform duration-200 ${
+            enabled ? 'translate-x-[18px]' : 'translate-x-0.5'
           }`} />
         </button>
       </div>
@@ -83,10 +83,10 @@ export function QuoteConfigCard({ enabled, running, isTrading, lastFetchMs, inte
               <span className="text-muted">轮询间隔</span>
               <button
                 onClick={() => onShowIntervalEdit()}
-                className={`p-0.5 rounded hover:bg-elevated transition-colors ${showIntervalEdit ? 'text-accent' : 'text-secondary'}`}
+                className={`ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center hover:bg-elevated ${showIntervalEdit ? 'text-accent' : 'text-secondary'}`}
                 title="设置轮询间隔"
               >
-                <Settings className="h-3 w-3" />
+                <Settings className="h-[12px] w-[12px]" />
               </button>
             </div>
             <span className="font-mono text-secondary">{intervalS}s</span>
@@ -138,7 +138,7 @@ function IntervalEditor({ min, max, value, onChange }: {
           <button
             key={p}
             onClick={() => { setDraft(p); onChange(p) }}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+            className={`ctl ctl-sm ctl-ghost px-1.5 font-mono ${
               Math.abs(clamped - p) < 0.01
                 ? 'bg-accent/15 text-accent border border-accent/30'
                 : 'bg-elevated text-secondary hover:text-foreground border border-transparent'
