@@ -19,7 +19,9 @@ BEIJING_BOARD_LIMIT = 0.30
 
 
 def is_risk_warning_name(name: str | None) -> bool:
-    return "ST" in str(name or "").upper()
+    """风险警示股票: 简称含 ST/*ST, 或以 S 开头 (S佳通 这类未冠 ST 的风险警示股)。"""
+    upper = str(name or "").upper()
+    return "ST" in upper or upper.startswith("S")
 
 
 _GEM_PREFIXES = ("300", "301", "302")
@@ -137,6 +139,27 @@ def is_no_limit_day(
     return day_rank is None or day_rank <= days
 
 
+def polars_board_limit_pct(symbol: pl.Expr, trade_date: pl.Expr) -> pl.Expr:
+    """板块涨跌幅带 (不含风险警示降级), 考虑创业板注册制切换日。"""
+    is_growth = (
+        symbol.str.starts_with("300")
+        | symbol.str.starts_with("301")
+        | symbol.str.starts_with("302")
+    )
+    is_star = symbol.str.starts_with("688") | symbol.str.starts_with("689")
+    is_beijing = symbol.str.ends_with(".BJ")
+    gem_pre_registration = (
+        is_growth & ~is_beijing & (trade_date < pl.lit(GEM_20PCT_LIMIT_START_DATE))
+    )
+    return (
+        pl.when(gem_pre_registration).then(MAIN_BOARD_LIMIT)
+        .when(is_growth | is_star).then(GROWTH_BOARD_LIMIT)
+        .when(is_beijing).then(BEIJING_BOARD_LIMIT)
+        .otherwise(MAIN_BOARD_LIMIT)
+        .cast(pl.Float64)
+    )
+
+
 def polars_price_limit_pct(
     symbol: pl.Expr,
     trade_date: pl.Expr,
@@ -154,12 +177,7 @@ def polars_price_limit_pct(
         is_growth & ~is_beijing & (trade_date < pl.lit(GEM_20PCT_LIMIT_START_DATE))
     )
     is_non_main = (is_growth | is_star | is_beijing) & ~gem_pre_registration
-    base = (
-        pl.when(gem_pre_registration).then(MAIN_BOARD_LIMIT)
-        .when(is_growth | is_star).then(GROWTH_BOARD_LIMIT)
-        .when(is_beijing).then(BEIJING_BOARD_LIMIT)
-        .otherwise(MAIN_BOARD_LIMIT)
-    )
+    base = polars_board_limit_pct(symbol, trade_date)
     legacy_main_st = (
         is_risk_warning.fill_null(False)
         & ~is_non_main
@@ -173,8 +191,9 @@ def polars_price_limit_pct(
 
 
 def polars_is_risk_warning_name(name: pl.Expr) -> pl.Expr:
-    """Return whether an instrument name contains the ST risk-warning marker."""
-    return name.fill_null("").str.to_uppercase().str.contains("ST", literal=True)
+    """风险警示标记: 简称含 ST/*ST, 或以 S 开头 (S佳通 这类未冠 ST 的风险警示股)。"""
+    upper = name.fill_null("").str.to_uppercase()
+    return upper.str.contains("ST", literal=True) | upper.str.starts_with("S")
 
 
 def polars_limit_price(previous: pl.Expr, limit_pct: pl.Expr, *, up: bool) -> pl.Expr:

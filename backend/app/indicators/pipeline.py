@@ -34,13 +34,16 @@ from app.enriched_generation import (
 from app.market_time import cn_today
 from app.parquet import scan_daily_parquet, scan_enriched_parquet, scan_parquet_compat
 from app.price_limits import (
+    LEGACY_MAIN_BOARD_ST_LIMIT,
     no_limit_window_days,
     no_limit_window_margin_days,
     parse_listing_date,
+    polars_board_limit_pct,
     polars_is_risk_warning_name,
     polars_limit_price,
     polars_price_limit_pct,
 )
+from app.services.instrument_sync import load_name_history
 from app.share_capital import apply_historical_float_shares, load_share_history
 
 logger = logging.getLogger(__name__)
@@ -718,11 +721,74 @@ def _attach_no_limit_window(inst_subset: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _apply_name_history(df: pl.DataFrame, name_history: pl.DataFrame | None) -> pl.DataFrame:
+    """用名称变更历史逐日还原风险警示标记 (_is_st)。
+
+    instruments.name 是同步当日的快照, 直接判 ST 会把「今天的 ST 标志」套到
+    全历史。name_history (symbol, name, as_of) 记录改名时点, 按 as_of <= date
+    的最近一次改名取当日简称 —— 风险警示状态因此逐日准确。
+
+    只处理风险警示候选标的 (当前或历史曾为风险警示), 避免对全表做 asof join。
+    历史未覆盖到的日期 (早于首次快照) 保留当前快照判定, 由带宽自证兜底。
+    """
+    if name_history is None or name_history.is_empty() or "_is_st" not in df.columns:
+        return df
+    hist = (
+        name_history
+        .select(
+            pl.col("symbol").cast(pl.Utf8),
+            pl.col("name").cast(pl.Utf8),
+            pl.col("as_of").cast(pl.Date, strict=False).alias("_as_of"),
+        )
+        .drop_nulls(subset=["_as_of"])
+        .unique(subset=["symbol", "_as_of"])
+    )
+    if hist.is_empty():
+        return df
+    risk_symbols = hist.filter(
+        polars_is_risk_warning_name(pl.col("name"))
+    ).select("symbol").unique()
+    if risk_symbols.is_empty():
+        return df
+    hist = hist.join(risk_symbols, on="symbol", how="semi").sort(["symbol", "_as_of"])
+    sym_list = risk_symbols["symbol"].to_list()
+
+    sub = (
+        df.filter(pl.col("symbol").is_in(sym_list))
+        .select("symbol", "date")
+        .unique()
+        .with_columns(pl.col("date").cast(pl.Date, strict=False).alias("_d"))
+        .sort(["symbol", "_d"])
+    )
+    if sub.is_empty():
+        return df
+    sub = sub.join_asof(
+        hist.rename({"name": "_hist_name"}),
+        left_on="_d",
+        right_on="_as_of",
+        by="symbol",
+        strategy="backward",
+        check_sortedness=False,
+    )
+    df = df.join(
+        sub.select("symbol", "date", "_hist_name"),
+        on=["symbol", "date"],
+        how="left",
+    )
+    return df.with_columns(
+        pl.when(pl.col("_hist_name").is_not_null())
+        .then(polars_is_risk_warning_name(pl.col("_hist_name")))
+        .otherwise(pl.col("_is_st"))
+        .alias("_is_st")
+    )
+
+
 def compute_limit_signals(
     df: pl.DataFrame,
     instruments: pl.DataFrame,
     needed: set[str] | None = None,
     historical_shares: pl.DataFrame | None = None,
+    name_history: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """计算涨跌停判定价与连板状态 (信号布尔列由自定义信号定义注入)。
 
@@ -735,6 +801,9 @@ def compute_limit_signals(
     依赖涨跌停判定价的自定义信号 (迁移自内置的 signal_limit_up /
     signal_limit_down / signal_limit_down_recovery / signal_broken_limit_up)
     在本函数末尾注入 —— 价格列彼时才存在。
+
+    name_history: 名称变更历史 (symbol, name, as_of), 用于按交易日还原
+      当日简称 → 风险警示标记逐日准确; 缺失时回退 instruments 当前快照。
 
     输入必须包含: symbol, date, raw_close, raw_high, raw_low, open, high, low, close,
                   change_pct, vol_ratio_5d。
@@ -794,6 +863,10 @@ def compute_limit_signals(
 
     df = df.join(inst_subset, on="symbol", how="left", suffix="_inst")
 
+    # 名称变更历史覆盖风险警示标记 (逐日还原当日简称)
+    if need_price_limits:
+        df = _apply_name_history(df, name_history)
+
     if "turnover_rate" in want:
         df = apply_historical_float_shares(df, historical_shares, today=cn_today())
 
@@ -837,6 +910,34 @@ def compute_limit_signals(
         polars_price_limit_pct(pl.col("symbol"), pl.col("date"), is_risk_warning)
         .alias("_limit_pct")
     )
+
+    # ── 风险警示带宽自证 ──────────────────────────────────────────────
+    # instruments.name 是同步当日的快照 (as_of), 倒推历史必然失真: 历史上
+    # 非风险警示的日期被按 5% 带算, 把 ±6%~9% 的普通波动误判成涨跌停。
+    # 市场自身能证伪 —— 涨停日 high == 涨停价, 跌停日 low == 跌停价, 因此
+    #   high > 5%涨停价 或 low < 5%跌停价
+    # 是「当日带宽 > 5%」的硬证据, 命中就把该行切回板块带。
+    # 反向不需要证据: 真风险警示股的涨停日 high 恰好等于 5% 涨停价, 不越界,
+    # 于是 5% 带被保留 —— 巧合 (收盘价恰好落在 5% 带的普通交易日) 因为
+    # low/high 越界而被正确排除。
+    if "raw_high" in df.columns and "raw_low" in df.columns:
+        _st_pct = pl.lit(LEGACY_MAIN_BOARD_ST_LIMIT)
+        _st_up = polars_limit_price(pl.col("_prev_raw_close"), _st_pct, up=True)
+        _st_dn = polars_limit_price(pl.col("_prev_raw_close"), _st_pct, up=False)
+        _band_wider = (
+            (pl.col("raw_high") > 0) & (pl.col("raw_high") > _st_up + 0.005)
+        ) | (
+            (pl.col("raw_low") > 0) & (pl.col("raw_low") < _st_dn - 0.005)
+        )
+        df = df.with_columns(
+            pl.when(
+                (pl.col("_limit_pct") == LEGACY_MAIN_BOARD_ST_LIMIT)
+                & _band_wider.fill_null(False)
+            )
+            .then(polars_board_limit_pct(pl.col("symbol"), pl.col("date")))
+            .otherwise(pl.col("_limit_pct"))
+            .alias("_limit_pct")
+        )
 
     # 理论涨停价 = prev_close × (1 + limit_pct)  整数算术，避免浮点误差
     df = df.with_columns(
@@ -988,6 +1089,7 @@ def compute_limit_signals(
                "_no_price_limit",
                "_grp_up", "_grp_down", "_instrument_as_of",
                "_no_limit_days", "_no_limit_until",
+               "_hist_name",
                "_is_limit_up", "_is_limit_down"]
     if "_is_st" in df.columns:
         cleanup.append("_is_st")
@@ -1016,6 +1118,7 @@ def compute_all(
     df: pl.DataFrame,
     instruments: pl.DataFrame | None = None,
     historical_shares: pl.DataFrame | None = None,
+    name_history: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """从 OHLCV 计算全套指标 + 信号。一站式调用。
 
@@ -1024,7 +1127,12 @@ def compute_all(
     df = compute_indicators(df)
     df = compute_signals(df)
     if instruments is not None and not instruments.is_empty():
-        df = compute_limit_signals(df, instruments, historical_shares=historical_shares)
+        df = compute_limit_signals(
+            df,
+            instruments,
+            historical_shares=historical_shares,
+            name_history=name_history,
+        )
 
     # 清理 NaN / Inf
     float_cols = [c for c in df.columns if df[c].dtype.is_float()]
@@ -1066,6 +1174,7 @@ def compute_enriched(
     factors: pl.DataFrame | None = None,
     instruments: pl.DataFrame | None = None,
     historical_shares: pl.DataFrame | None = None,
+    name_history: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """对原始日 K 应用前复权 + 全量计算指标 + 信号, 产出完整 enriched (含全部指标列)。
 
@@ -1101,6 +1210,7 @@ def compute_enriched(
         df,
         instruments=instruments,
         historical_shares=historical_shares,
+        name_history=name_history,
     )
 
     return df
@@ -1479,6 +1589,7 @@ def compute_enriched_history_window(
     sym_batch: int | None = None,
     *,
     include_instrument_metadata: bool = False,
+    name_history: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """按 symbol 分批执行历史窗口计算: 指标 → 偏离列 → 信号 → 涨跌停。
 
@@ -1506,7 +1617,12 @@ def compute_enriched_history_window(
                 if historical_shares is not None and not historical_shares.is_empty()
                 else historical_shares
             )
-            part = compute_limit_signals(part, inst_batch, historical_shares=shares_batch)
+            part = compute_limit_signals(
+                part,
+                inst_batch,
+                historical_shares=shares_batch,
+                name_history=name_history,
+            )
             if include_instrument_metadata:
                 inst_cols = [c for c in ("name", "total_shares", "float_shares")
                              if c in inst_batch.columns and c not in part.columns]
@@ -1526,6 +1642,7 @@ def _compute_storage_batches(
     factors: pl.DataFrame,
     instruments: pl.DataFrame,
     historical_shares: pl.DataFrame,
+    name_history: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """保留完整标的历史输入, 单批计算宽表后仅累积落盘窄表。"""
     from app.services import preferences
@@ -1545,6 +1662,7 @@ def _compute_storage_batches(
                          if not instruments.is_empty() else instruments),
             historical_shares=(historical_shares.filter(pl.col("symbol").is_in(batch))
                                if not historical_shares.is_empty() else historical_shares),
+            name_history=name_history,
         )
         # 下一批开始前释放宽表; 分区发布仍在所有计算批次成功之后。
         if not part.is_empty():
@@ -1578,6 +1696,7 @@ def recompute_daily_symbols(
     factors = _load_factors(root / ("adj_factor_etf" if asset_type == "etf" else "adj_factor") / "all.parquet") if asset_type != "index" else pl.DataFrame()
     instruments = repo.get_instruments_asset("stock") if asset_type == "stock" else pl.DataFrame()
     shares = load_share_history(root) if asset_type == "stock" else pl.DataFrame()
+    name_history = repo.get_instrument_name_history() if asset_type == "stock" else pl.DataFrame()
     batch_size = max(1, min(preferences.get_enriched_batch_size(), 200))
     publication = EnrichedPublication(root, asset_type, recover=True,
                                      claim_wait_s=_PUBLICATION_CLAIM_WAIT_S, purpose="daily_repair")
@@ -1605,6 +1724,7 @@ def recompute_daily_symbols(
                 factors=factors.filter(pl.col("symbol").is_in(batch)) if not factors.is_empty() else factors,
                 instruments=instruments.filter(pl.col("symbol").is_in(batch)) if not instruments.is_empty() else instruments,
                 historical_shares=shares.filter(pl.col("symbol").is_in(batch)) if not shares.is_empty() else shares,
+                name_history=name_history,
             )
             output = _select_storage_cols(enriched.filter(pl.col("date") >= start))
             written += repo.replace_enriched_rows(asset_type, output, start=start, symbols=batch, publication=publication)
@@ -1702,6 +1822,7 @@ def _run_pipeline_impl(data_dir: Path | None = None,
     except Exception as e:  # noqa: BLE001
         logger.warning("instruments 读取失败: %s", e)
     historical_shares = load_share_history(d)
+    name_history = load_name_history(d)
 
     if new_dates_only:
         # ── 向后增量模式 ──
@@ -1751,6 +1872,7 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                 factors=factors,
                 instruments=instruments,
                 historical_shares=historical_shares,
+                name_history=name_history,
             )
 
             # 只保留新日期的行
@@ -1794,6 +1916,7 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                     factors=factors_sym,
                     instruments=inst_sym,
                     historical_shares=shares_sym,
+                    name_history=name_history,
                 )
                 for date_df in enriched_sym.partition_by("date"):
                     dt = date_df["date"][0]
@@ -1902,6 +2025,7 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                 factors=batch_factors,
                 instruments=batch_inst,
                 historical_shares=batch_shares,
+                name_history=name_history,
             )
 
             if not enriched.is_empty():

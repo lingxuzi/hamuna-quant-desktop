@@ -310,6 +310,8 @@ class DataStore:
                 SELECT * FROM read_parquet('{d}/adj_factor_etf/**/*.parquet', union_by_name=true)""",
             f"""CREATE OR REPLACE VIEW instruments AS
                 SELECT * FROM read_parquet('{d}/instruments/**/*.parquet', union_by_name=true)""",
+            f"""CREATE OR REPLACE VIEW instrument_name_history AS
+                SELECT * FROM read_parquet('{d}/instrument_name_history/**/*.parquet', union_by_name=true)""",
             f"""CREATE OR REPLACE VIEW instruments_index AS
                 SELECT * FROM read_parquet('{d}/instruments_index/**/*.parquet', union_by_name=true)""",
             f"""CREATE OR REPLACE VIEW instruments_etf AS
@@ -475,6 +477,8 @@ class KlineRepository:
         self._live_agg_cache_date: date | None = None
         self._live_agg_check_date: date | None = None          # 上次跨日校验时的 today (快路径节流)
         self._instruments_cache: pl.DataFrame | None = None
+        self._name_history_cache: pl.DataFrame | None = None
+        self._name_history_mtime_ns: int | None = None
         self._historical_shares_cache: pl.DataFrame | None = None
         self._historical_shares_mtime_ns: int | None = None
         # 完整 enriched 历史 (含所有指标, 供 filter_history 策略使用)
@@ -820,6 +824,7 @@ class KlineRepository:
                             else None
                         ),
                         include_instrument_metadata=True,
+                        name_history=self.get_instrument_name_history(),
                     )
                     del df_hist
                     logger.info("enriched refresh step done: compute window rows=%d (%.2fs)",
@@ -1576,6 +1581,17 @@ class KlineRepository:
         if self._instruments_cache is None:
             return pl.DataFrame()
         return self._instruments_cache
+
+    def get_instrument_name_history(self) -> pl.DataFrame:
+        """名称变更历史 (symbol, name, as_of)。按 mtime 失效, 无文件时返回空表。"""
+        from app.services.instrument_sync import load_name_history
+
+        path = self.store.data_dir / "instrument_name_history" / "part.parquet"
+        mtime_ns = path.stat().st_mtime_ns if path.exists() else None
+        if self._name_history_cache is None or mtime_ns != self._name_history_mtime_ns:
+            self._name_history_cache = load_name_history(self.store.data_dir)
+            self._name_history_mtime_ns = mtime_ns
+        return self._name_history_cache
 
     def get_historical_shares(self) -> pl.DataFrame:
         """读取财务股本历史，并在文件更新后自动刷新缓存。"""

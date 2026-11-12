@@ -7,6 +7,8 @@ flatten ext 字段写入 instruments.parquet; 生效源不提供维表时回退�
 from __future__ import annotations
 
 import logging
+from collections import Counter
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -15,6 +17,13 @@ from app.market_time import cn_today
 from app.services.fs_utils import atomic_write_parquet
 
 logger = logging.getLogger(__name__)
+
+# 注册制新股「上市前 N 个交易日无涨跌幅限制」规则的起点 (沪深主板)。
+# 早于该日上市的老股不适用窗口, 见 app.price_limits。
+_REGISTRATION_DATE = date(2023, 2, 17)
+# 上市日回填的「拥挤日」阈值: 同一个首日落在这么多标的身上, 说明这个日期是
+# 同步窗口批量落库的特征 (历史起点) 而不是真实上市日, 一律不回填。
+_LISTING_BACKFILL_CROWDED_MIN = 15
 
 
 def _flatten_instruments(items: list[dict], *, current_limits: bool = True) -> list[dict]:
@@ -84,11 +93,20 @@ def sync_instruments(data_dir: Path) -> int:
 
     df = pl.DataFrame(all_rows)
     df = _preserve_share_fields(df, data_dir)
-    df = df.with_columns(pl.lit(cn_today()).alias("as_of"))
+    df = _backfill_listing_dates(df, data_dir)
+    today = cn_today()
+    df = df.with_columns(pl.lit(today).alias("as_of"))
 
     out = data_dir / "instruments" / "instruments.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_parquet(df, out)
+
+    try:
+        changed = _update_name_history(df, data_dir, today)
+        if changed:
+            logger.info("instruments 名称变更 %d 条 → name_history", changed)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("名称变更历史写入失败 (不影响维表同步): %s", e)
 
     logger.info("instruments synced: %d rows → %s", df.height, out)
     return df.height
@@ -156,6 +174,138 @@ def _preserve_share_fields(df: pl.DataFrame, data_dir: Path) -> pl.DataFrame:
             "/".join(filled), restored, merged.height,
         )
     return merged
+
+
+def load_name_history(data_dir: Path) -> pl.DataFrame:
+    """读取名称变更历史 (symbol, name, as_of); 未生成时返回空表。"""
+    path = data_dir / "instrument_name_history" / "part.parquet"
+    if not path.exists():
+        return pl.DataFrame()
+    try:
+        return pl.read_parquet(path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("名称变更历史读取失败: %s", e)
+        return pl.DataFrame()
+
+
+def _local_first_trade_dates(data_dir: Path) -> dict[str, date]:
+    """本地日K 每标的的首个交易日 (上市日的近似)。"""
+    daily_dir = data_dir / "kline_daily"
+    if not daily_dir.exists():
+        return {}
+    import duckdb
+
+    con = duckdb.connect()
+    try:
+        rows = con.execute(
+            "SELECT symbol, min(CAST(\"date\" AS DATE)) FROM "
+            f"read_parquet('{daily_dir}/**/*.parquet', union_by_name=true) "
+            "GROUP BY symbol"
+        ).fetchall()
+    finally:
+        con.close()
+    return {sym: day for sym, day in rows if sym and day is not None}
+
+
+def _backfill_listing_dates(df: pl.DataFrame, data_dir: Path) -> pl.DataFrame:
+    """provider 未给上市日时, 用本地日K首日回填 (新股)。
+
+    easytdx 上游不提供上市日, 缺失时「注册制新股上市初期无涨跌幅限制」窗口
+    判不出来, 上市头几天会被误判成涨跌停。
+
+    回填前提: 本地日K首日就是上市日。本地库实测 387 只有已知上市日的标的
+    (首日 >= 注册制起点) 全部满足「首日 == 上市日」, 零反例; 反过来老股的
+    首日是同步起始日, 拿它当上市日会让老股凭空多出 5 日窗口。因此只回填
+    首日落在注册制起点之后、且该首日不拥挤 (同首日标的数 < 阈值) 的标的 ——
+    拥挤日正是历史窗口批量落库的特征。
+    """
+    if "listing_date" not in df.columns:
+        return df
+    if df.filter(pl.col("listing_date").is_null()).is_empty():
+        return df
+    first_dates = _local_first_trade_dates(data_dir)
+    if not first_dates:
+        return df
+    per_day = Counter(first_dates.values())
+    mapping = {
+        sym: day
+        for sym, day in first_dates.items()
+        if day >= _REGISTRATION_DATE and per_day[day] < _LISTING_BACKFILL_CROWDED_MIN
+    }
+    if not mapping:
+        return df
+    filled = pl.DataFrame(
+        {"symbol": list(mapping), "listing_date": list(mapping.values())},
+        schema={"symbol": pl.Utf8, "listing_date": pl.Date},
+    )
+    # listing_date 在维表里是字符串列 (provider 原始形态), 回填值须同类型,
+    # 否则 coalesce 会因 String/Date 混合报错。
+    target_dtype = df.schema["listing_date"]
+    if target_dtype == pl.Null:
+        target_dtype = pl.Date
+    filled = filled.with_columns(pl.col("listing_date").cast(target_dtype))
+    merged = df.join(filled, on="symbol", how="left", suffix="_backfill")
+    result = merged.with_columns(
+        pl.coalesce(pl.col("listing_date"), pl.col("listing_date_backfill"))
+        .alias("listing_date")
+    ).drop("listing_date_backfill")
+    restored = result.filter(pl.col("listing_date").is_not_null()).height
+    logger.info(
+        "instruments 上市日回填 %d/%d (本地日K首日, 非拥挤日)",
+        restored, df.height,
+    )
+    return result
+
+
+def _update_name_history(df: pl.DataFrame, data_dir: Path, as_of: date) -> int:
+    """记录名称变更 → data/instrument_name_history/part.parquet。
+
+    维表是同步当日的快照, 单靠它无法还原「某个历史交易日当时叫什么」——
+    风险警示标记(简称含 ST)因此会被套用到全历史。名称变更历史按 as_of 记录
+    改名时点, 供计算路径逐日还原当日简称。
+
+    只在名称变化时追加 (含首次出现的标的), 避免每天重复写入全量。
+    """
+    path = data_dir / "instrument_name_history" / "part.parquet"
+    current = (
+        df.select("symbol", "name")
+        .unique(subset=["symbol"])
+        .filter(pl.col("name").is_not_null())
+    )
+    if current.is_empty():
+        return 0
+    old = pl.DataFrame()
+    if path.exists():
+        try:
+            old = pl.read_parquet(path)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("名称变更历史读取失败, 重建: %s", e)
+            old = pl.DataFrame()
+    if old.is_empty():
+        changed = current
+    else:
+        latest = (
+            old.sort("as_of")
+            .group_by("symbol", maintain_order=True)
+            .last()
+            .select("symbol", pl.col("name").alias("_last_name"))
+        )
+        joined = current.join(latest, on="symbol", how="left")
+        changed = joined.filter(
+            pl.col("_last_name").is_null() | (pl.col("name") != pl.col("_last_name"))
+        ).select("symbol", "name")
+    if changed.is_empty():
+        return 0
+    new_rows = changed.with_columns(pl.lit(as_of).alias("as_of"))
+    merged = (
+        pl.concat([old, new_rows], how="diagonal_relaxed")
+        if not old.is_empty()
+        else new_rows
+    )
+    merged = merged.sort(["symbol", "as_of"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_parquet(merged, path)
+    return changed.height
 
 
 def enrich_names_from_quotes(
