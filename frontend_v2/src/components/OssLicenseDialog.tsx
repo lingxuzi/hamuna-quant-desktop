@@ -30,7 +30,7 @@ export function LicenseComplianceNotice({ compact = false }: { compact?: boolean
 }
 
 /**
- * 开源许可对话框 — 设置→关于「查看许可」入口。
+ * 开源许可对话框 — 设置→系统设置「查看许可」入口。
  * 展示本项目 LICENSE 全文与随应用分发的第三方组件许可清单。
  */
 export function OssLicenseDialog({ onClose }: { onClose: () => void }) {

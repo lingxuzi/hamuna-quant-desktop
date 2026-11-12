@@ -67,7 +67,7 @@ export function FinancialPlot(props: Props) {
       handleScale: !propsRef.current.intraday,
       handleScroll: !propsRef.current.intraday,
       layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: theme.text,
-        // 归属声明与链接统一放在设置的关于页，避免每个画布重复显示角标。
+        // 归属声明与链接统一放在设置的系统设置页，避免每个画布重复显示角标。
         fontFamily: 'JetBrains Mono, monospace', fontSize: 11, attributionLogo: false,
         panes: { separatorColor: theme.border, separatorHoverColor: theme.crosshair, enableResize: !propsRef.current.intraday } },
       grid: { vertLines: { visible: false }, horzLines: { color: theme.grid } },

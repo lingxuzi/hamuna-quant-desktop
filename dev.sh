@@ -272,6 +272,21 @@ echo
 ) &
 PIDS+=("$!")
 
+# 等后端 /health 通了再起前端: 后端导入模块 + app.main 启动要好几秒, 先起 vite
+# 的话页面首屏那几个 /api 请求会撞上「端口还没监听」, 代理报一堆 ECONNREFUSED。
+if command -v curl >/dev/null 2>&1; then
+  info "等待后端就绪..."
+  for _ in $(seq 1 60); do
+    if curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$BACKEND_PORT/health"; then
+      ok "后端已就绪"
+      break
+    fi
+    sleep 0.5
+  done
+else
+  warn "未找到 curl, 跳过后端就绪等待"
+fi
+
 (
   cd "$FRONTEND_DIR"
   # 前端不接管道: vite 只在 stdout 是 TTY 时打印启动横幅(ready + 访问地址),

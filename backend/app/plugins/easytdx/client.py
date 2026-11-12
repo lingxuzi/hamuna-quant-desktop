@@ -9,8 +9,8 @@ get_xdxr_info 是唯一两族都正常的命令, 沿用标准协议。
 provider 不直接碰 easy_tdx: 全部调用经本模块, 便于契约测试注入假 client,
 并在此处集中处理连接复用、线程串行化与符号映射。
 
-ponytail: 单连接 + 一把 RLock 串行化; 若轮询周期被拉长到无法接受, 再考虑
-连接池或按通道拆分(实测量级: 全市场快照 5.7s, 日K 单标的每 700 根一页)。
+连接池: 单个 EasyTdxClient = 一条 MAC 连接 + 一把 RLock(请求串行)。
+并发拉取靠 **多实例**: 每个实例一条连接, 互不加锁(见 fork())。
 """
 
 from __future__ import annotations
@@ -88,6 +88,43 @@ class EasyTdxClient:
                     except Exception:  # noqa: BLE001 — 关闭失败不影响重建
                         logger.debug("easy_tdx %s 关闭异常", attr, exc_info=True)
                     setattr(self, attr, None)
+
+    def prepare(self) -> None:
+        """预热 MAC 通道: 选优主机 + 建连。
+
+        from_best_host 会 ping + 能力探测全部节点(约 1s), 并发分叉前先调一次,
+        各路 fork 就只做建连, 不重复选优。
+        """
+        self._mac_client()
+
+    def prepare_std(self) -> None:
+        """预热标准协议通道: 选优主机 + 建连 (除权事件走这条)。
+
+        同 prepare: from_best_host 每次都 ping 全部节点, 并发分叉前只调一次。
+        """
+        self._std_client()
+
+    def fork(self) -> EasyTdxClient:
+        """按已选优的主机另开一条连接 (并发拉取用)。
+
+        刻意不走 from_best_host: 那会 ping + 能力探测全部节点(每次数秒),
+        16 路并发下不可接受。这里复用 config.json 里已选优的主机直连。
+
+        只复制主连接**已建好**的通道 —— 需要哪条通道就先 prepare 那条:
+        prepare() → 行情(fork 后带 MAC); prepare_std() → 除权(fork 后带标准协议)。
+        """
+        clone = EasyTdxClient()
+        if self._mac is not None:
+            mac = self._require("easy_tdx.mac.client")
+            conn = mac.MacClient()  # host/port/timeout 取缓存的最优主机
+            conn.connect()
+            clone._mac = conn
+        if self._std is not None:
+            top = self._require("easy_tdx")
+            conn = top.TdxClient()  # host 取 config.json 已选优的 best_host
+            conn.connect()
+            clone._std = conn
+        return clone
 
     # ---- 行情 ----
     def _guard(self, what: str, fn, *args, **kwargs):

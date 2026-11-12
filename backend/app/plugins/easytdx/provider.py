@@ -31,10 +31,13 @@ from __future__ import annotations
 import importlib.util
 import logging
 import math
+import queue
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from typing import TypeVar
 
 import polars as pl
 
@@ -50,6 +53,8 @@ _HIST_INTERVAL_S = 0.02  # 单标的 K 线/事件请求节流(本地 TCP, 比 RE
 _ADJ_BACKDAYS = 30  # 推导因子时向前找"除权日前收盘"的回看天数(容忍长期停牌)
 _ADJ_FUTURE_DAYS = 15  # 未来已公告事件窗口(无前收盘自然跳过)
 _DAILY_MAX_COUNT = 6000  # ≈24 年; 服务端深度不足时在空页自动终止
+_SYNC_WORKERS = 16  # 逐标的并发路数(实测 256 只: 单路 91ms/只 → 16 路 9ms/只)
+_DAILY_FRAME_SYMBOLS = 500  # 每帧聚合的标的数 → 落盘小文件数 = 帧数 × 天数
 _MINUTE_MAX_COUNT = 9600  # 服务端 1m 实测保留约 21 个交易日
 _MINUTE_BARS_PER_DAY = 240
 _MINUTE_HISTORY_DAYS = 20  # 实测 21 个交易日, 向下取整声明
@@ -152,6 +157,110 @@ def _as_naive_dt(value) -> datetime | None:
 def _bars_for_window(span_days: int) -> int:
     """窗口自然日跨度 → count 模式请求根数(交易日≈自然日×5/7, 加停牌冗余)。"""
     return max(30, min(_DAILY_MAX_COUNT, int(span_days * 5 / 7) + 20))
+
+
+def _fork_client(client: EasyTdxClient) -> EasyTdxClient:
+    """并发拉取要独立连接: 能 fork 就另开一条, 否则复用(共用会被锁串行化)。"""
+    fork = getattr(client, "fork", None)
+    return fork() if callable(fork) else client
+
+
+_T = TypeVar("_T")
+
+
+def _map_parallel(
+    client: EasyTdxClient,
+    symbols: list[str],
+    fn: Callable[[EasyTdxClient, str], _T],
+    *,
+    workers: int = _SYNC_WORKERS,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> Iterator[tuple[str, _T]]:
+    """逐标的并发拉取: 每路 worker 一条独立连接, 结果按 symbols 原序产出。
+
+    - **fn 自行决定软/硬失败**: 抛异常 → 整轮中断, 异常原样上抛(调用方语义不变);
+    - 共用一条连接会被 EasyTdxClient 的 RLock 重新串行化, 故每路 fork() 一条;
+    - 先 prepare 一次: from_best_host 要 ping 全部节点, 各路分叉只做建连;
+    - 结果按输入序产出(落盘顺序稳定), 内存只滞留 in-flight 的少量结果。
+
+    ponytail: 路数按本地 TCP 实测定(256 只 91ms/只 → 16 路 9ms/只); 节点限流变严时调小
+    _SYNC_WORKERS。
+    """
+    if not symbols:
+        return
+    total = len(symbols)
+    workers = max(1, min(workers, total))
+    prepare = getattr(client, "prepare", None)
+    if callable(prepare):
+        prepare()  # 先选优一次主机, 各路分叉只建连(选优要 ping 全部节点)
+    shards = [list(range(i, total, workers)) for i in range(workers)]
+
+    out_q: queue.Queue = queue.Queue(maxsize=workers * 2)
+    stop = threading.Event()
+
+    def _put(item) -> bool:
+        """带停止检查的入队: 队列满时轮询, 消费端提前退出则放弃投递。"""
+        while not stop.is_set():
+            try:
+                out_q.put(item, timeout=0.5)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def _run(shard: list[int], index: int) -> None:
+        conn = client
+        if index:  # 首路用主连接, 其余各自分叉(在线程内并行建连)
+            try:
+                conn = _fork_client(client)
+            except Exception as e:  # noqa: BLE001 — 分叉失败退回单连接, 只是变慢
+                logger.warning("EasyTdx 并发连接分叉失败, 退回单连接: %s", e)
+        try:
+            for pos in shard:
+                if stop.is_set():
+                    break
+                if not _put((pos, fn(conn, symbols[pos]))):
+                    return
+                time.sleep(_HIST_INTERVAL_S)
+        except BaseException as exc:  # noqa: BLE001 — 交消费线程原样重抛
+            _put(exc)
+        finally:
+            if conn is not client:
+                conn.close()
+            _put(None)  # 哨兵: 每路 worker 必发, 否则消费端会等空
+
+    threads = [
+        threading.Thread(target=_run, args=(shards[i], i),
+                         name=f"easytdx-sync-{i}", daemon=True)
+        for i in range(workers)
+    ]
+    try:
+        for t in threads:
+            t.start()
+        pending: dict[int, _T] = {}
+        next_pos = 0
+        done = 0
+        alive = workers
+        while alive:
+            item = out_q.get()
+            if item is None:
+                alive -= 1
+                continue
+            if isinstance(item, BaseException):
+                raise item
+            pos, value = item
+            pending[pos] = value
+            while next_pos in pending:  # 按输入序吐结果(完成顺序乱序到达)
+                yield symbols[next_pos], pending.pop(next_pos)
+                next_pos += 1
+                done += 1
+                if on_progress:
+                    on_progress(done, total)
+    finally:
+        stop.set()
+        for t in threads:
+            if t.ident is not None:
+                t.join(timeout=5)
 
 
 def _minute_count_for_window(start_dt: datetime | None, end_dt: datetime) -> int:
@@ -321,19 +430,28 @@ class EasyTdxProvider:
         asset_type: str = "stock",
         on_chunk_done: Callable[[int, int], None] | None = None,
     ) -> Iterator[pl.DataFrame]:
-        """逐标的 count 模式拉日K(每页 700 根由库内部翻页) → 原始价契约帧。"""
+        """并发拉日K(每页 700 根由库内部翻页) → 原始价契约帧。
+
+        并发: _SYNC_WORKERS 路各持一条独立 MAC 连接(共用一条连接会被
+        EasyTdxClient 的 RLock 重新串行化)。实测 256 只标的 91ms/只 → 9ms/只。
+        聚帧: 每 _DAILY_FRAME_SYMBOLS 只聚成一帧 —— 落盘侧按 (帧 × 日期) 写
+        staging 小文件, 逐只一帧会写出「标的数 × 天数」个文件(全市场一年 =
+        139 万个), 聚帧后是「帧数 × 天数」。
+        """
         if not symbols:
             if on_chunk_done:
                 on_chunk_done(0, 0)
             return
-        client = self._get_client()
         start_d = start_time.date() if start_time else None
         end_d = end_time.date() if end_time else date.today()
         span = (end_d - start_d).days if start_d else None
         count = _bars_for_window(int(span)) if span is not None else _DAILY_MAX_COUNT
-        for i, symbol in enumerate(symbols):
+
+        client = self._get_client()
+
+        def _fetch(conn: EasyTdxClient, symbol: str) -> pl.DataFrame:
             try:
-                bars = client.kline(symbol, period_name="DAILY", count=count)
+                bars = conn.kline(symbol, period_name="DAILY", count=count)
             except EasyTdxError as e:
                 logger.warning("EasyTdx 日K %s 拉取失败: %s", symbol, e)
                 bars = []
@@ -341,10 +459,16 @@ class EasyTdxProvider:
             if rows and start_d is not None and rows[0]["date"] > start_d:
                 logger.info("EasyTdx 日K %s: count=%d 仅覆盖到 %s(窗口起点 %s 之前不在返回内)",
                             symbol, count, rows[0]["date"], start_d)
-            yield pl.DataFrame(rows, schema=_DAILY_SCHEMA)
-            if on_chunk_done:
-                on_chunk_done(i + 1, len(symbols))
-            time.sleep(_HIST_INTERVAL_S)
+            return pl.DataFrame(rows, schema=_DAILY_SCHEMA)
+
+        buf: list[pl.DataFrame] = []
+        for _symbol, frame in _map_parallel(client, symbols, _fetch, on_progress=on_chunk_done):
+            buf.append(frame)
+            if len(buf) >= _DAILY_FRAME_SYMBOLS:
+                yield pl.concat(buf, how="vertical")
+                buf = []
+        if buf:
+            yield pl.concat(buf, how="vertical")
 
     @staticmethod
     def _daily_rows(symbol: str, bars: list[dict], start_d: date | None, end_d: date) -> list[dict]:
@@ -374,6 +498,9 @@ class EasyTdxProvider:
 
         数据链: xdxr 事件(库内已 ÷10 成每股) → 同一标的日K配前收 →
         交易所公式 + 涨跌停自检, 公式与自检在 ex_factor.py 共享。
+
+        并发: 除权事件走**标准协议**, 与日K的 MAC 通道是两条线; 各路 worker
+        各自持有标准协议 + MAC 连接(配价要拉日K)。
         """
         if not symbols:
             return pl.DataFrame(schema=_ADJ_SCHEMA)
@@ -394,13 +521,17 @@ class EasyTdxProvider:
         if not valid:
             return pl.DataFrame(schema=_ADJ_SCHEMA)
 
-        out_rows: list[dict] = []
-        for i, symbol in enumerate(valid):
-            try:
-                events = self._events(symbol)
-            except EasyTdxError:
-                # 失败不能当作「该股无除权」; 由任务层标记失败, 整轮不写不完整因子
-                raise
+        # 标准协议通道先选优一次: from_best_host 会 ping 全部节点, 各路分叉直连
+        # config.json 里已选优的 best_host(否则 16 路各 ping 一次, 比串行还慢)。
+        prepare_std = getattr(client, "prepare_std", None)
+        if callable(prepare_std):
+            prepare_std()
+
+        horizon = end_d + timedelta(days=_ADJ_FUTURE_DAYS)
+
+        def _fetch(conn: EasyTdxClient, symbol: str) -> list[dict]:
+            # 失败不能当作「该股无除权」; 由任务层标记失败, 整轮不写不完整因子
+            events = self._events(conn, symbol)
             events = [
                 {**ev, "date": _as_date(ev.get("date"))}
                 for ev in events
@@ -409,21 +540,26 @@ class EasyTdxProvider:
             # 先按目标窗口裁事件, 再决定要不要拉日K。窗口外的历史事件最终会被
             # factor_rows 丢弃, 但若用它们算 first_ex, 每只股票都要按其最早除权日
             # (可追溯到 1990 年) 拉满 6000 根日K —— 全市场同步从 5 分钟变 10 小时。
-            horizon = end_d + timedelta(days=_ADJ_FUTURE_DAYS)
             in_window = [
                 ev for ev in events
                 if (start_d is None or ev["date"] >= start_d) and ev["date"] <= horizon
             ]
-            if in_window:
-                first_ex = min(ev["date"] for ev in in_window)
-                closes = self._close_map(client, symbol, first_ex - timedelta(days=_ADJ_BACKDAYS), end_d)
-                out_rows.extend(factor_rows(
-                    symbol, self._normalized_events(in_window), closes,
-                    start_d, end_d, future_days=_ADJ_FUTURE_DAYS,
-                ))
+            if not in_window:
+                return []
+            first_ex = min(ev["date"] for ev in in_window)
+            closes = self._close_map(conn, symbol, first_ex - timedelta(days=_ADJ_BACKDAYS), end_d)
+            return factor_rows(
+                symbol, self._normalized_events(in_window), closes,
+                start_d, end_d, future_days=_ADJ_FUTURE_DAYS,
+            )
+
+        def _progress(done: int, _total: int) -> None:
             if on_chunk_done:
-                on_chunk_done(i + 1, len(symbols))
-            time.sleep(_HIST_INTERVAL_S)
+                on_chunk_done(done, len(symbols))
+
+        out_rows: list[dict] = []
+        for _symbol, rows in _map_parallel(client, valid, _fetch, on_progress=_progress):
+            out_rows.extend(rows)
         if not out_rows:
             return pl.DataFrame(schema=_ADJ_SCHEMA)
         return (
@@ -432,8 +568,8 @@ class EasyTdxProvider:
             .sort(["symbol", "trade_date"])
         )
 
-    def _events(self, symbol: str) -> list[dict]:
-        return self._get_client().xdxr_events(symbol)
+    def _events(self, conn: EasyTdxClient, symbol: str) -> list[dict]:
+        return conn.xdxr_events(symbol)
 
     @staticmethod
     def _normalized_events(events: list[dict]) -> list[dict]:
@@ -487,19 +623,21 @@ class EasyTdxProvider:
         start_dt = start_time.replace(tzinfo=None) if start_time is not None else None
         end_dt = (end_time or datetime.now()).replace(tzinfo=None)
         count = _minute_count_for_window(start_dt, end_dt)
-        parts: list[pl.DataFrame] = []
-        for i, symbol in enumerate(symbols):
+
+        def _fetch(conn: EasyTdxClient, symbol: str) -> pl.DataFrame:
             try:
-                bars = client.kline(symbol, period_name="MIN_1", count=count)
+                bars = conn.kline(symbol, period_name="MIN_1", count=count)
             except EasyTdxError as e:
                 # 请求失败应中止历史同步并标记失败, 不得作为无数据继续遍历全市场
                 raise EasyTdxError(f"分钟K {symbol}: {e}") from e
-            parts.append(_minute_frame(symbol, bars, start_dt, end_dt))
-            if on_chunk_done:
-                on_chunk_done(i + 1, len(symbols))
-            time.sleep(_HIST_INTERVAL_S)
-        non_empty = [df for df in parts if not df.is_empty()]
-        return pl.concat(non_empty, how="diagonal_relaxed") if non_empty else pl.DataFrame(schema=_MINUTE_SCHEMA)
+            return _minute_frame(symbol, bars, start_dt, end_dt)
+
+        parts = [
+            frame
+            for _symbol, frame in _map_parallel(client, symbols, _fetch, on_progress=on_chunk_done)
+            if not frame.is_empty()
+        ]
+        return pl.concat(parts, how="diagonal_relaxed") if parts else pl.DataFrame(schema=_MINUTE_SCHEMA)
 
     def get_intraday_batch(
         self, symbols: list[str], count: int = 300, asset_type: str = "stock",
@@ -509,6 +647,7 @@ class EasyTdxProvider:
         上游无批量分钟端点(MAC 协议 K 线命令单标的一次一请求), 与 tdxquant
         同形: 5574 只单线程约 13 分钟(实测 144ms/只), 由 minute_refresh 以
         修复轮节奏调度。count 模式尾部天然带前一日余量, 按今日过滤掉。
+        并发后同量级请求约 1 分钟跑完。
         """
         if not symbols or asset_type != "stock":
             return pl.DataFrame(schema=_MINUTE_SCHEMA)
@@ -517,17 +656,20 @@ class EasyTdxProvider:
         start_dt = datetime.combine(today, datetime.min.time())
         # 240 根/日 + count 余量, 上限按服务端保留深度截断
         fetch = min(_MINUTE_MAX_COUNT, _MINUTE_BARS_PER_DAY + max(int(count), 0))
-        parts: list[pl.DataFrame] = []
-        for symbol in symbols:
+
+        def _fetch(conn: EasyTdxClient, symbol: str) -> pl.DataFrame | None:
             try:
-                bars = client.kline(symbol, period_name="MIN_1", count=fetch)
+                bars = conn.kline(symbol, period_name="MIN_1", count=fetch)
             except EasyTdxError:
                 # 单标的失败不拖垮整轮(修复轮会重来), 与 realtime 软失败同语义
-                continue
-            df = _minute_frame(symbol, bars, start_dt, None)
-            if not df.is_empty():
-                parts.append(df)
-            time.sleep(_HIST_INTERVAL_S)
+                return None
+            return _minute_frame(symbol, bars, start_dt, None)
+
+        parts = [
+            frame
+            for _symbol, frame in _map_parallel(client, symbols, _fetch)
+            if frame is not None and not frame.is_empty()
+        ]
         return pl.concat(parts, how="diagonal_relaxed") if parts else pl.DataFrame(schema=_MINUTE_SCHEMA)
 
     # ---- depth5 ----

@@ -9,13 +9,14 @@
 from __future__ import annotations
 
 import math
+import types
 from datetime import date, datetime, timedelta
 
 import polars as pl
 import pytest
 
 from app.plugins.easytdx import provider as ep
-from app.plugins.easytdx.client import EasyTdxError, parse_symbol
+from app.plugins.easytdx.client import EasyTdxClient, EasyTdxError, parse_symbol
 from app.plugins.easytdx.provider import EasyTdxProvider
 
 
@@ -27,18 +28,39 @@ class _FakeClient:
         self.kline_by_symbol: dict[str, list[dict]] = {}
         self.kline_error: Exception | None = None
         self.kline_calls: list[dict] = []
+        self.client_ids: list[int] = []
         self.quote_rows: list[dict] = []
         self.quote_calls: list[dict] = []
         self.list_rows: list[dict] = []
         self.xdxr: dict[str, object] = {}
         self.xdxr_calls: list[str] = []
+        self.xdxr_client_ids: list[int] = []
+        self.forks: list[_FakeClient] = []
+        self.prepare_calls = 0
+        self.prepare_std_calls = 0
         self.closed = False
+
+    def prepare(self) -> None:
+        """真实实现里预热 MAC 通道(选优 + 建连), 各路分叉只建连。"""
+        self.prepare_calls += 1
+
+    def prepare_std(self) -> None:
+        """真实实现里预热标准协议通道(除权事件用)。"""
+        self.prepare_std_calls += 1
+
+    def fork(self) -> _FakeClient:
+        """并发分叉出的连接: 共用同一份预置数据, 便于断言调用归属。"""
+        clone = _FakeClient()
+        clone.__dict__.update(self.__dict__)
+        self.forks.append(clone)  # 保留引用: 否则 id 会被回收复用, 断言失真
+        return clone
 
     def close(self) -> None:
         self.closed = True
 
     def kline(self, symbol, *, period_name, count):
         self.kline_calls.append({"symbol": symbol, "period": period_name, "count": count})
+        self.client_ids.append(id(self))
         if self.kline_error:
             raise self.kline_error
         return list(self.kline_by_symbol.get(symbol, []))
@@ -53,6 +75,7 @@ class _FakeClient:
 
     def xdxr_events(self, symbol):
         self.xdxr_calls.append(symbol)
+        self.xdxr_client_ids.append(id(self))
         item = self.xdxr.get(symbol, [])
         if isinstance(item, Exception):
             raise item
@@ -110,6 +133,76 @@ def test_daily_symbol_failure_yields_empty_frame_not_raise(provider):
     fake.kline_error = EasyTdxError("节点断连")
     df = p.get_daily(["600519.SH"], None, datetime(2026, 11, 6))
     assert df.is_empty() and df.columns == list(ep._DAILY_SCHEMA)
+
+
+def test_daily_batches_symbols_into_frames(monkeypatch, provider):
+    """帧数 = 标的数 / 每帧标的数 —— 落盘小文件数随之收敛(逐只一帧会爆文件)。"""
+    p, fake = provider
+    monkeypatch.setattr(ep, "_DAILY_FRAME_SYMBOLS", 3)
+    syms = [f"{600000 + i:06d}.SH" for i in range(7)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+
+    frames = list(p.iter_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6)))
+
+    assert [f.height for f in frames] == [3, 3, 1]
+    assert sum(f["symbol"].n_unique() for f in frames) == 7
+    assert frames[0].columns == list(ep._DAILY_SCHEMA)
+
+
+def test_daily_uses_independent_connections(provider):
+    """并发靠多连接: 共用一条会被 EasyTdxClient 的 RLock 重新串行化。"""
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(4)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+
+    list(p.iter_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6)))
+
+    assert len(set(fake.client_ids)) == len(syms)
+
+
+def test_daily_progress_callback_counts_every_symbol(provider):
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(5)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+    seen: list[tuple[int, int]] = []
+
+    list(p.iter_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6),
+                      on_chunk_done=lambda cur, tot: seen.append((cur, tot))))
+
+    assert [cur for cur, _ in seen] == [1, 2, 3, 4, 5]
+    assert all(tot == len(syms) for _, tot in seen)
+
+
+def test_daily_one_symbol_failure_does_not_drop_others(provider):
+    p, fake = provider
+    syms = ["600000.SH", "600001.SH", "600002.SH"]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+
+    def kline(symbol, *, period_name, count):
+        if symbol == "600001.SH":
+            raise EasyTdxError("节点断连")
+        return fake.kline_by_symbol[symbol]
+
+    fake.kline = kline
+    df = p.get_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6))
+
+    assert set(df["symbol"].to_list()) == {"600000.SH", "600002.SH"}
+
+
+def test_daily_keeps_input_symbol_order(provider):
+    """并发完成顺序是乱的, 落盘顺序必须跟输入一致(重跑/合并结果才稳定)。"""
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(8)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+
+    df = p.get_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6))
+
+    assert df["symbol"].to_list() == syms
 
 
 # ---------------------------------------------------------------- adj_factor
@@ -180,6 +273,34 @@ def test_adj_factor_skips_unparsable_symbol_instead_of_aborting(provider):
     df = p.get_adj_factors(["000001", "600000.SH"], None, datetime(2026, 6, 30))
     assert not df.is_empty()
     assert set(df["symbol"].to_list()) == {"600000.SH"}
+
+
+def test_adj_factor_uses_independent_connections(provider):
+    """除权事件走标准协议: 共用一条连接会被 RLock 重新串行化。"""
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(4)]
+    for s in syms:
+        fake.xdxr[s] = []
+    fake.kline_by_symbol["600519.SH"] = [_bar(date(2026, 6, 25), c=10.0)]
+
+    p.get_adj_factors(syms, datetime(2026, 6, 1), datetime(2026, 6, 30))
+
+    assert len(set(fake.xdxr_client_ids)) == len(syms)
+    assert fake.prepare_std_calls == 1  # 标准协议主机只选优一次, 各路直连
+
+
+def test_adj_factor_progress_callback_counts_every_symbol(provider):
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(5)]
+    for s in syms:
+        fake.xdxr[s] = []
+    seen: list[tuple[int, int]] = []
+
+    p.get_adj_factors(syms, datetime(2026, 6, 1), datetime(2026, 6, 30),
+                      on_chunk_done=lambda cur, tot: seen.append((cur, tot)))
+
+    assert [cur for cur, _ in seen] == [1, 2, 3, 4, 5]
+    assert all(tot == len(syms) for _, tot in seen)
 
 
 # ---------------------------------------------------------------- realtime
@@ -331,6 +452,35 @@ def test_minute_failure_raises_for_task_layer(provider):
         p.get_minute(["600519.SH"], None, datetime(2026, 11, 6))
 
 
+def test_minute_failure_in_one_symbol_aborts_whole_round(provider):
+    """并发下任一标的失败仍要中止整轮 —— 不能让任务层误以为同步成功。"""
+    p, fake = provider
+
+    def kline(symbol, *, period_name, count):
+        if symbol == "000001.SZ":
+            raise EasyTdxError("节点断连")
+        return []
+
+    fake.kline = kline
+    with pytest.raises(EasyTdxError):
+        p.get_minute(["600000.SH", "000001.SZ"], None, datetime(2026, 11, 6))
+
+
+def test_minute_uses_independent_connections(provider):
+    p, fake = provider
+    syms = [f"{600000 + i:06d}.SH" for i in range(4)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [
+            {"datetime": datetime(2026, 11, 6, 9, 31), "open": 1.0, "high": 1.0, "low": 1.0,
+             "close": 1.0, "vol": 100.0, "amount": 100.0},
+        ]
+
+    df = p.get_minute(syms, None, datetime(2026, 11, 6, 15, 0))
+
+    assert len(set(fake.client_ids)) == len(syms)
+    assert df["symbol"].to_list() == syms
+
+
 def test_minute_history_days_declared(provider):
     p, _ = provider
     assert p.minute_history_days == ep._MINUTE_HISTORY_DAYS == 20
@@ -376,6 +526,22 @@ def test_intraday_batch_empty_symbols_returns_schema(provider):
     assert df.is_empty() and df.columns == list(ep._MINUTE_SCHEMA)
 
 
+def test_intraday_batch_uses_independent_connections(provider):
+    p, fake = provider
+    now = datetime.now()
+    syms = [f"{600000 + i:06d}.SH" for i in range(4)]
+    for s in syms:
+        fake.kline_by_symbol[s] = [
+            {"datetime": now.replace(hour=9, minute=31, second=0, microsecond=0), "open": 1.0,
+             "high": 1.0, "low": 1.0, "close": 1.0, "vol": 100.0, "amount": 100.0},
+        ]
+
+    df = p.get_intraday_batch(syms, count=3)
+
+    assert len(set(fake.client_ids)) == len(syms)
+    assert df["symbol"].to_list() == syms
+
+
 def test_test_dataset_full_minute_returns_preview(provider):
     p, fake = provider
     now = datetime.now()
@@ -406,6 +572,49 @@ def test_instruments_rejects_non_stock(provider):
 
 
 # ---------------------------------------------------------------- 声明与可用性
+# ---------------------------------------------------------------- client.fork
+def test_fork_copies_only_prepared_channels(monkeypatch):
+    """fork 只复制主连接**已建好**的通道。
+
+    没 prepare 过的通道不在分叉时现连 —— from_best_host 要 ping 全部节点,
+    16 路各来一次比串行还慢; 除权(标准协议)与日K(MAC)是两条独立通道。
+    """
+    made: list[str] = []
+
+    class _StubMac:
+        def __init__(self, *a, **k):
+            self.connected = False
+            made.append("mac")
+
+        def connect(self):
+            self.connected = True
+
+    class _StubStd:
+        def __init__(self, *a, **k):
+            self.connected = False
+            made.append("std")
+
+        def connect(self):
+            self.connected = True
+
+    monkeypatch.setattr(
+        EasyTdxClient, "_require",
+        lambda self, module: types.SimpleNamespace(MacClient=_StubMac, TdxClient=_StubStd),
+    )
+
+    base = EasyTdxClient()
+    clone = base.fork()
+    assert clone._mac is None and clone._std is None
+    assert made == []  # 主连接没通道 → 分叉也不建
+
+    base._mac = object()
+    base._std = object()
+    clone = base.fork()
+    assert isinstance(clone._mac, _StubMac) and clone._mac.connected
+    assert isinstance(clone._std, _StubStd) and clone._std.connected
+    assert made == ["mac", "std"]
+
+
 def test_symbol_parsing():
     assert parse_symbol("600519.SH") == (1, "600519")
     assert parse_symbol("000001.sz") == (0, "000001")

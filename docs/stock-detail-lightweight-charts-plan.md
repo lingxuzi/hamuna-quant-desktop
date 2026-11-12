@@ -121,7 +121,7 @@ StockPreviewDialogContent
 
 后端数据、数据源配置、Key、Parquet、指标口径、旧设置键和资源包不迁移。新图表继续读取旧数据与旧偏好，归属链接与第三方声明随本地依赖交付；不额外引入外部 CDN 脚本。
 
-详情画布隐藏重复的 TradingView 角标，署名及 TradingView 链接集中在「设置 → 关于 → 版权」展示，弹窗底部不再重复展示；相应 LICENSE/NOTICE 仍随应用分发并可从关于页查看。官方要求用户可访问页面保留署名和链接，并未要求固定放在图表旁；`attributionLogo` 可在已满足链接要求时关闭。[官方归属说明](https://tradingview.github.io/lightweight-charts/docs#license-and-attribution)、[角标选项](https://tradingview.github.io/lightweight-charts/docs/api/interfaces/LayoutOptions#attributionlogo)。
+详情画布隐藏重复的 TradingView 角标，署名及 TradingView 链接集中在「设置 → 系统设置 → 版权与许可」展示，弹窗底部不再重复展示；相应 LICENSE/NOTICE 仍随应用分发并可从该页查看。官方要求用户可访问页面保留署名和链接，并未要求固定放在图表旁；`attributionLogo` 可在已满足链接要求时关闭。[官方归属说明](https://tradingview.github.io/lightweight-charts/docs#license-and-attribution)、[角标选项](https://tradingview.github.io/lightweight-charts/docs/api/interfaces/LayoutOptions#attributionlogo)。
 
 ## 10. 实施记录与验证范围
 
@@ -144,7 +144,7 @@ StockPreviewDialogContent
 - 日K异动三种样式：详情工具栏在原“异动”开关旁提供小箭头、紧凑标签、黄紫柱体选择，默认紧凑标签；新本地偏好键 `stock_daily_marker_style` 记忆选择，未知旧值回到默认。黄色为涨停、紫色为炸板，浅色主题加强对比度；柱体模式仅改变K线实体，影线保持阴阳色，悬停信息保留涨停/炸板与连板数。来源使用前端可选 `ChartMarker.event` 明确区分，炸板优先级沿用原规则；策略买卖点及未知外部事件不按颜色猜测，旧 ECharts 消费者保持原行为。
 - 异动开关关闭后恢复原始K线颜色，重新打开沿用所选样式；缩小视图时文字标签转为可见小圆点。样式切换沿用现有图表和查询缓存，不改源OHLC/指标/事件计算，不重拉日K。新增回归在旧实现下 5 项失败；最终全量 82 个文件、558 项测试与构建通过。Chromium 实页验证 605365.SH 的 2026-09-01 真实涨停K线三种画法、开关恢复、明暗主题与偏好重载；切换后同一横坐标仍为 2026-10-16，新增日K请求为零。390px 窄屏无横向溢出，日K/分时主图仍均为 288px、成交量 95px、时间轴 28px；关闭后宿主归零，未捕获异常为空。紫色炸板、历史修补撤色、自定义标记与未知偏好的边界由回归测试覆盖。
 - 当前股悬停及缩放沿用已有查询；实页采样时仍能观察到原有邻股预取。未执行同环境迁移前后完整性能基准，不宣称性能提升比例。
-- 详情内置角标关闭，版权署名和链接集中在「设置 → 关于 → 版权」，`public/third-party/lightweight-charts` 随构建携带 LICENSE/NOTICE。
+- 详情内置角标关闭，版权署名和链接集中在「设置 → 系统设置 → 版权与许可」，`public/third-party/lightweight-charts` 随构建携带 LICENSE/NOTICE。
 - 迁移及布局阶段的全量 `pnpm exec vitest run`：81 个测试文件、543 项测试通过；后续右边界修复的定向测试结果见上文。`pnpm build` 与 `git diff --check` 通过。构建保留既有 ECharts 大 chunk 警告，新 Lightweight Charts chunk 约 185 kB（gzip 60 kB）。验证截图位于被忽略的 `output/playwright`，不纳入提交。
 - Windows、桌面安装包及真实盘中长时间运行尚未验证；没有进行迁移前后完整性能基准。
 

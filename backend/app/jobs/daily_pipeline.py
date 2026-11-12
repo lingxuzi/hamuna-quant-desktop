@@ -478,7 +478,10 @@ def run_now(
     forward_incremental = False
     backward_extension = False
 
-    if daily_days > prev_enriched_days and enriched_exists:
+    # 判定用**日期集合差**, 不能用分区计数: daily 少一个分区时(例如某个历史分区被
+    # 完整性修复删除), 计数比较会永远为假 —— 新日期不再触发增量补算, 只会落到
+    # "除权因子增量"分支, 当天 enriched 分区只覆盖受除权影响的少数标的。
+    if enriched_exists:
         daily_dates = sorted(d.stem.split("=")[1] for d in daily_dir.glob("date=*"))
         enriched_dates = sorted(d.stem.split("=")[1] for d in enriched_dir.glob("date=*"))
         earliest_enriched = enriched_dates[0]

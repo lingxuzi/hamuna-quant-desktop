@@ -367,4 +367,4 @@ AI 客户端 ⇄ MCP stdio (薄桥) ⇄ HTTP + Bearer Token ⇄ 开放网关
 
 ### 桌面客户端版本清单
 
-发布流水线会在每个 Release 附带 `latest.json`(版本号、三平台下载地址、sha256),设置 → 关于 → 检查更新即基于它(优先 GitHub API)提示新版本。
+发布流水线会在每个 Release 附带 `latest.json`(版本号、三平台下载地址、sha256),侧栏版本号旁的更新徽标即基于它(优先 GitHub API)提示新版本,点击直接打开 Release 页下载。

@@ -547,18 +547,25 @@ export function SettingsSystemPanel() {
       <UpgradeGuardCard />
 
       <section className="mt-10">
-        <SectionHead icon={Scale} title="版权与许可" className="mb-4" />
+        <SectionHead
+          icon={Scale}
+          title="版权与许可"
+          className="mb-4"
+          right={
+            <span className="shrink-0 border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
+              {PROJECT_LICENSE_NAME}
+            </span>
+          }
+        />
 
         <div className="rowset">
+          {/* 版权署名 — 界面常驻, 避免仅存在于 LICENSE 文件时被整包删除 */}
           <div className="r">
             <div className="lab">
               <b>© 2026 tick-stock-panel contributors</b>
               <small>基于 MIT 协议开源 · 遵照协议分发时须保留版权与许可声明</small>
             </div>
             <div className="ctl">
-              <span className="shrink-0 border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
-                {PROJECT_LICENSE_NAME}
-              </span>
               <a
                 href={PROJECT_REPO_URL}
                 target="_blank"
@@ -568,6 +575,16 @@ export function SettingsSystemPanel() {
                 <ExternalLink className="h-[12px] w-[12px]" />
                 仓库
               </a>
+            </div>
+          </div>
+
+          {/* 开源许可 — 点击弹窗查看完整内容 */}
+          <div className="r">
+            <div className="lab">
+              <b>开源许可</b>
+              <small>本项目协议全文与第三方组件许可清单</small>
+            </div>
+            <div className="ctl">
               <button
                 onClick={() => setLicenseOpen(true)}
                 className="ctl-btn ctl-sm"

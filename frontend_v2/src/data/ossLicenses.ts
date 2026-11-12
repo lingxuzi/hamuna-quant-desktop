@@ -1,5 +1,5 @@
 /**
- * 关于页开源许可数据 — 本项目 LICENSE 全文 + 随应用分发的第三方组件清单。
+ * 开源许可数据 — 本项目 LICENSE 全文 + 随应用分发的第三方组件清单。
  *
  * 清单口径: 前后端「直接运行时依赖」(frontend package.json dependencies /
  * backend pyproject.toml [project.dependencies]); devDependencies 与测试工具

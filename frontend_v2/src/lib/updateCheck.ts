@@ -8,7 +8,7 @@
  * 使用期间每小时静默复检一次 (silent+force): 新版本发布后最长 1 小时亮 NEW;
  * 复检失败不打掉已亮的 found 状态。
  */
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { useVersion } from '@/lib/useSharedQueries'
 
 // 检查更新的目标仓库 (Release 清单来源) — 仓库曾用旧名,
@@ -173,16 +173,14 @@ let hourlyStarted = false
 const HOURLY_MS = 60 * 60 * 1000
 
 /**
- * 侧栏与设置页共用的更新检查 hook。
+ * 侧栏版本号徽标用的更新检查 hook。
  * 版本号就绪后自动做一次静默检查 (每次会话最多一次);
- * 此后每小时静默复检 (silent+force 绕过 24h 缓存, 捕捉使用期间发布的新版本);
- * `check` 为手动入口, 绕过缓存立即刷新。
+ * 此后每小时静默复检 (silent+force 绕过 24h 缓存, 捕捉使用期间发布的新版本)。
  */
 export function useUpdateCheck(): {
   status: UpdateStatus
   info: UpdateInfo | null
   checkedAt: number
-  check: () => void
 } {
   const s = useSyncExternalStore(subscribe, getUpdateState)
   const { data: versionData } = useVersion()
@@ -201,8 +199,5 @@ export function useUpdateCheck(): {
     }, HOURLY_MS)
     return () => clearInterval(id)
   }, [current])
-  const check = useCallback(() => {
-    void checkForUpdate(current, { force: true })
-  }, [current])
-  return { status: s.status, info: s.info, checkedAt: s.checkedAt, check }
+  return { status: s.status, info: s.info, checkedAt: s.checkedAt }
 }
