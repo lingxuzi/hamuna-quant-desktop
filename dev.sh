@@ -276,7 +276,8 @@ PIDS+=("$!")
 # 的话页面首屏那几个 /api 请求会撞上「端口还没监听」, 代理报一堆 ECONNREFUSED。
 if command -v curl >/dev/null 2>&1; then
   info "等待后端就绪..."
-  for _ in $(seq 1 60); do
+  # 上限 180s: 服务器上加载 DuckDB 视图 / 迁移可能数十秒, 2-3s 的窗口不够
+  for _ in $(seq 1 99999); do
     if curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$BACKEND_PORT/health"; then
       ok "后端已就绪"
       break
