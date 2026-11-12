@@ -1112,6 +1112,35 @@ def _select_storage_cols(df: pl.DataFrame) -> pl.DataFrame:
     return df.select(cols)
 
 
+def _merge_enriched_rows(
+    existing: pl.DataFrame,
+    incoming: pl.DataFrame,
+    *,
+    drop_symbols: list[str] | None = None,
+) -> pl.DataFrame:
+    """合并 enriched 分区: 每 (symbol, date) 只保留最后一条。
+
+    incoming 在后 → keep="last" 让重算值覆盖旧值; drop_symbols 先把局部重算
+    涉及的标的从 existing 里剔掉, 避免旧值残留。
+
+    唯一性是硬契约: 回测矩阵 (MarketDataMatrix) 要求 (date, symbol) 唯一,
+    重复行会让整段矩阵缓存构建失败。日K分区里一天落了多份 parquet 碎片
+    (历史 part-stream-* 残留) 时, 输入本身就带重复行 —— 合并时统一去重,
+    污染不再原样写回 (与 replace_enriched_rows 同一判据)。
+    """
+    if drop_symbols and not existing.is_empty():
+        existing = existing.filter(~pl.col("symbol").is_in(drop_symbols))
+    merged = (
+        incoming if existing.is_empty()
+        else pl.concat([existing, incoming], how="diagonal_relaxed")
+    )
+    deduped = merged.unique(subset=["symbol", "date"], keep="last")
+    dropped = merged.height - deduped.height
+    if dropped:
+        logger.warning("enriched 分区去重: 丢弃 %d 行重复 (symbol, date)", dropped)
+    return deduped.sort(["symbol", "date"])
+
+
 # ================================================================
 # 异动偏离列 (deviate_3d/10d/30d)
 #
@@ -1772,11 +1801,10 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                     out = enriched_base / f"date={ds}" / "part.parquet"
                     out.parent.mkdir(parents=True, exist_ok=True)
                     date_df_storage = _select_storage_cols(date_df)
-                    if out.exists():
-                        existing = pl.read_parquet(out)
-                        existing = existing.filter(~pl.col("symbol").is_in(list(sym_set)))
-                        date_df_storage = pl.concat([existing, date_df_storage], how="diagonal_relaxed")
-                    date_df_storage = date_df_storage.sort(["symbol"])
+                    existing = pl.read_parquet(out) if out.exists() else pl.DataFrame()
+                    date_df_storage = _merge_enriched_rows(
+                        existing, date_df_storage, drop_symbols=list(sym_set),
+                    )
                     publication.write_parquet(date_df_storage, out)
                     written += date_df.height
                 logger.info("除权重算: %d 只, 共写入 %d 行", len(sym_set), written)
@@ -1885,11 +1913,10 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                         out = base / f"date={ds}" / "part.parquet"
                         out.parent.mkdir(parents=True, exist_ok=True)
                         date_df_storage = _select_storage_cols(date_df)
-                        if out.exists():
-                            existing = pl.read_parquet(out)
-                            existing = existing.filter(~pl.col("symbol").is_in(batch_syms))
-                            date_df_storage = pl.concat([existing, date_df_storage], how="diagonal_relaxed")
-                        date_df_storage = date_df_storage.sort(["symbol"])
+                        existing = pl.read_parquet(out) if out.exists() else pl.DataFrame()
+                        date_df_storage = _merge_enriched_rows(
+                            existing, date_df_storage, drop_symbols=list(batch_syms),
+                        )
                         publication.write_parquet(date_df_storage, out)
                         written += date_df_storage.height
                 else:
@@ -1970,7 +1997,9 @@ def _run_pipeline_impl(data_dir: Path | None = None,
                     ds_str = ds.isoformat() if hasattr(ds, "isoformat") else str(ds)
                     out = base / f"date={ds_str}" / "part.parquet"
                     out.parent.mkdir(parents=True, exist_ok=True)
-                    publication.write_parquet(date_df.sort(["symbol"]), out)
+                    publication.write_parquet(
+                        _merge_enriched_rows(pl.DataFrame(), date_df), out,
+                    )
             gc.collect()
             logger.info("全量暂存合并完成: %d 个日期分区", len(unique_dates))
     finally:

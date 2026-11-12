@@ -277,13 +277,20 @@ PIDS+=("$!")
 if command -v curl >/dev/null 2>&1; then
   info "等待后端就绪..."
   # 上限 180s: 服务器上加载 DuckDB 视图 / 迁移可能数十秒, 2-3s 的窗口不够
-  for _ in $(seq 1 99999); do
+  backend_ready=0
+  for _ in $(seq 1 360); do
     if curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$BACKEND_PORT/health"; then
       ok "后端已就绪"
+      backend_ready=1
       break
     fi
     sleep 0.5
   done
+  if [[ "$backend_ready" -ne 1 ]]; then
+    err "后端 180s 内未就绪(/health 无响应), 不启动前端 —— 看上方 [backend] 日志排查"
+    kill_tree "${PIDS[0]}"   # 不留孤儿后端
+    exit 1
+  fi
 else
   warn "未找到 curl, 跳过后端就绪等待"
 fi

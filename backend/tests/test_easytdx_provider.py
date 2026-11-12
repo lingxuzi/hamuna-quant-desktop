@@ -32,6 +32,8 @@ class _FakeClient:
         self.quote_rows: list[dict] = []
         self.quote_calls: list[dict] = []
         self.list_rows: list[dict] = []
+        self.security_rows: list[dict] = []
+        self.security_error: Exception | None = None
         self.xdxr: dict[str, object] = {}
         self.xdxr_calls: list[str] = []
         self.xdxr_client_ids: list[int] = []
@@ -72,6 +74,11 @@ class _FakeClient:
     def quote_list(self, category_name="A", count=6000):
         self.quote_calls.append({"category": category_name, "count": count})
         return list(self.list_rows)
+
+    def security_list(self):
+        if self.security_error:
+            raise self.security_error
+        return list(self.security_rows)
 
     def xdxr_events(self, symbol):
         self.xdxr_calls.append(symbol)
@@ -191,6 +198,31 @@ def test_daily_one_symbol_failure_does_not_drop_others(provider):
     df = p.get_daily(syms, datetime(2026, 11, 6), datetime(2026, 11, 6))
 
     assert set(df["symbol"].to_list()) == {"600000.SH", "600002.SH"}
+
+
+def test_daily_iter_reports_symbol_failure(provider):
+    """单票拉取失败经 on_symbol_failed 回调上报 (上层据此上浮 stage_error)。"""
+    p, fake = provider
+    syms = ["600000.SH", "600001.SH"]
+    for s in syms:
+        fake.kline_by_symbol[s] = [_bar(date(2026, 11, 6))]
+
+    def kline(symbol, *, period_name, count):
+        if symbol == "600001.SH":
+            raise EasyTdxError("节点断连")
+        return fake.kline_by_symbol[symbol]
+
+    fake.kline = kline
+    failed: list[tuple[str, str]] = []
+
+    frames = list(p.iter_daily(
+        syms, datetime(2026, 11, 6), datetime(2026, 11, 6),
+        on_symbol_failed=lambda symbol, reason: failed.append((symbol, reason)),
+    ))
+
+    assert [s for s, _ in failed] == ["600001.SH"]
+    # 失败票只出空帧, 不影响其余标的
+    assert set(frames[0]["symbol"].to_list()) == {"600000.SH"}
 
 
 def test_daily_keeps_input_symbol_order(provider):
@@ -569,6 +601,36 @@ def test_instruments_converts_wan_shares_to_shares(provider):
 def test_instruments_rejects_non_stock(provider):
     p, _ = provider
     assert p.get_instruments("etf") == []
+
+
+# ---------------------------------------------------------------- 代码解析
+def test_resolve_symbols_maps_bare_code_to_exchange(provider):
+    """裸代码 → 带后缀完整代码 (标准协议全市场证券列表)。"""
+    p, fake = provider
+    fake.security_rows = [
+        {"market": 1, "code": "600519", "name": "贵州茅台"},
+        {"market": 0, "code": "000001", "name": "平安银行"},
+        {"market": 2, "code": "920374", "name": "云里物里"},
+    ]
+    assert p.resolve_symbols(["600519", "000001", "920374", "999999"]) == {
+        "600519": "600519.SH",
+        "000001": "000001.SZ",
+        "920374": "920374.BJ",
+    }
+
+
+def test_resolve_symbols_ignores_suffixed_codes(provider):
+    p, fake = provider
+    fake.security_rows = [{"market": 1, "code": "600519", "name": "贵州茅台"}]
+    assert p.resolve_symbols(["600519.SH"]) == {}
+
+
+def test_resolve_symbols_raises_when_code_table_unavailable(provider):
+    """代码表取不到 → 抛 EasyTdxError; 调用方据此降级, 不当成"代码不存在"。"""
+    p, fake = provider
+    fake.security_error = EasyTdxError("节点断连")
+    with pytest.raises(EasyTdxError):
+        p.resolve_symbols(["600519"])
 
 
 # ---------------------------------------------------------------- 声明与可用性

@@ -11,9 +11,16 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 import polars as pl
+import pytest
 
-from app.services import kline_sync
 from app.data_providers.repository import DataStore, KlineRepository
+from app.services import kline_sync
+
+
+@pytest.fixture
+def no_live(monkeypatch):
+    """默认: 全市场代码表不可用 (源不通) → 裸符号退回代码前缀推断。"""
+    monkeypatch.setattr(kline_sync, "_live_symbol_index", lambda codes: None)
 
 
 def _write_instruments(data_dir, symbols: list[str]) -> None:
@@ -55,7 +62,7 @@ def _route_provider(monkeypatch, provider):
     )
 
 
-def test_normalize_maps_bare_via_instruments_and_dedups(tmp_path):
+def test_normalize_maps_bare_via_instruments_and_dedups(tmp_path, no_live):
     _write_instruments(tmp_path, ["600000.SH", "000001.SZ"])
 
     out, resolved, skipped = kline_sync._normalize_bare_symbols(
@@ -67,26 +74,72 @@ def test_normalize_maps_bare_via_instruments_and_dedups(tmp_path):
     assert skipped == []
 
 
-def test_normalize_without_instruments_skips_all_bare(tmp_path, caplog):
+def test_normalize_without_instruments_infers_suffix_by_code_prefix(tmp_path, caplog, no_live):
+    """维表缺失 + 代码表不可用时按代码前缀推断, 不能把整批裸符号跳过。"""
     out, resolved, skipped = kline_sync._normalize_bare_symbols(["600000", "000001.SZ"], tmp_path)
 
-    assert out == ["000001.SZ"]
-    assert resolved == {}
-    assert skipped == ["600000"]
+    assert out == ["600000.SH", "000001.SZ"]
+    assert resolved == {"600000": "600000.SH"}
+    assert skipped == []
     assert any("维表不可用" in r.message for r in caplog.records)
 
 
-def test_normalize_skips_ambiguous_bare(tmp_path):
-    _write_instruments(tmp_path, ["830001.BJ", "830001.SH", "600000.SH"])
+def test_normalize_prefers_live_code_table_over_prefix(tmp_path, monkeypatch):
+    """全市场代码表是权威口径: 000001 归上证, 不按前缀猜成深市平安银行。"""
+    monkeypatch.setattr(
+        kline_sync, "_live_symbol_index",
+        lambda codes: {"000001": "000001.SH", "600000": "600000.SH"},
+    )
+
+    out, resolved, skipped = kline_sync._normalize_bare_symbols(["000001", "600000"], tmp_path)
+
+    assert out == ["000001.SH", "600000.SH"]
+    assert resolved == {"000001": "000001.SH", "600000": "600000.SH"}
+    assert skipped == []
+
+
+def test_normalize_skips_codes_absent_from_live_table(tmp_path, monkeypatch, caplog):
+    """代码表里没有的代码 → 显式跳过, 不用前缀规则编一个后缀。"""
+    monkeypatch.setattr(kline_sync, "_live_symbol_index", lambda codes: {})
 
     out, resolved, skipped = kline_sync._normalize_bare_symbols(["830001", "600000"], tmp_path)
 
+    assert out == []
+    assert resolved == {}
+    assert skipped == ["830001", "600000"]
+    assert any("不在全市场代码表内" in r.message for r in caplog.records)
+
+
+def test_normalize_disambiguates_by_code_prefix(tmp_path, no_live):
+    """同代码多交易所(000001.SZ 平安 / 000001.SH 上证)按前缀消歧。"""
+    _write_instruments(tmp_path, ["000001.SZ", "000001.SH", "600000.SH"])
+
+    out, resolved, skipped = kline_sync._normalize_bare_symbols(["000001", "600000"], tmp_path)
+
+    assert out == ["000001.SZ", "600000.SH"]
+    assert resolved == {"000001": "000001.SZ", "600000": "600000.SH"}
+    assert skipped == []
+
+
+def test_normalize_infers_bj_and_shenzhen_codes(tmp_path, no_live):
+    """北交所/深市/ETF 裸代码按前缀补出正确后缀。"""
+    out, _resolved, skipped = kline_sync._normalize_bare_symbols(
+        ["830001", "300750", "159558", "510300"], tmp_path,
+    )
+
+    assert out == ["830001.BJ", "300750.SZ", "159558.SZ", "510300.SH"]
+    assert skipped == []
+
+
+def test_normalize_skips_undecidable_bare(tmp_path, no_live):
+    """判不出交易所的代码仍显式跳过, 不带着已知无效的符号发请求。"""
+    out, _resolved, skipped = kline_sync._normalize_bare_symbols(["ABCDEF", "600000"], tmp_path)
+
     assert out == ["600000.SH"]
-    assert resolved == {"600000": "600000.SH"}
-    assert skipped == ["830001"]
+    assert skipped == ["ABCDEF"]
 
 
-def test_sync_reports_zero_rows_in_caller_spelling(monkeypatch, tmp_path, caplog):
+def test_sync_reports_zero_rows_in_caller_spelling(monkeypatch, tmp_path, caplog, no_live):
     """裸符号无维表可补 → 跳过; 带后缀但上游空 payload → 0 行; 均按原始写法回报。"""
     caplog.set_level(logging.WARNING, logger="app.services.kline_sync")
     repo = KlineRepository(DataStore(tmp_path))
@@ -101,11 +154,11 @@ def test_sync_reports_zero_rows_in_caller_spelling(monkeypatch, tmp_path, caplog
     )
 
     assert written == 1
-    assert zero == ["999999.SZ", "600000"]  # 0 行标的 + 被跳过的裸符号
+    assert zero == ["600000", "999999.SZ"]  # 0 行标的 (按调用方原始写法)
     assert any("入库 0 行" in r.message for r in caplog.records)
 
 
-def test_sync_daily_path_normalizes_and_reports_zero(monkeypatch, tmp_path):
+def test_sync_daily_path_normalizes_and_reports_zero(monkeypatch, tmp_path, no_live):
     _write_instruments(tmp_path, ["600000.SH"])
     repo = KlineRepository(DataStore(tmp_path))
     provider = _Provider([])   # 上游 200 空 payload → 全部 0 行
@@ -126,7 +179,7 @@ def test_sync_daily_path_normalizes_and_reports_zero(monkeypatch, tmp_path):
     assert zero == ["600000", "000001.SH"]
 
 
-def test_api_sync_batch_returns_zero_row_symbols(monkeypatch, tmp_path):
+def test_api_sync_batch_returns_zero_row_symbols(monkeypatch, tmp_path, no_live):
     from app.api import kline as kline_api
 
     _write_instruments(tmp_path, ["600000.SH"])

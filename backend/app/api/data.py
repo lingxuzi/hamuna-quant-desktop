@@ -193,11 +193,27 @@ def _safe_aggregate(repo, view: str) -> dict | None:
     }
 
 
-def _safe_aggregate_daily(repo, view: str = "kline_daily") -> dict | None:
-    """日K轻量统计 — 零数据扫描。
+def _count_view_rows(repo, view: str) -> int:
+    """视图行数 — count(*) 只读 parquet footer，不读数据列（247 分区实测 ~20ms）。
 
-    从分区目录名获取日期范围和交易日数，不读任何 parquet。
-    标的数从 instruments 小表获取（~5000行，毫秒级）。
+    日K / 日K增强 曾把行数写死 0（当时为躲开一次全表扫描），数据页因此显示
+    「行数为空」，看着像数据丢了。count(*) 的代价远低于扫表，不该省。
+    """
+    try:
+        row = repo.execute_one(f"SELECT count(*) FROM {view}")
+        if row and row[0]:
+            return int(row[0])
+    except Exception as e:  # noqa: BLE001
+        logger.debug("count %s failed: %s", view, e)
+    return 0
+
+
+def _safe_aggregate_daily(repo, view: str = "kline_daily") -> dict | None:
+    """日K轻量统计 — 不读数据列。
+
+    日期范围和交易日数从分区目录名获取（不扫 parquet），
+    标的数从 instruments 小表获取（~5000行，毫秒级），
+    行数走视图 count(*)（只读 footer）。
     """
     daily_dir = repo.store.data_dir / "kline_daily"
     if not daily_dir.exists():
@@ -213,7 +229,7 @@ def _safe_aggregate_daily(repo, view: str = "kline_daily") -> dict | None:
     symbols = _count_instruments_symbols(repo)
 
     return {
-        "rows": 0,
+        "rows": _count_view_rows(repo, view),
         "earliest_date": dates[0],
         "latest_date": dates[-1],
         "symbols_covered": symbols,
@@ -222,11 +238,11 @@ def _safe_aggregate_daily(repo, view: str = "kline_daily") -> dict | None:
 
 
 def _safe_aggregate_enriched(repo) -> dict | None:
-    """Enriched 轻量统计 — 零数据扫描。
+    """Enriched 轻量统计 — 不读数据列。
 
     字段数从 DESCRIBE 读 schema（不碰数据），毫秒级。
     日期范围从分区目录名获取（同 minute 策略），不读任何 parquet。
-    标的数从 instruments 小表取。
+    标的数从 instruments 小表取，行数走视图 count(*)。
     """
     # 字段数：读 schema，不碰数据
     fields = 0
@@ -251,7 +267,7 @@ def _safe_aggregate_enriched(repo) -> dict | None:
     symbols = _count_instruments_symbols(repo)
 
     return {
-        "rows": 0,
+        "rows": _count_view_rows(repo, "kline_enriched"),
         "fields": fields,
         "earliest_date": dates[0],
         "latest_date": dates[-1],

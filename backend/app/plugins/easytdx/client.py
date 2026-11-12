@@ -189,6 +189,27 @@ class EasyTdxClient:
             return []
         return df.to_dict("records")
 
+    # ---- 证券列表(标准协议) ----
+    def security_list(self) -> list[dict]:
+        """标准协议全市场证券列表 → [{market, code, name}]。
+
+        与 MAC 通道 (quote_list) 相互独立: 服务器只通标准协议节点时, 全市场
+        代码仍拿得到 → 裸代码补交易所后缀不用靠前缀规则猜。
+        沪深 A 股走 easy_tdx 自带缓存 (get_security_list_all, 1 天),
+        北交所标准协议单页可取 (README 说 BJ 列表超时的老问题, 本机实测正常)。
+        """
+        top = self._require("easy_tdx")
+        with self._lock:
+            df = self._guard("全市场证券列表", self._std_client().get_security_list_all)
+            bj = self._guard(
+                "北交所证券列表", self._std_client().get_security_list, top.Market.BJ, 0)
+        rows: list[dict] = []
+        for frame in (df, bj):
+            if frame is None or frame.empty:
+                continue
+            rows.extend(frame[["market", "code", "name"]].to_dict("records"))
+        return rows
+
     # ---- 除权事件(标准协议) ----
     def xdxr_events(self, symbol: str) -> list[dict]:
         """除权除息事件 → [{date, category, fenhong, peigujia, songzhuangu, peigu}]。

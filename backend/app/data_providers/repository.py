@@ -193,8 +193,24 @@ class DataStore:
         # DuckDB 内存模式 — 不建 .db 文件(§7.1)
         with startup_phase(logger, "DuckDB connection"):
             self.db = duckdb.connect(database=":memory:")
+            self._apply_duckdb_limits()
         with startup_phase(logger, "DuckDB view registration"):
             self._register_views()
+
+    def _apply_duckdb_limits(self) -> None:
+        """限制 DuckDB 的线程与内存, 防止与 polars 叠加吃满物理内存。
+
+        DuckDB 默认按整机预算 (threads=核数, memory_limit≈物理内存80%) 配置,
+        与本进程 polars 的内存占用互不知情。同步/重算期间两者叠加会触发 swap,
+        所有接口一起变慢。配置为 0/空 时保持 DuckDB 默认。
+        """
+        try:
+            if settings.duckdb_threads > 0:
+                self.db.execute(f"SET threads = {settings.duckdb_threads}")
+            if settings.duckdb_memory_limit:
+                self.db.execute(f"SET memory_limit = '{settings.duckdb_memory_limit}'")
+        except Exception as e:  # noqa: BLE001 — 资源限制失败不应阻塞启动
+            logger.warning("DuckDB 资源限制设置失败 (保持默认): %s", e)
 
     def _migrate_legacy_data_dir(self) -> None:
         """把旧版数据目录迁移到当前位置 (打包桌面版, 首次启动自动搬迁)。

@@ -18,6 +18,7 @@ import polars as pl
 
 from app.market_time import cn_now, cn_today
 from app.services.fs_utils import atomic_write_parquet, atomic_write_text
+from app.symbols import symbol_of_code
 
 logger = logging.getLogger(__name__)
 
@@ -656,7 +657,9 @@ def normalize_symbol(series: pl.Series, lookup: dict[str, str] | None = None) ->
     """将 symbol 列标准化为 代码.交易所 格式。
 
     优先使用 instruments 维表查找 code → symbol，确保 100% 准确。
-    查不到时按规则兜底：6开头 → .SH，其余 → .SZ。
+    查不到时按统一的前缀规则判定交易所 (app.symbols): 北交所 43/83/87/92
+    开头 → .BJ, 6 开头 → .SH, 其余深市代码 → .SZ; 判不出交易所的代码原样
+    返回, 不编造后缀。
     """
     _lookup = lookup or {}
 
@@ -672,11 +675,8 @@ def normalize_symbol(series: pl.Series, lookup: dict[str, str] | None = None) ->
             mapped = _lookup.get(val)
             if mapped:
                 return mapped
-            # 兜底规则
-            if val.startswith(("6",)):
-                return f"{val}.SH"
-            else:
-                return f"{val}.SZ"
+            # 兜底规则: 按代码前缀判定交易所
+            return symbol_of_code(val) or val
         return val
 
     return series.map_elements(_fix_one, return_dtype=pl.Utf8)

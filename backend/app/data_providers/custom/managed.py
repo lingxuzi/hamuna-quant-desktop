@@ -1,6 +1,8 @@
 """Keep a provider alive until its last call / streaming iterator completes."""
 from __future__ import annotations
 
+import contextlib
+import inspect
 import logging
 import threading
 from collections.abc import Iterator
@@ -99,4 +101,9 @@ class ManagedProvider:
                 return _Stream(result, lambda: self._release(entry))
             self._release(entry)
             return result
+
+        # 转发层签名是 (*args, **kwargs); 挂上真实签名, 调用方自省
+        # (如「provider 是否支持某可选回调参数」)才看得到底层契约。
+        with contextlib.suppress(TypeError, ValueError):
+            invoke.__signature__ = inspect.signature(value)
         return invoke

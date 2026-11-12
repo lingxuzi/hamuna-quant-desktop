@@ -429,6 +429,7 @@ class EasyTdxProvider:
         end_time: datetime | None,
         asset_type: str = "stock",
         on_chunk_done: Callable[[int, int], None] | None = None,
+        on_symbol_failed: Callable[[str, str], None] | None = None,
     ) -> Iterator[pl.DataFrame]:
         """并发拉日K(每页 700 根由库内部翻页) → 原始价契约帧。
 
@@ -437,6 +438,9 @@ class EasyTdxProvider:
         聚帧: 每 _DAILY_FRAME_SYMBOLS 只聚成一帧 —— 落盘侧按 (帧 × 日期) 写
         staging 小文件, 逐只一帧会写出「标的数 × 天数」个文件(全市场一年 =
         139 万个), 聚帧后是「帧数 × 天数」。
+
+        on_symbol_failed(symbol, reason): 可选回调, 单票拉取失败时触发 ——
+        上层据此把单票失败上浮为阶段错误, 不与「窗口内无数据」混为一谈。
         """
         if not symbols:
             if on_chunk_done:
@@ -454,6 +458,8 @@ class EasyTdxProvider:
                 bars = conn.kline(symbol, period_name="DAILY", count=count)
             except EasyTdxError as e:
                 logger.warning("EasyTdx 日K %s 拉取失败: %s", symbol, e)
+                if on_symbol_failed:
+                    on_symbol_failed(symbol, str(e))
                 bars = []
             rows = self._daily_rows(symbol, bars, start_d, end_d)
             if rows and start_d is not None and rows[0]["date"] > start_d:
@@ -750,6 +756,28 @@ class EasyTdxProvider:
                 if symbol not in seen:
                     seen.add(symbol)
                     out.append(self._instrument_row(symbol, {"name": name}, asset_type))
+        return out
+
+    def resolve_symbols(self, codes: list[str]) -> dict[str, str]:
+        """裸代码 → 带交易所后缀的完整代码 (权威: 标准协议全市场证券列表)。
+
+        日K 同步的裸符号 (自选里手打的 600519) 用它补后缀, 不靠代码前缀猜:
+        市场里不存在的代码不返回 → 调用方显式跳过, 不带着无效代码发请求。
+        代码表本身取不到 → 抛 EasyTdxError (与"代码不存在"是两回事, 调用方
+        据此降级, 不能把取不到当成不存在)。
+        """
+        want = {str(c) for c in codes if c and "." not in str(c)}
+        if not want:
+            return {}
+        rows = self._get_client().security_list()
+        out: dict[str, str] = {}
+        for row in rows:
+            code = str(row.get("code") or "")
+            if code not in want:
+                continue
+            symbol = _symbol_of(row.get("market"), code)
+            if symbol:
+                out.setdefault(code, symbol)
         return out
 
     @staticmethod

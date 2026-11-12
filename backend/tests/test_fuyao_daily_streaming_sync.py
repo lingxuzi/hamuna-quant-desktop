@@ -75,7 +75,9 @@ def test_sync_promotes_staged_files_without_reading_them_back(monkeypatch, repo)
 
     assert written == 2
     parts = sorted((repo.store.data_dir / "kline_daily" / "date=2020-01-02").glob("*.parquet"))
-    assert len(parts) == 2
+    # 同一日期的多个 chunk 合成一个分区文件 (逐 chunk 落文件会堆出上千碎片)
+    assert len(parts) == 1, f"一个日期应只落一个分区文件: {[p.name for p in parts]}"
+    assert parts[0].name == "part.parquet"
     stored = pl.concat([pl.read_parquet(part) for part in parts])
     assert set(stored["symbol"].to_list()) == {"000001.SZ", "000002.SZ"}
 

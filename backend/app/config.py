@@ -150,7 +150,14 @@ class Settings(BaseSettings):
 
     # 同步路由 (def) 线程池容量: Starlette/anyio 默认 40。看板自动刷新 +
     # 多标签页 + 长计算路由并存时 40 容易排队, 调大仅提高上限 (按需创建)。
-    api_sync_thread_pool: int = 100
+    api_sync_thread_pool: int = 32
+
+    # DuckDB 资源上限 — 默认 threads=CPU核数、memory_limit≈物理内存80% 是**单进程**
+    # 预算, 与本进程的 polars 内存互不知情。同步期间两者叠加会吃满物理内存触发
+    # zram 换页, 所有接口一起卡住 (2026-11-12 实测: 15GB 机器 available 仅剩 3GB,
+    # zram 已用 11GB)。设为 0 表示交给 DuckDB 默认。
+    duckdb_threads: int = 4
+    duckdb_memory_limit: str = "4GB"
 
     # Auth — 首次启动时预置访问密码(明文, 仅用于初始化, 详见 services/auth.bootstrap_from_env)
     # 公网服务器部署时免去 SSH 端口转发设密码的麻烦。写入 auth.json(哈希)后即不再读取。

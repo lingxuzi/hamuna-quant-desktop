@@ -155,8 +155,11 @@ class MyProvider:
         """日K: [symbol, date, open, high, low, close, volume, amount]; 不复权"""
 
     def iter_daily(self, symbols, start_time, end_time, asset_type="stock",
-                   on_chunk_done=None) -> Iterator[pl.DataFrame]:
-        """(可选)有界分批返回与 get_daily 同形的日K; 全市场历史同步优先消费。"""
+                   on_chunk_done=None, on_symbol_failed=None) -> Iterator[pl.DataFrame]:
+        """(可选)有界分批返回与 get_daily 同形的日K; 全市场历史同步优先消费。
+        on_symbol_failed(symbol, reason): (可选)单标的拉取失败时回调 ——
+        上层据此把单票失败上浮为阶段错误, 不与「窗口内无数据」混淆 (#514)。
+        未声明该参数的源不受影响: 服务层自省签名后只给声明了的源传它。"""
 
     def get_adj_factors(self, symbols, start_time, end_time, asset_type="stock",
                         on_chunk_done=None) -> pl.DataFrame:
@@ -193,6 +196,12 @@ class MyProvider:
 
     def get_instruments(self, asset_type="stock") -> list[dict]:
         """(可选)标的维表: 返回内置源 Instrument 形状的行, 供 instrument_sync 复用 flatten"""
+
+    def resolve_symbols(self, codes: list[str]) -> dict[str, str]:
+        """(可选)裸代码 → 带交易所后缀的完整代码, 如 {"600519": "600519.SH"}。
+        日K 同步遇到无后缀的自选代码时用它补全 (本地维表缺该代码时);
+        市场里不存在的代码不返回 → 服务层显式跳过, 不带着无效代码发请求。
+        代码表本身取不到时抛异常 (与"代码不存在"是两回事), 服务层据此降级。"""
 
     def test_dataset(self, dataset: str, symbols=None) -> dict:
         """(强烈建议)设置页"试拉"按钮。
@@ -267,7 +276,7 @@ provider 不应自行切换或回退到其他数据源。
 | `get_depth_batch` | 单批异常由服务隔离并保留其他批次; 不跨数据源回退 |
 | `get_minute` | 抛异常时调用方自动回退内置源 easytdx 重试 |
 | `get_daily` / `get_adj_factors` / `get_financials` | 异常由上层同步流程捕获记录; 无数据返回空 DataFrame |
-| `iter_daily` | 可选; 每批必须符合 `get_daily` 契约。流正常结束后才提交 staging; 未捕获异常会丢弃 staging。provider 内已定义的单标的软失败语义保持不变 |
+| `iter_daily` | 可选; 每批必须符合 `get_daily` 契约。流正常结束后才提交 staging; 未捕获异常会丢弃 staging。provider 内已定义的单标的软失败语义保持不变; 单票拉取失败可经 `on_symbol_failed` 回调上报(未声明该参数的源按「入库 0 行」回报) |
 
 `iter_daily` 用于避免大范围日K同步在 provider 内累积完整 DataFrame。实现该方法后,
 `kline_sync` 会优先消费它; 未实现的 provider 继续调用 `get_daily`,保持兼容。批次大小应有

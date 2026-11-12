@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import contextlib
+import inspect
 import logging
 import shutil
 import time
@@ -26,6 +27,7 @@ from app.indicators.pipeline import filter_halt_days
 from app.market_time import CN_TZ, cn_now, cn_today
 from app.services import minute_adjust, preferences
 from app.services.shared_work import SharedWork, WorkBusyError
+from app.symbols import exchange_of_code
 
 logger = logging.getLogger(__name__)
 
@@ -160,15 +162,47 @@ def _instruments_symbol_index(data_dir) -> dict[str, list[str]] | None:
     return index
 
 
+def _live_symbol_index(codes: list[str]) -> dict[str, str] | None:
+    """向生效日K源 (或默认源) 要全市场代码表 → {裸代码: 完整符号}。
+
+    内置 easytdx 走标准协议证券列表 (与 MAC 行情通道独立), 权威且含北交所;
+    比本地维表全 (维表是 MAC 快照, 缺新上市代码)。源不提供该能力 / 调用
+    失败 → 返回 None, 调用方退回代码前缀推断。
+    """
+    from app.data_providers import custom as custom_sources
+    from app.data_providers.capabilities import default_provider_for
+
+    for name in (preferences.get_data_provider("daily"), default_provider_for("daily")):
+        if not name or not custom_sources.is_custom_provider(name):
+            continue
+        try:
+            provider = custom_sources.get_provider(name)
+        except ValueError:
+            continue
+        resolver = getattr(provider, "resolve_symbols", None)
+        if not callable(resolver):
+            continue
+        try:
+            return resolver(codes) or {}
+        except Exception as e:  # noqa: BLE001 — 补全失败不该中断同步
+            logger.warning("日K同步: 数据源 %s 全市场代码表获取失败: %s", name, e)
+            return None
+    return None
+
+
 def _normalize_bare_symbols(
     symbols: list[str], data_dir,
 ) -> tuple[list[str], dict[str, str], list[str]]:
-    """裸符号(无交易所后缀, 如 600000)按 instruments 维表补全为 600000.SH (#302)。
+    """裸符号(无交易所后缀, 如 600000)补全为 600000.SH (#302)。
 
     返回 (规范化后的去重请求列表, {裸符号: 补全后符号}, 被跳过的裸符号)。
     上游对裸符号返回 200 空 payload, 本地静默写 0 行 — 补全失败时显式跳过并告警,
     不再带着已知无效的符号发请求。全部带后缀时不读维表, 行为与开销同旧版;
     带后缀符号原样透传, 由上游照常处理。
+
+    补全顺序: 维表唯一匹配(权威) → 全市场代码表(权威, 维表缺失或不含时) →
+    代码前缀推断(代码表不可用时兜底) → 都判不出才跳过。维表缺失不该让
+    整批裸符号写不进去。
     """
     bare = [s for s in symbols if "." not in s]
     if not bare:
@@ -177,23 +211,50 @@ def _normalize_bare_symbols(
     index = _instruments_symbol_index(data_dir)
     resolved: dict[str, str] = {}
     skipped: list[str] = []
+    pending: list[str] = []
     for s in bare:
         matches = (index or {}).get(s, [])
         if len(matches) == 1:
             resolved[s] = matches[0]
+        elif matches:
+            # 同代码多交易所 (000001.SZ 平安 / 000001.SH 上证) → 按前缀消歧
+            suffix = exchange_of_code(s)
+            inferred = f"{s}.{suffix}" if suffix else None
+            resolved[s] = inferred if inferred in matches else matches[0]
         else:
+            pending.append(s)
+
+    # 维表缺失/不含该代码 → 向数据源要全市场代码表 (权威, 比维表全)
+    live = _live_symbol_index(pending) if pending else None
+    for s in pending:
+        if live is not None:
+            sym = live.get(s)
+            if sym:
+                resolved[s] = sym
+            else:
+                skipped.append(s)
+            continue
+        suffix = exchange_of_code(s)
+        if suffix is None:
             skipped.append(s)
+        else:
+            resolved[s] = f"{s}.{suffix}"
 
     if index is None:
         logger.warning(
-            "日K同步: instruments 维表不可用, %d 个裸符号(无交易所后缀)将被跳过 — "
-            "请先同步标的维表, 或改用带后缀符号 (如 600000.SH)", len(skipped))
-    elif skipped:
-        logger.warning(
-            "日K同步: %d 个裸符号在维表中无唯一匹配(不支持或非股票), 已跳过: %s",
-            len(skipped), skipped[:20])
+            "日K同步: instruments 维表不可用, %d 个裸符号改用全市场代码表补全后缀 (建议先同步标的维表)",
+            len(resolved))
+    if skipped:
+        if live is not None:
+            logger.warning(
+                "日K同步: %d 个裸符号不在全市场代码表内(代码不存在), 已跳过: %s",
+                len(skipped), skipped[:20])
+        else:
+            logger.warning(
+                "日K同步: %d 个裸符号无法判定交易所(非 6 位 A 股代码), 已跳过: %s",
+                len(skipped), skipped[:20])
     if resolved:
-        logger.info("日K同步: 已按维表补全 %d 个裸符号后缀 (样例: %s)",
+        logger.info("日K同步: 已补全 %d 个裸符号后缀 (样例: %s)",
                     len(resolved), list(resolved.items())[:5])
 
     out: list[str] = []
@@ -234,15 +295,43 @@ def sync_daily_batch(symbols: list[str],
         # 交易日 ≈ 自然日 × 5/7, 留一周冗余给停牌
         start_time = end_time - timedelta(days=int(count * 7 / 5) + 5)
     out: list[pl.DataFrame] = []
+    failed_syms: list[str] = []
+    kwargs: dict = dict(start_time=start_time, end_time=end_time, on_chunk_done=on_chunk_done)
+    kwargs.update(_symbol_failure_sink(provider, failed_syms))
     for frame in iter_custom_daily_frames(
-        provider, symbols, asset_type="stock",
-        start_time=start_time, end_time=end_time, on_chunk_done=on_chunk_done,
+        provider, symbols, asset_type="stock", **kwargs,
     ):
         if not frame.is_empty():
             out.append(frame)
+    if failed_out is not None and failed_syms:
+        failed_out.extend(failed_syms)
     if not out:
         return pl.DataFrame()
     return pl.concat(out, how="diagonal_relaxed")
+
+
+def _symbol_failure_sink(provider, failed_syms: list[str]) -> dict:
+    """provider 声明了逐标的失败回调时, 返回 {"on_symbol_failed": cb}; 否则 {}。
+
+    逐票失败通道是可选契约: 只有声明 on_symbol_failed 的源才收这个参数
+    (不声明的源传了会 TypeError)。有通道时单票拉取失败与「窗口内无数据」
+    分开记账 —— 后者走 zero_row_out, 前者上浮 stage_errors (#514)。
+    """
+    fn = getattr(provider, "iter_daily", None)
+    if not callable(fn):
+        return {}
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return {}
+    if "on_symbol_failed" not in params:
+        return {}
+
+    def _on_failed(symbol: str, reason: str) -> None:
+        failed_syms.append(symbol)
+        logger.warning("日K同步: 标的 %s 拉取失败: %s", symbol, reason)
+
+    return {"on_symbol_failed": _on_failed}
 
 
 def iter_custom_daily_frames(provider, symbols, *, asset_type="stock", **kwargs):
@@ -312,8 +401,9 @@ def sync_and_persist_daily_batch(
     zero_row_out: 可选出参。本轮实际入库 0 行的标的(含无法识别被跳过的裸符号、
                   上游 200 空 payload 的静默 0 行)按调用方原始写法追加进该 list,
                   供上层 fail-loud 展示, 不再"显示成功实则全空" (#302)。
-    failed_out: 可选出参。分块拉取失败(超时/异常)的标的, 供上层把单票失败
-                上浮为 stage_errors 而非静默当成功 (#514)。
+    failed_out: 可选出参。provider 逐票拉取失败(超时/断连)的标的, 供上层把
+                单票失败上浮为 stage_errors 而非静默当成功 (#514)。
+                源未实现逐票失败通道时该 list 保持为空 (这些标的按 0 行回报)。
     """
     seen: set[str] = set()
     failed_syms: list[str] = []
@@ -322,7 +412,7 @@ def sync_and_persist_daily_batch(
     def _finalize(written: int) -> int:
         if failed_out is not None and failed_syms:
             # 单票失败上浮给调用方 (daily_pipeline 汇入 stage_errors, #514)
-            failed_out.extend(failed_syms)
+            failed_out.extend(orig_by_full.get(s, s) for s in failed_syms)
         zero_full = [s for s in requested if s not in seen and s not in failed_syms]
         if zero_full or skipped_bare:
             zero = [orig_by_full.get(s, s) for s in zero_full] + skipped_bare
@@ -366,6 +456,7 @@ def sync_and_persist_daily_batch(
                 start_time=start_time,
                 end_time=end_time,
                 on_chunk_done=on_chunk_done,
+                **_symbol_failure_sink(provider, failed_syms),
             )),
             repo,
         ))
@@ -384,6 +475,26 @@ def sync_and_persist_daily_batch(
     repo.refresh_view("kline_daily", f"{d}/kline_daily/**/*.parquet")
     return _finalize(df.height)
 
+# staging 缓冲的行数上限: 同一日期的 chunk 先在内存里合成一个文件再落盘。
+# 内存驻留量 = 上限 + 一个 chunk, 与历史长度无关。
+_STAGE_BATCH_ROWS = 200_000
+
+
+def _write_daily_stage(pending: dict[str, list[pl.DataFrame]], root: Path, index: int) -> None:
+    """把缓冲的各日期帧写成 staging 文件 (每个日期一个文件)。
+
+    index 是落盘批次号: 文件名按批次递增, 合并时「后写的批次覆盖先写的」,
+    与流式取数的时序一致。
+    """
+    for ds, frames in pending.items():
+        out_dir = root / f"date={ds}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        df = frames[0] if len(frames) == 1 else pl.concat(frames, how="diagonal_relaxed")
+        # 同一天里同一 symbol 出现多次 → 只留最后一条 (与落盘侧去重契约一致)
+        df = df.unique(subset=["symbol", "date"], keep="last").sort(["symbol", "date"])
+        df.write_parquet(out_dir / f"part-{index}.parquet")
+
+
 def _persist_daily_chunks(chunks, repo: KlineRepository) -> int:
     """先把流式 provider 结果写入私有 staging,完整取数后再提交正式分区。"""
     staging_base = repo.store.data_dir / ".daily_sync_staging"
@@ -391,16 +502,30 @@ def _persist_daily_chunks(chunks, repo: KlineRepository) -> int:
     root = staging_base / uuid.uuid4().hex
     written = 0
     try:
-        for index, df in enumerate(chunks):
+        # chunk 逐个落文件时, 全市场一天会写出「chunk 数」个碎片 (实测 5578 个):
+        # 每个小文件在本机约 20-40ms (逐文件 open/write), 一次同步光写 staging
+        # 就要几分钟; 碎片数还会线性放大 DuckDB 视图注册 (逐文件读 footer +
+        # union_by_name)。这里按行数上限先把多个 chunk 合成一个文件再落盘,
+        # 文件数从「chunk 数 × 天数」降到「总行数 / 上限 × 天数」。
+        pending: dict[str, list[pl.DataFrame]] = {}
+        pending_rows = 0
+        stage_index = 0
+        for df in chunks:
             if df.is_empty():
                 continue
             for date_df in df.partition_by("date"):
                 dt = date_df["date"][0]
                 ds = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
-                out = root / f"date={ds}" / f"part-{index}.parquet"
-                out.parent.mkdir(parents=True, exist_ok=True)
-                date_df.write_parquet(out)
+                pending.setdefault(ds, []).append(date_df)
+                pending_rows += date_df.height
                 written += date_df.height
+            if pending_rows >= _STAGE_BATCH_ROWS:
+                _write_daily_stage(pending, root, stage_index)
+                stage_index += 1
+                pending.clear()
+                pending_rows = 0
+        if pending:
+            _write_daily_stage(pending, root, stage_index)
 
         for date_dir in sorted(root.glob("date=*")):
             files = sorted(date_dir.glob("*.parquet"))
@@ -408,17 +533,21 @@ def _persist_daily_chunks(chunks, repo: KlineRepository) -> int:
                 continue
             target_dir = repo.store.data_dir / "kline_daily" / date_dir.name
             target_dir.mkdir(parents=True, exist_ok=True)
+            # 分区里可能同时存在历史碎片 (part-stream-*.parquet) 与正式分区
+            # (part.parquet), 只读一个文件会让同一 (symbol, date) 散在多文件里重复。
             existing = sorted(target_dir.glob("*.parquet"))
-            if not existing:
-                for index, staged in enumerate(files):
-                    replace_with_retry(staged, target_dir / f"part-stream-{index}.parquet")
+            if not existing and len(files) == 1:
+                # 单个 staging 文件 → 直接改名成正式分区, 不回读 staging
+                # (整段历史不驻留内存, 也不产生第二个分区文件)。
+                replace_with_retry(files[0], target_dir / "part.parquet")
                 continue
-            base = pl.scan_parquet(existing).collect(engine="streaming")
+            # 多文件或已有分区: 按日期回读合并, 内存里只驻留一天的数据。
             incoming = pl.scan_parquet(files).collect(engine="streaming")
-            merged = pl.concat([base, incoming], how="diagonal_relaxed").unique(
-                subset=["symbol", "date"], keep="last"
-            )
-            repo.append_daily(merged)
+            if existing:
+                base = pl.scan_parquet(existing).collect(engine="streaming")
+                incoming = pl.concat([base, incoming], how="diagonal_relaxed")
+            # append_daily 内部按 (symbol, date) 去重并原子写成单个 part.parquet
+            repo.append_daily(incoming)
             for part in target_dir.glob("part-stream-*.parquet"):
                 part.unlink(missing_ok=True)
     finally:
