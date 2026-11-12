@@ -19,7 +19,7 @@ import {
   useQuoteStatus,
   useVersion,
 } from '@/lib/useSharedQueries'
-import { useUpdateCheck } from '@/lib/updateCheck'
+import { useUpdateCheck, RELEASES_URL } from '@/lib/updateCheck'
 import {
   useToggleRealtimeQuotes,
 } from '@/lib/useSharedMutations'
@@ -994,14 +994,16 @@ export function Layout() {
               <b className="inline-flex items-center gap-1.5">
                 {version || '—'}
                 {hasUpdate && (
-                  <button
-                    onClick={() => navigate('/settings?tab=about&autoupdate=1')}
+                  <a
+                    href={update.info?.url ?? RELEASES_URL}
+                    target="_blank"
+                    rel="noreferrer"
                     className="inline-flex items-center text-amber-400 transition-transform hover:scale-110 animate-breath"
-                    title={`发现新版本 ${update.info?.latest ?? ''}，点击检查更新`}
-                    aria-label="检查更新"
+                    title={`发现新版本 ${update.info?.latest ?? ''}，点击前往下载`}
+                    aria-label="前往下载新版本"
                   >
                     <Download className="h-[11px] w-[11px]" />
-                  </button>
+                  </a>
                 )}
               </b>
             </span>

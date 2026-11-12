@@ -5,7 +5,7 @@
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Settings2, Trash2, RefreshCw, Bell, Volume2, ExternalLink, ZoomIn, Minus, Plus, ShieldCheck, RotateCcw, ChevronDown, Layers, Upload, MemoryStick } from 'lucide-react'
+import { Settings2, Trash2, RefreshCw, Bell, Volume2, ExternalLink, ZoomIn, Minus, Plus, ShieldCheck, RotateCcw, ChevronDown, Layers, Upload, MemoryStick, Scale, ScrollText } from 'lucide-react'
 import { usePreferences } from '@/lib/useSharedQueries'
 import { api } from '@/lib/api'
 import type { UpgradeGuardCategory } from '@/lib/api'
@@ -13,6 +13,8 @@ import { toast } from '@/components/Toast'
 import { QK } from '@/lib/queryKeys'
 import { PageHeader } from '@/components/PageHeader'
 import { SectionHead } from '@/components/SectionHead'
+import { OssLicenseDialog, LicenseComplianceNotice } from '@/components/OssLicenseDialog'
+import { PROJECT_LICENSE_NAME, PROJECT_REPO_URL } from '@/data/ossLicenses'
 import { ExtensionSlot } from '@/extensions/ExtensionSlot'
 import { refreshAlertToastConfig } from '@/components/AlertToast'
 import { mergeSoundOptions, previewSound, CUSTOM_SOUND_PREFIX } from '@/lib/notificationSound'
@@ -42,6 +44,8 @@ export function SettingsSystemPanel() {
   const screenerAutoRun = prefs?.screener_auto_run ?? true
   const [extTpl, setExtTpl] = useState(() => loadStockExternalTemplate())
   const [clearing, setClearing] = useState(false)
+  // 开源许可弹窗 (本项目 LICENSE 全文 + 第三方组件许可清单)
+  const [licenseOpen, setLicenseOpen] = useState(false)
 
   // ===== 界面缩放 (桌面客户端无浏览器缩放快捷键, CSS zoom 作用于 <html>) =====
   const [pageZoom, setPageZoomState] = useState(() => getPageZoom())
@@ -541,6 +545,60 @@ export function SettingsSystemPanel() {
       </section>
 
       <UpgradeGuardCard />
+
+      <section className="mt-10">
+        <SectionHead icon={Scale} title="版权与许可" className="mb-4" />
+
+        <div className="rowset">
+          <div className="r">
+            <div className="lab">
+              <b>© 2026 tick-stock-panel contributors</b>
+              <small>基于 MIT 协议开源 · 遵照协议分发时须保留版权与许可声明</small>
+            </div>
+            <div className="ctl">
+              <span className="shrink-0 border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
+                {PROJECT_LICENSE_NAME}
+              </span>
+              <a
+                href={PROJECT_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="ctl-btn ctl-sm"
+              >
+                <ExternalLink className="h-[12px] w-[12px]" />
+                仓库
+              </a>
+              <button
+                onClick={() => setLicenseOpen(true)}
+                className="ctl-btn ctl-sm"
+              >
+                <ScrollText className="h-[12px] w-[12px]" />
+                查看许可
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 图表组件署名与许可链接 — 官方要求用户可达页面保留署名与链接 */}
+        <div className="mt-3 border-t border-border pt-3 text-[11px] leading-relaxed text-secondary">
+          <p>
+            图表组件：
+            <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+              TradingView Lightweight Charts™
+            </a>
+          </p>
+          <p className="mt-1">Copyright (с) 2025 TradingView, Inc.</p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <a href="/third-party/lightweight-charts/LICENSE" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Apache-2.0 许可</a>
+            <a href="/third-party/lightweight-charts/NOTICE" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">NOTICE</a>
+          </div>
+        </div>
+
+        {/* 许可合规声明 — 醒目警示 */}
+        <LicenseComplianceNotice compact />
+      </section>
+
+      {licenseOpen && <OssLicenseDialog onClose={() => setLicenseOpen(false)} />}
     </>
   )
 }

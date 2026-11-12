@@ -7,7 +7,7 @@ import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Database, KeyRound, LayoutGrid, Library, Radio, Sparkles, Settings2, PanelLeftClose, PanelLeftOpen, Clock3, Info, PackageOpen } from 'lucide-react'
+import { Database, KeyRound, LayoutGrid, Library, Radio, Sparkles, Settings2, PanelLeftClose, PanelLeftOpen, Clock3, PackageOpen } from 'lucide-react'
 import { toast } from '@/components/Toast'
 // 面板按 tab 按需加载: 8 个面板源码 270KB+, 同步打包会让设置页 chunk 膨胀
 const SettingsAIPanel = lazy(() => import('./settings/AI').then(m => ({ default: m.SettingsAIPanel })))
@@ -18,7 +18,6 @@ const SettingsMonitoringPanel = lazy(() => import('./settings/Monitoring').then(
 const SettingsPageAdminPanel = lazy(() => import('./settings/PageAdmin').then(m => ({ default: m.SettingsPageAdminPanel })))
 const SettingsTimeoutPanel = lazy(() => import('./settings/Timeout').then(m => ({ default: m.SettingsTimeoutPanel })))
 const SettingsSystemPanel = lazy(() => import('./settings/System').then(m => ({ default: m.SettingsSystemPanel })))
-const SettingsAboutPanel = lazy(() => import('./settings/About').then(m => ({ default: m.SettingsAboutPanel })))
 const SettingsDataSourcesPanel = lazy(() => import('./settings/DataSources').then(m => ({ default: m.SettingsDataSourcesPanel })))
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/cn'
@@ -49,7 +48,6 @@ const TABS: readonly TabDef[] = [
   { key: 'definitions', label: '定义目录',   icon: Library,    panel: SettingsDefinitionsPanel },
   { key: 'import',     label: '导入与备份', icon: PackageOpen, panel: SettingsImportCenterPanel },
   { key: 'system',     label: '系统设置',   icon: Settings2,  panel: SettingsSystemPanel },
-  { key: 'about',      label: '关于',       icon: Info,       panel: SettingsAboutPanel },
 ]
 
 // 「页面管理」归拢前的三个 tab key → 深链子区块, 历史链接零失效
