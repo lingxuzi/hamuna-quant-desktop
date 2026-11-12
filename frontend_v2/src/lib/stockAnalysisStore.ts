@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { api, friendlyStreamError, type PriceLevel, type LevelType } from './api'
+import { cnToday } from '@/lib/cnDate'
 
 /**
  * AI 个股分析 —— 全局任务/报告 store(与 aiReportStore 解耦、并行存在)。
@@ -153,7 +154,7 @@ export async function findLatestHistoryReport(symbol: string): Promise<HistoryRe
  */
 export async function findTodayReport(symbol: string): Promise<HistoryReport | null> {
   if (!historyLoaded) await loadHistory()
-  const today = new Date().toISOString().slice(0, 10)  // YYYY-MM-DD
+  const today = cnToday()
   return history.find(r => r.symbol === symbol && (r.created_at ?? '').slice(0, 10) === today) ?? null
 }
 

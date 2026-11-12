@@ -20,6 +20,7 @@ import { useCapabilities, usePreferences } from '@/lib/useSharedQueries'
 import { SealedBadge } from '@/components/SealedBadge'
 import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
 import type { ExtColumnDisplayConfig } from '@/lib/watchlist-columns'
+import { cnToday } from '@/lib/cnDate'
 
 // ===== Ext 字段配置 =====
 
@@ -1565,7 +1566,7 @@ export function LimitUpLadder() {
     )
   }
 
-  const dateValue = displayDate || new Date().toISOString().slice(0, 10)
+  const dateValue = displayDate || cnToday()
 
   // 工具条左侧状态签 (设计稿 .tb-left): 涨跌停家数 + 封板状态 + 梯队口径
   const headerChips = (

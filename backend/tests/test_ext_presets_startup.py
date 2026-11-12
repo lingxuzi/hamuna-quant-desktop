@@ -17,7 +17,9 @@ from pathlib import Path
 
 from app.services.ext_data import ExtConfigStore, PullConfig
 from app.services.ext_presets import (
+    _FACTORY_SCHEDULE_MINUTES,
     _RETIRED_FACTORY_PULLS,
+    _RETIRED_FACTORY_SCHEDULE_MINUTES,
     _concept_preset,
     _industry_preset,
     ensure_builtin_presets,
@@ -180,3 +182,50 @@ def test_ensure_builtin_presets_syncs_retired_factory_description(tmp_path: Path
     final = ExtConfigStore(tmp_path).get("ext_gn_ths")
     assert final is not None
     assert final.description == "我自己的概念表, 别动"
+
+
+# ------------------------------------------------------- 出厂频率降频迁移
+def test_factory_schedule_is_weekly() -> None:
+    """出厂频率 7 天一轮: 板块成分按月调整, 每天 710 次调用纯属浪费。"""
+    for preset in (_concept_preset(), _industry_preset()):
+        assert preset.pull is not None
+        assert preset.pull.schedule_minutes == _FACTORY_SCHEDULE_MINUTES
+    assert _FACTORY_SCHEDULE_MINUTES == 7 * 24 * 60
+
+
+def test_ensure_builtin_presets_downgrades_legacy_factory_schedule(tmp_path: Path) -> None:
+    """存量出厂配方 + 出厂频率(每天) → 跟着降频。"""
+    asyncio.run(ensure_builtin_presets(tmp_path))
+    store = ExtConfigStore(tmp_path)
+
+    for cid in _PRESET_IDS:
+        config = store.get(cid)
+        assert config is not None and config.pull is not None
+        config.pull.schedule_minutes = _RETIRED_FACTORY_SCHEDULE_MINUTES
+        store.upsert(config)
+
+    asyncio.run(ensure_builtin_presets(tmp_path))
+
+    for cid in _PRESET_IDS:
+        refreshed = ExtConfigStore(tmp_path).get(cid)
+        assert refreshed is not None and refreshed.pull is not None
+        assert refreshed.pull.schedule_minutes == _FACTORY_SCHEDULE_MINUTES, (
+            f"{cid} 存量出厂频率未降频"
+        )
+
+
+def test_ensure_builtin_presets_keeps_custom_schedule(tmp_path: Path) -> None:
+    """用户自己调过频率 → 不动 (哪怕配方还是出厂的)。"""
+    asyncio.run(ensure_builtin_presets(tmp_path))
+    store = ExtConfigStore(tmp_path)
+
+    config = store.get("ext_gn_ths")
+    assert config is not None and config.pull is not None
+    config.pull.schedule_minutes = 60
+    store.upsert(config)
+
+    asyncio.run(ensure_builtin_presets(tmp_path))
+
+    refreshed = ExtConfigStore(tmp_path).get("ext_gn_ths")
+    assert refreshed is not None and refreshed.pull is not None
+    assert refreshed.pull.schedule_minutes == 60, "用户自定义频率被静默改写"

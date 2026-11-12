@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { MissingCapChip } from '@/lib/capability-labels'
+import { cnAddDays } from '@/lib/cnDate'
 
 // hasCap: 日K批量能力当前是否可用 (路由矩阵判定, 生效源含插件/自定义源)
 export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }: {
@@ -26,13 +27,7 @@ export function ExtendHistoryPanel({ hasCap, isRunning, earliestDate, onStart }:
   })
 
   const offsetDays = unit === 'month' ? value * 30 : value * 365
-  const estimate = earliestDate
-    ? (() => {
-        const d = new Date(earliestDate)
-        d.setDate(d.getDate() - offsetDays)
-        return d.toISOString().slice(0, 10)
-      })()
-    : null
+  const estimate = earliestDate ? cnAddDays(earliestDate, -offsetDays) : null
 
   return (
     <div className="px-4 pb-4 pt-3 border-t border-accent/20 space-y-3">

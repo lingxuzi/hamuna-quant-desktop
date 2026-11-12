@@ -48,14 +48,10 @@ import { BacktestEvidencePanel } from './components/BacktestEvidencePanel'
 import { buildDailyNavItems, buildTradeKeyMap, buildTradesNavItems, type TradeNavItem } from './tradeNav'
 import { INPUT_MD, SELECT_MD } from '@/components/controls'
 import { cn } from '@/lib/cn'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
-const formatDate = (date: Date) => date.toISOString().slice(0, 10)
-const monthsAgo = (months: number) => {
-  const date = new Date()
-  date.setMonth(date.getMonth() - months)
-  return formatDate(date)
-}
-const TODAY = formatDate(new Date())
+const monthsAgo = (months: number) => cnAddMonths(cnToday(), -months)
+const TODAY = cnToday()
 const THREE_MONTHS_AGO = monthsAgo(3)
 
 type QuickRangeUnit = 'month' | 'year' | 'all'
@@ -140,7 +136,7 @@ function FillRuleHint() {
         aria-label="查看成交时序说明"
         aria-expanded={open}
         title="查看成交时序说明"
-        className="ctl ctl-sm ctl-ghost inline-flex w-[24px] px-0 items-center justify-center text-yellow-500/80 hover:text-yellow-500"
+        className="inline-flex h-[14px] w-[14px] items-center justify-center rounded-[2px] text-yellow-500/80 hover:bg-elevated hover:text-yellow-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[hsl(var(--accent))]"
       >
         <HelpCircle className="h-3.5 w-3.5" />
       </button>
@@ -168,6 +164,16 @@ function FillRuleHint() {
           </>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+/** 成交口径字段 — 标签 + 控件。建仓/清仓两列同款 (标签行、边距、控件壳一致)。 */
+function FillField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[10.5px] text-secondary">{label}</label>
+      {children}
     </div>
   )
 }
@@ -1393,12 +1399,12 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
 
   const applyRange = (months: number) => {
     setStart(monthsAgo(months))
-    setEnd(formatDate(new Date()))
+    setEnd(cnToday())
   }
 
   const applyAllRange = () => {
     setStart(earliestDate ?? '')
-    setEnd(formatDate(new Date()))
+    setEnd(cnToday())
   }
 
   // 进入页面/还在加载时就点了"全部": earliestDate 就绪后回填, 让 DatePicker 显示真实起始日
@@ -1965,18 +1971,17 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
         </div>
 
         <div>
-          <div className="figcap">成 交 方 式</div>
+          <div className="mb-2 flex items-center gap-1">
+            <div className="figcap mb-0">成 交 方 式</div>
+            <FillRuleHint />
+          </div>
           <div className="grid grid-cols-2 gap-2">
-          <div>
-            <div className="mb-1.5 flex items-center gap-1">
-              <label className="text-[10.5px] text-secondary">建仓口径</label>
-              <FillRuleHint />
-            </div>
+          <FillField label="建仓口径">
             {isMinuteStrategy ? (
-              <div className={`${INPUT_CLS} flex items-center gap-1.5`} title="信号在盘中触发分钟成交，无次日开盘口径">
-                <Clock className="h-[12px] w-[12px] text-sky-400 shrink-0" />
+              <div className={cn(INPUT_CLS, 'flex items-center gap-1.5 font-sans')} title="信号在盘中触发分钟成交，无次日开盘口径">
+                <Clock className="h-[12px] w-[12px] shrink-0 text-sky-400" />
                 <span className="text-secondary">信号分钟收盘</span>
-                <span className="text-[8px] px-1 py-px rounded border border-sky-500/30 bg-sky-500/10 text-sky-400">分钟</span>
+                <span className="ml-auto shrink-0 rounded border border-sky-500/30 bg-sky-500/10 px-1 py-px text-[8px] text-sky-400">分钟</span>
               </div>
             ) : (
               <select value={entryFill} onChange={e => setEntryFill(e.target.value as 'close_t' | 'open_t+1')} className={SELECT_CLS}>
@@ -1984,9 +1989,8 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
                 <option value="close_t">信号日收盘</option>
               </select>
             )}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10.5px] text-secondary">清仓口径</label>
+          </FillField>
+          <FillField label="清仓口径">
             <select
               value={exitFill}
               onChange={e => setExitFill(e.target.value as 'close_t' | 'open_t+1' | 'signal_next_minute')}
@@ -1998,7 +2002,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
                 <option value="signal_next_minute">信号触发卖出 BETA</option>
               )}
             </select>
-          </div>
+          </FillField>
           {!isMinuteStrategy && (entryFill === 'close_t' || exitFill === 'close_t') && (
             <div className="col-span-2 flex items-start gap-1 text-[10px] leading-4 text-warning">
               <AlertTriangle className="mt-0.5 h-[12px] w-[12px] shrink-0" />

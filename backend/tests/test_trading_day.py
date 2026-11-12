@@ -126,6 +126,25 @@ def test_easytdx_fallback_failure_is_unknown(monkeypatch):
     assert is_trading_day(monday) is None
 
 
+def test_easytdx_probe_timeout_does_not_block_caller(monkeypatch):
+    """建连卡住 (选主机超时) → 主线程按未知返回, 不拖住轮询线程。"""
+    import time as _t
+
+    from app.data_providers import custom as custom_sources
+
+    monday = datetime(2026, 9, 7, 10, 0, tzinfo=CN)
+    monkeypatch.setattr(trading_day, "_probe_fuyao", lambda now: None)
+    monkeypatch.setattr(trading_day, "_EASYTDX_PROBE_TIMEOUT_S", 0.05)
+
+    class _Slow:
+        def get_minute(self, *args, **kwargs):
+            _t.sleep(2)
+            return pl.DataFrame({"datetime": []})
+
+    monkeypatch.setattr(custom_sources, "get_provider", lambda name: _Slow())
+    assert is_trading_day(monday) is None
+
+
 def test_concurrent_cold_oracle_requests_share_one_upstream_probe(monkeypatch):
     import threading
     import time

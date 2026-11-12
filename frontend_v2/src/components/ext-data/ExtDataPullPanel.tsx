@@ -9,6 +9,7 @@ import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
 import { QK } from '@/lib/queryKeys'
 import { SectionHead, INPUT_CLS, FIELD_MD_CLS, SELECT_MD_CLS } from './dialogShared'
 import { Switch } from '@/components/Switch'
+import { cnAddDays, cnToday } from '@/lib/cnDate'
 
 const AUTH_TYPE_LABELS: Record<ExtPullAuth['type'], string> = {
   none: '无',
@@ -300,8 +301,8 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
   const [error, setError] = useState('')
 
   // 历史回补 (仅 timeseries + 接口支持按日查询)
-  const today = new Date().toISOString().slice(0, 10)
-  const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10)
+  const today = cnToday()
+  const monthAgo = cnAddDays(today, -30)
   const [bfStart, setBfStart] = useState(monthAgo)
   const [bfEnd, setBfEnd] = useState(today)
   const [bfRunning, setBfRunning] = useState(false)

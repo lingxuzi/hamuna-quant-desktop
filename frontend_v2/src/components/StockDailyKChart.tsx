@@ -8,6 +8,7 @@ import { OVERLAY_INDICATORS, SUB_CHART_META } from '@/lib/chart-indicators'
 import { CHART_LAYOUT, dailyChartHeight } from '@/lib/chart-layout'
 import { Switch } from '@/components/Switch'
 import { selectCls } from '@/components/controls'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
 const EChartsCandlestick = lazy(() => import('./EChartsCandlestick').then(m => ({ default: m.EChartsCandlestick })))
 const LightweightDaily = lazy(() => import('./charts/LightweightDaily').then(m => ({ default: m.LightweightDaily })))
@@ -107,12 +108,8 @@ function buildLimitMarkers(rows: KlineRow[], includeLimitDown: boolean): ChartMa
 }
 
 export function getDefaultRange(): { start: string; end: string } {
-  const now = new Date()
-  const end = now.toISOString().slice(0, 10)
-  const s = new Date(now)
-  s.setMonth(s.getMonth() - 6)
-  const start = s.toISOString().slice(0, 10)
-  return { start, end }
+  const end = cnToday()
+  return { start: cnAddMonths(end, -6), end }
 }
 
 /** 工具栏小胶囊开关（指标与标注开关共用一套尺寸/关闭态样式，激活色由调用方给字面量）。 */

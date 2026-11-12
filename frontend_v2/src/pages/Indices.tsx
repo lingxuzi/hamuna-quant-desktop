@@ -8,13 +8,11 @@ import { useCapabilities } from '@/lib/useSharedQueries'
 import { PageHeader } from '@/components/PageHeader'
 import { EChartsCandlestick, type OHLC } from '@/components/EChartsCandlestick'
 import { EChartsIntraday } from '@/components/EChartsIntraday'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
 function defaultRange() {
-  const now = new Date()
-  const end = now.toISOString().slice(0, 10)
-  const s = new Date(now)
-  s.setMonth(s.getMonth() - 6)
-  return { start: s.toISOString().slice(0, 10), end }
+  const end = cnToday()
+  return { start: cnAddMonths(end, -6), end }
 }
 
 function toOHLC(rows: KlineRow[]): OHLC[] {

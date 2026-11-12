@@ -2562,7 +2562,10 @@ class KlineRepository:
                         if paths else pl.DataFrame())
             keep = existing.filter(~pl.col("symbol").is_in(symbols)) if not existing.is_empty() else existing
             incoming = frame.filter(pl.col("date") == day) if not frame.is_empty() else frame
-            merged = pl.concat([keep, incoming], how="diagonal_relaxed").sort(["symbol", "date"])
+            # 修补同样要唯一: incoming 里有重复行时不加 unique, 污染会被原样写回
+            merged = pl.concat([keep, incoming], how="diagonal_relaxed").unique(
+                subset=["symbol", "date"], keep="last",
+            ).sort(["symbol", "date"])
             if merged.equals(existing) and len(paths) <= 1:
                 continue
             with self._write_lock:
@@ -2731,11 +2734,13 @@ class KlineRepository:
         重试耗尽退回锁内直读直写 (正确性优先, 牺牲隔离性)。
         """
         def _merge(existing: pl.DataFrame) -> pl.DataFrame:
-            if existing.is_empty():
-                return incoming.sort(["symbol", "date"])
-            return pl.concat([existing, incoming], how="diagonal_relaxed").unique(
-                subset=["symbol", "date"], keep="last"
-            ).sort(["symbol", "date"])
+            # incoming 在后 → keep="last" 让新值覆盖旧值; 空分区也走去重,
+            # 免得重复行直接落盘。
+            return (
+                pl.concat([existing, incoming], how="diagonal_relaxed")
+                .unique(subset=["symbol", "date"], keep="last")
+                .sort(["symbol", "date"])
+            )
 
         for _ in range(retries):
             existing = pl.read_parquet(out) if out.exists() else pl.DataFrame()
@@ -2868,8 +2873,35 @@ class KlineRepository:
             return
         self.flush_live_daily_asset("stock", df)
 
+    @staticmethod
+    def _read_partition_dir(part_dir: Path) -> tuple[pl.DataFrame, list[Path]]:
+        """读出分区内全部 parquet; 返回合并帧与读过的文件列表。
+
+        分区里可能同时存在回补留下的 part-stream-*.parquet 与实时的 part.parquet,
+        只读一个文件会让同一 (symbol, date) 散在多个文件里重复。
+        """
+        paths = sorted(part_dir.glob("*.parquet"))
+        if not paths:
+            return pl.DataFrame(), []
+        return pl.concat([pl.read_parquet(p) for p in paths], how="diagonal_relaxed"), paths
+
+    @staticmethod
+    def _merge_live_rows(base: pl.DataFrame, incoming: pl.DataFrame) -> pl.DataFrame:
+        """当日分区落盘的唯一性契约: 新值覆盖旧值, (symbol, date) 唯一。
+
+        - 快照里同一 symbol 会有多条 (实测 5572 条记录 / 5559 个唯一 symbol),
+          不去重会让分区出现重复行, 回测矩阵直接拒绝;
+        - 盘中快照会变残缺 (实测「行情刷新」只数从 5574 降到 4672), 盲覆写会把
+          整天洗掉 (11-09 的 enriched 分区曾因此只剩 23 行)。
+        """
+        return (
+            pl.concat([base, incoming], how="diagonal_relaxed")
+            .unique(subset=["symbol", "date"], keep="last")
+            .sort(["symbol", "date"])
+        )
+
     def flush_live_daily_asset(self, asset_type: str, df: pl.DataFrame) -> None:
-        """覆写当天指定资产日K分区 (实时行情落盘, 非merge)。"""
+        """落盘当天指定资产日K分区 (新值覆盖旧值, 本轮未出现的标的保留旧行)。"""
         if df.is_empty() or "date" not in df.columns:
             return
         table = {
@@ -2884,10 +2916,13 @@ class KlineRepository:
         ds = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
         out = base / f"date={ds}" / "part.parquet"
         out.parent.mkdir(parents=True, exist_ok=True)
-        # 覆写语义: 排序在锁外, 锁内只做原子替换。
-        df_sorted = df.sort(["symbol", "date"])
+        base_frame, read_paths = self._read_partition_dir(out.parent)
+        merged = self._merge_live_rows(base_frame, df)
         with self._write_lock:
-            self._atomic_write_parquet(df_sorted, out)
+            self._atomic_write_parquet(merged, out)
+            for path in read_paths:
+                if path != out:
+                    path.unlink(missing_ok=True)
 
     def flush_live_enriched(self, df: pl.DataFrame) -> None:
         """覆写当天 kline_daily_enriched 分区 (实时 enriched 落盘, 非merge)。
@@ -2897,9 +2932,13 @@ class KlineRepository:
         self.flush_live_enriched_asset("stock", df)
 
     def flush_live_enriched_asset(self, asset_type: str, df: pl.DataFrame) -> None:
-        """覆写当天指定资产 enriched 分区 (实时 enriched 落盘, 非merge)。"""
+        """落盘当天指定资产 enriched 分区 (新值覆盖旧值, 本轮未出现的标的保留旧行)。"""
         if df.is_empty() or "date" not in df.columns:
             return
+        # 快照里同一 symbol 会出现多条 (实测 5572 条记录 / 5559 个唯一 symbol)。
+        # 去重放在最前面: 落盘与内存缓存一起干净 —— 缓存带重复会被下一轮当成
+        # 「昨日状态」再 join 一次, 行数每轮 ×4 (实测 11-10 分区 477042 行)。
+        df = df.unique(subset=["symbol", "date"], keep="last")
         dt = df["date"][0]
         cache_df = self._with_instrument_metadata(asset_type, df).sort(["symbol"])
         if asset_type == "stock":
@@ -2923,11 +2962,16 @@ class KlineRepository:
             if asset_type in {"stock", "etf"}
             else None
         )
-        # 覆写语义: 读旧内容只为跳过无变化的写, 读在锁外 (误判最多造成一次
-        # 冗余覆写, 不影响正确性); 锁内只做替换 + commit。
+        # 新值覆盖旧值 + 保留本轮未出现的标的; 读在锁外 (误判最多造成一次
+        # 冗余写, 不影响正确性); 锁内只做替换 + commit。
+        base_frame, read_paths = self._read_partition_dir(out.parent)
+        merged = self._merge_live_rows(base_frame, df_storage)
         existing = pl.read_parquet(out) if out.exists() else pl.DataFrame()
         with self._write_lock:
-            self._write_partition_locked(out, df_storage, existing, publication)
+            self._write_partition_locked(out, merged, existing, publication)
+            for path in read_paths:
+                if path != out:
+                    path.unlink(missing_ok=True)
 
         if asset_type == "stock":
             self._enriched_cache = cache_df

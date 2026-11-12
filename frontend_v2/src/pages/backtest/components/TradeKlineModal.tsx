@@ -9,6 +9,7 @@ import { useListNav } from '@/lib/useListNav'
 import { tradeNavKey, type TradeNavItem } from '../tradeNav'
 import { fmtPct, fmtPrice, priceColorClass } from '@/lib/format'
 import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
+import { cnAddDays } from '@/lib/cnDate'
 
 /** 单笔回放来自哪个入口: 决定切交易时同步翻哪张表的页 */
 export type TradeNavSource = 'daily' | 'trades'
@@ -25,9 +26,7 @@ interface Props {
 }
 
 function addDays(date: string, days: number): string {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return cnAddDays(date, days)
 }
 
 function fmtMoney(v: number | null | undefined): string {

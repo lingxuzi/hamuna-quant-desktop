@@ -1,5 +1,7 @@
 // 数字 / 价格 / 涨跌幅 格式化(§6.0.2 等宽数字)
 
+import { cnDateStr, cnToday } from './cnDate'
+
 export function fmtPrice(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return '—'
   return v.toFixed(digits)
@@ -76,10 +78,6 @@ const CN_DATE_TIME = new Intl.DateTimeFormat('en-CA', {
   hour: '2-digit', minute: '2-digit', second: '2-digit',
   hourCycle: 'h23',
 })
-const CN_DATE = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric', month: '2-digit', day: '2-digit',
-})
 
 /** naive UTC 串 → Date; 空/非法返回 null。naive 串按 UTC 解析, 已带偏移的保持原样。 */
 function parseUtcNaive(utcIso: string | null | undefined): Date | null {
@@ -92,7 +90,7 @@ function parseUtcNaive(utcIso: string | null | undefined): Date | null {
 /** naive UTC ISO 串 → 北京日期 'YYYY-MM-DD'; 空/非法返回 ''。 */
 export function cnDateFromUtc(utcIso: string | null | undefined): string {
   const d = parseUtcNaive(utcIso)
-  return d ? CN_DATE.format(d) : ''
+  return d ? cnDateStr(d) : ''
 }
 
 /** naive UTC ISO 串 → 北京日期时间 'YYYY-MM-DD HH:mm:ss'; 空/非法返回 ''。 */
@@ -133,11 +131,7 @@ export function formatScheduleTimePart(iso: string): string {
 }
 
 export function isToday(iso: string): boolean {
-  const d = new Date(iso)
-  const now = new Date()
-  return d.getFullYear() === now.getFullYear()
-    && d.getMonth() === now.getMonth()
-    && d.getDate() === now.getDate()
+  return cnDateFromUtc(iso) === cnToday()
 }
 
 export function formatLogTime(iso: string): string {

@@ -24,6 +24,7 @@ import { navItemKey, type NavItem } from '@/lib/listNav'
 import { useListNav } from '@/lib/useListNav'
 import { DEFAULT_INTRADAY_DAYS } from '@/lib/kline'
 import { ExtensionSlot } from '@/extensions/ExtensionSlot'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
 export interface Props {
   symbol: string | null
@@ -331,19 +332,14 @@ export function StockPreviewDialogContent({ symbol, name, onClose, triggerInfo, 
                   <div className="flex max-w-full flex-wrap items-center gap-2">
                     <div className="inline-flex shrink-0 items-center rounded border border-border/60 bg-base/60 p-0.5">
                     {PRESETS.map(p => {
-                      const now = new Date()
-                      const s = new Date(now)
-                      s.setMonth(s.getMonth() - p.months)
-                      const expected = s.toISOString().slice(0, 10)
+                      const expected = cnAddMonths(cnToday(), -p.months)
                       const isActive = dateRange.start === expected
                       return (
                         <button
                           key={p.label}
                           onClick={() => {
-                            const end = new Date().toISOString().slice(0, 10)
-                            const ns = new Date()
-                            ns.setMonth(ns.getMonth() - p.months)
-                            setDateRange({ start: ns.toISOString().slice(0, 10), end })
+                            const end = cnToday()
+                            setDateRange({ start: cnAddMonths(end, -p.months), end })
                           }}
                           className={`ctl ctl-sm ctl-ghost shrink-0 whitespace-nowrap px-1.5
                             ${isActive

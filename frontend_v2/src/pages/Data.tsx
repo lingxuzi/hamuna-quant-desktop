@@ -51,6 +51,7 @@ import { ExtDataStatCard } from '@/components/ext-data/ExtDataStatCard'
 import { CreateExtDialog } from '@/components/ext-data/CreateExtDialog'
 import { EditExtDialog } from '@/components/ext-data/EditExtDialog'
 import { ExtConfigImportDialog } from '@/components/ext-data/ExtConfigTransfer'
+import { cnAddDays, cnToday } from '@/lib/cnDate'
 
 export function Data() {
   const qc = useQueryClient()
@@ -330,15 +331,10 @@ export function Data() {
   const indexOverviewLabel = s ? '日 · 维表 · 日K · 指标' : undefined
   const indexEarliestDate = s?.index_daily?.earliest_date ?? s?.index_enriched?.earliest_date ?? null
   const indexOffsetDays = indexExtendUnit === 'month' ? indexExtendValue * 30 : indexExtendValue * 365
-  const indexTargetDate = (() => {
-    const d = indexEarliestDate ? new Date(indexEarliestDate) : new Date()
-    d.setDate(d.getDate() - indexOffsetDays)
-    return d
-  })()
-  const indexTargetDateText = indexTargetDate.toISOString().slice(0, 10)
+  const indexTargetDateText = cnAddDays(indexEarliestDate ?? cnToday(), -indexOffsetDays)
   const indexSyncDays = Math.min(
     5000,
-    Math.max(30, Math.ceil((Date.now() - indexTargetDate.getTime()) / 86_400_000) + 1),
+    Math.max(30, Math.ceil((Date.now() - new Date(indexTargetDateText).getTime()) / 86_400_000) + 1),
   )
 
   // 「字段」列只对三张增强表取 schema 计数 (设计稿: 增强 15 / 11 / 12, 原表为 —)

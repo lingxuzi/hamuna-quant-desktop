@@ -14,6 +14,8 @@
   - 出厂值变更时定向迁移: 仅当现有配置的 pull 精确命中历代出厂值时整体替换,
     用户自定义过的一律不碰 (见 _RETIRED_FACTORY_PULLS)。迁移不受播种标记
     限制 — 存活表的出厂配方升级必须继续送达。
+  - 出厂频率变更时定向迁移: 配方仍是出厂 + 频率仍是出厂(每天) → 跟着降频;
+    用户自己调过频率的不碰。
   - 拉取失败只记 warning, 不阻断启动 (保持「没数据也能跑」)。
 
 数据来源 (概念/行业共用 fuyao 同花顺指数接口):
@@ -50,6 +52,11 @@ _FUYAO_TIMEOUT_S = 20.0
 _FUYAO_BOARD_RETRIES = 1
 # 复用 fuyao 行情插件的凭据 (secrets.json: fuyao_api_key / 环境变量 FUYAO_API_KEY)
 _FUYAO_KEY_REF = "fuyao_api_key"
+# 出厂拉取频率: 7 天一轮。板块成分变动很慢 (同花顺行业/概念分类通常按月调整),
+# 每天全量 710 次成分股调用纯属浪费。
+_FACTORY_SCHEDULE_MINUTES = 7 * 24 * 60
+# 历代出厂频率 (每天) —— 存量出厂配置的降频迁移依据
+_RETIRED_FACTORY_SCHEDULE_MINUTES = 1440
 
 _PRESET_IDS = ("ext_gn_ths", "ext_hy_ths")
 
@@ -93,7 +100,7 @@ def _concept_preset() -> ExtConfig:
             response_path="data.item",
             auth=_fuyao_auth(),
             timeout_seconds=int(_FUYAO_TIMEOUT_S),
-            schedule_minutes=1440,
+            schedule_minutes=_FACTORY_SCHEDULE_MINUTES,
             enabled=True,
             fanout={
                 "url": f"{_FUYAO_BASE}{_FUYAO_CONSTITUENTS_PATH}",
@@ -140,7 +147,7 @@ def _industry_preset() -> ExtConfig:
             response_path="data.item",
             auth=_fuyao_auth(),
             timeout_seconds=int(_FUYAO_TIMEOUT_S),
-            schedule_minutes=1440,
+            schedule_minutes=_FACTORY_SCHEDULE_MINUTES,
             enabled=True,
             fanout={
                 "url": f"{_FUYAO_BASE}{_FUYAO_CONSTITUENTS_PATH}",
@@ -212,6 +219,22 @@ def _is_retired_factory_pull(config_id: str, pull: PullConfig | None) -> bool:
     return any(url == retired["url"] for retired in _RETIRED_FACTORY_PULLS.get(config_id, ()))
 
 
+def _is_current_factory_pull(config_id: str, pull: PullConfig | None) -> bool:
+    """现有 pull 是否仍是当前出厂配方 (url + fanout 逐字段一致)。
+
+    用于「只改频率」的定向迁移: 配方没被动过 = 用户没自定义 = 频率可以跟着
+    出厂值走; 改过 url 或 fanout 的不动。
+    """
+    if pull is None:
+        return False
+    factory = get_preset(config_id)
+    if factory is None or factory.pull is None:
+        return False
+    if (pull.url or "").strip() != factory.pull.url:
+        return False
+    return (pull.fanout or {}) == (factory.pull.fanout or {})
+
+
 async def ensure_builtin_presets(data_dir: Path) -> None:
     """启动时: 首次安装创建预设配置, 并把历代出厂空壳/旧配方补齐为当前配方。
 
@@ -222,6 +245,7 @@ async def ensure_builtin_presets(data_dir: Path) -> None:
       - 已存在且是用户自定义配置 → 跳过, 绝不覆盖用户数据
       - 仅当 pull 为空 / 命中历代出厂配方指纹时, 用当前完整配方替换
         (配方迁移不受播种标记限制, 存活表的出厂配方升级必须送达)
+      - 频率: 仅当配方仍是出厂且频率仍是出厂(每天)时降频, 用户自定义不动
       - description 仅当命中出厂前缀时同步, 用户自定义描述不动
       - 只写 config.json (不拉数据), 失败只记 warning 不阻断启动
 
@@ -242,6 +266,15 @@ async def ensure_builtin_presets(data_dir: Path) -> None:
             changed = False
             if _is_retired_factory_pull(config.id, existing.pull):
                 existing.pull = config.pull
+                changed = True
+            elif (
+                existing.pull is not None
+                and existing.pull.schedule_minutes == _RETIRED_FACTORY_SCHEDULE_MINUTES
+                and _is_current_factory_pull(config.id, existing.pull)
+            ):
+                # 降频迁移: 只动「配方仍是出厂 + 频率仍是出厂(每天)」的存量配置。
+                # 用户改过配方或自己调过频率 → 不碰。
+                existing.pull.schedule_minutes = config.pull.schedule_minutes
                 changed = True
             if not (existing.description or "").strip() or \
                     (existing.description or "").startswith(_FACTORY_DESC_PREFIXES):

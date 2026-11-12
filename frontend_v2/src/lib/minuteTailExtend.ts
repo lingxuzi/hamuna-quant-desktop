@@ -9,6 +9,7 @@
 // close 是旧日K回退值 (与当日价可偏离数个百分点), 拼到当日分钟K尾部会把整条
 // 分时压扁并在尾部画出错价长刺; dates 缺失 (旧后端) 同样一律不续画。
 import type { MinuteKlineRow } from '@/lib/api'
+import { cnDateStr, cnHm } from '@/lib/cnDate'
 
 export interface TailExtendLiveRow {
   symbol: string
@@ -28,12 +29,10 @@ export type TailExtendQuoteDates = {
 
 /** 连续竞价时段 (9:31-11:30, 13:01-15:00); 收盘后 rt 价即收盘价无需续写 */
 function inContinuousSession(now: Date): boolean {
-  const hh = now.getHours(), mm = now.getMinutes()
+  const [hh, mm] = cnHm(now).split(':').map(Number)
   return (hh === 9 && mm >= 31) || hh === 10 ||
     (hh === 11 && mm <= 30) || (hh === 13 && mm >= 1) || hh === 14
 }
-
-const pad = (n: number) => String(n).padStart(2, '0')
 
 export function extendMinuteTail(
   base: Record<string, MinuteKlineRow[]>,
@@ -45,9 +44,9 @@ export function extendMinuteTail(
   // fail-closed: 旧后端无 dates 字段时整个续画停用 (退化为纯轮询节奏, 不会画错)
   if (!quoteDates) return base
 
-  // 与服务端同构的 naive 北京时间戳 (手工拼本地时间, 不能用 toISOString — 那是 UTC)
-  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  const barTs = `${todayStr}T${pad(now.getHours())}:${pad(now.getMinutes())}:00`
+  // 与服务端同构的 naive 北京时间戳 (显式按北京时区取, 不能用 toISOString — 那是 UTC)
+  const todayStr = cnDateStr(now)
+  const barTs = `${todayStr}T${cnHm(now)}:00`
 
   const liveBySymbol = new Map(liveRows.map((r) => [r.symbol, r]))
   const patched: Record<string, MinuteKlineRow[]> = {}

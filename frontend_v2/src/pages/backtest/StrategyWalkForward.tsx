@@ -25,9 +25,10 @@ import {
   SweepParamList,
   CombosHint,
 } from './components/paramSweep'
+import { cnAddDays, cnToday } from '@/lib/cnDate'
 
-const TODAY = new Date().toISOString().slice(0, 10)
-const THREE_YEARS_AGO = new Date(Date.now() - 3 * 365 * 864e5).toISOString().slice(0, 10)
+const TODAY = cnToday()
+const THREE_YEARS_AGO = cnAddDays(TODAY, -3 * 365)
 
 /** 训练/测试/步长默认值 — 工具条状态签与本页输入同源 (design/v2/12 「训练 250 / 测试 60」) */
 export const WF_DEFAULT_TRAIN_DAYS = '252'

@@ -35,6 +35,7 @@ import {
   startReviewGeneration, resetReview, isReviewGenerating, cancelReviewGeneration,
   type ReviewPhase,
 } from '@/lib/reviewStore'
+import { cnToday } from '@/lib/cnDate'
 
 // ================================================================
 // 涨跌幅格式化(注意单位差异)
@@ -210,7 +211,7 @@ export function ReviewPage() {
 
   // 自动归档(生成完成后台静默保存)—— 通过回调注入 store,避免 store 直接依赖 qc/marketQuery
   const onGenerationDone = useCallback(async (fullContent: string, doneMeta: { as_of?: string; summary?: string; emotion_score?: number; emotion_label?: string } | null) => {
-    const reportAsOf = doneMeta?.as_of ?? marketQuery.data?.as_of ?? asOf ?? new Date().toISOString().slice(0, 10)
+    const reportAsOf = doneMeta?.as_of ?? marketQuery.data?.as_of ?? asOf ?? cnToday()
     try {
       await api.reviewReportSave({
         as_of: reportAsOf,
@@ -250,7 +251,7 @@ export function ReviewPage() {
   const downloadContent = useCallback(() => {
     const text = viewing?.content ?? content
     if (!text) return
-    const reportDate = viewing?.as_of ?? meta?.as_of ?? asOf ?? new Date().toISOString().slice(0, 10)
+    const reportDate = viewing?.as_of ?? meta?.as_of ?? asOf ?? cnToday()
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

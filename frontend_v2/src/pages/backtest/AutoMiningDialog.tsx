@@ -9,13 +9,12 @@ import { startAutoMining } from '@/lib/miningTask'
 import { QK } from '@/lib/queryKeys'
 import { INPUT_MD } from '@/components/controls'
 import { cn } from '@/lib/cn'
+import { cnAddDays, cnToday } from '@/lib/cnDate'
 
 const INPUT_CLS = cn(INPUT_MD, 'w-full')
 
 function isoDaysAgo(days: number) {
-  const value = new Date()
-  value.setDate(value.getDate() - days)
-  return value.toISOString().slice(0, 10)
+  return cnAddDays(cnToday(), -days)
 }
 
 const PROFILE_ORDER: MiningBudgetProfile[] = ['exploratory', 'balanced', 'strict']
@@ -43,7 +42,7 @@ export function AutoMiningDialog({
   const [profile, setProfile] = useState<MiningBudgetProfile>('balanced')
   const [profileTouched, setProfileTouched] = useState(false)
   const [start, setStart] = useState(isoDaysAgo(365 * 2))
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10))
+  const [end, setEnd] = useState(cnToday())
 
   // 三档可用性: 数据交易日 vs 各档所需; 默认档数据不够时自动落到可用的最高档
   const availabilityArgs = {

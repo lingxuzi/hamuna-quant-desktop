@@ -48,9 +48,10 @@ import { CandidatesPanel } from './ResearchCandidatesDialog'
 import { FactorCorrelationHeatmap } from './charts/FactorCorrelationHeatmap'
 import { MiningOosChart } from './charts/MiningOosChart'
 import { RegimeComparisonChart } from './charts/RegimeComparisonChart'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
 const DRAFT_KEY = 'mining_workbench_draft_v1'
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = cnToday()
 const INPUT = 'ctl ctl-md ctl-input w-full'
 const SELECT = 'ctl ctl-md ctl-select w-full'
 const LABEL = 'mb-1 block text-[10px] font-medium text-secondary'
@@ -97,9 +98,7 @@ interface MiningDraft {
 }
 
 function yearsAgo(years: number) {
-  const value = new Date()
-  value.setFullYear(value.getFullYear() - years)
-  return value.toISOString().slice(0, 10)
+  return cnAddMonths(cnToday(), -12 * years)
 }
 
 const DEFAULT_DRAFT: MiningDraft = {

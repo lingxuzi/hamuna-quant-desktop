@@ -15,14 +15,10 @@ import { AutoMiningDialog } from './AutoMiningDialog'
 import { AddFactorSignalDialog } from './AddFactorSignalDialog'
 import { factorBatchCandidate } from './researchCandidates'
 import { FIELD_SM, INPUT_MD, SELECT_MD } from '@/components/controls'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
-const formatDate = (value: Date) => value.toISOString().slice(0, 10)
-const monthsAgo = (months: number) => {
-  const value = new Date()
-  value.setMonth(value.getMonth() - months)
-  return formatDate(value)
-}
-const TODAY = formatDate(new Date())
+const monthsAgo = (months: number) => cnAddMonths(cnToday(), -months)
+const TODAY = cnToday()
 const INPUT_CLS = cn(INPUT_MD, 'w-full')
 
 const SELECT_CLS = cn(SELECT_MD, 'w-full')

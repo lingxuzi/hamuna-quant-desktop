@@ -5,17 +5,11 @@ import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { MissingCapChip } from '@/lib/capability-labels'
 import { DatePicker } from '@/components/DatePicker'
+import { cnAddDays, cnToday } from '@/lib/cnDate'
 
-function pad(n: number) { return String(n).padStart(2, '0') }
-function todayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-/** 往前推 N 天 */
+/** 往前推 N 天 (北京时间日历日) */
 function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return cnAddDays(cnToday(), -n)
 }
 
 // hasCap: 日K批量能力当前是否可用 (路由矩阵判定, 生效源含插件/自定义源)
@@ -39,7 +33,7 @@ export function RepairDailyPanel({ hasCap, isRunning, latestDate, onStart }: {
     },
   })
 
-  const today = todayStr()
+  const today = cnToday()
   const canSubmit = hasBatchCap && !isRunning && !repair.isPending && startDate <= today
   const gapDays = latestDate
     ? Math.max(0, Math.round((Date.parse(today) - Date.parse(latestDate)) / 86400000))

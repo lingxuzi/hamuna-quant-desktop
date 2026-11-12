@@ -29,6 +29,8 @@ export interface ModalProps {
   initialFocusRef?: React.RefObject<HTMLElement>
   /** 点击遮罩是否关闭 (默认 true) */
   closeOnBackdrop?: boolean
+  /** 是否允许 ESC 关闭 (默认 true)。false = 弹窗不可关闭 (阻塞闸门场景) */
+  closable?: boolean
 }
 
 const FOCUSABLE = [
@@ -50,6 +52,7 @@ export function Modal({
   overlayClassName = 'fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--scrim)/0.55)] backdrop-blur-[2px]',
   initialFocusRef,
   closeOnBackdrop = true,
+  closable = true,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const activeRef = useRef(active)
@@ -68,6 +71,9 @@ export function Modal({
   // 面板首个元素, 导致对话框内文本框无法输入。
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+  // closable 存 ref: ESC 监听只在挂载时装一次, 普通变量会捕获初始值。
+  const closableRef = useRef(closable)
+  closableRef.current = closable
 
   const requestClose = useCallback(() => {
     if (reduced) { onCloseRef.current(); return }
@@ -104,6 +110,7 @@ export function Modal({
     const onKeyDown = (e: KeyboardEvent) => {
       if (!activeRef.current) return
       if (e.key === 'Escape') {
+        if (!closableRef.current) return  // 不可关闭: ESC 也不放行
         e.stopPropagation()
         requestCloseRef.current()
         return

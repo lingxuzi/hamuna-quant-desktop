@@ -30,6 +30,7 @@ import { Switch } from '@/components/Switch'
 import { StrategyExecutionPanel } from './StrategyExecutionPanel'
 import { executionApi, executionListKey } from './executionClient'
 import { BTN_MD, INPUT_MD } from '@/components/controls'
+import { cnToday } from '@/lib/cnDate'
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
   market: '市价',
@@ -2263,7 +2264,7 @@ function AccountPanel({ acc, name, onDeleted }: { acc: string; name?: string; on
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `模拟盘成交台账_${acc}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `模拟盘成交台账_${acc}_${cnToday()}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }

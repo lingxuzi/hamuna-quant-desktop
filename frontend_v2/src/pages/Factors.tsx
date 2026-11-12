@@ -19,6 +19,7 @@ import { FactorComposite } from './factors/FactorComposite'
 import { FactorEditor } from './factors/FactorEditor'
 import { FactorLibrary } from './factors/FactorLibrary'
 import { ResearchCandidatesDialog } from './backtest/ResearchCandidatesDialog'
+import { cnToday } from '@/lib/cnDate'
 
 type Tab = 'discover' | 'create' | 'library'
 type CreateMode = 'editor' | 'composite'
@@ -114,7 +115,7 @@ export function Factors() {
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = `因子名录_${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `因子名录_${cnToday()}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }

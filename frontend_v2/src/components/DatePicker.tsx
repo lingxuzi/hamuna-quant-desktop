@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { ICON_BTN_SM, FIELD_MD } from '@/components/controls'
 import { cn } from '@/lib/cn'
+import { cnToday } from '@/lib/cnDate'
 
 /** 弹层固定宽度(px) — 与下方 w-[260px] 保持一致,用于水平边界裁剪计算 */
 const POPUP_WIDTH = 260
@@ -29,12 +30,8 @@ function pad(n: number) { return String(n).padStart(2, '0') }
 function toDateStr(y: number, m: number, d: number) {
   return `${y}-${pad(m + 1)}-${pad(d)}`
 }
-function todayStr() {
-  const date = new Date()
-  return toDateStr(date.getFullYear(), date.getMonth(), date.getDate())
-}
 function viewDate(value: string, min?: string, max?: string) {
-  const source = value || max || min || todayStr()
+  const source = value || max || min || cnToday()
   return {
     year: Number(source.slice(0, 4)),
     month: Number(source.slice(5, 7)) - 1,
@@ -155,7 +152,7 @@ export function DatePicker({
   }
 
   const displayLabel = value || placeholder
-  const today = todayStr()
+  const today = cnToday()
 
   return (
     <div className={`relative inline-flex ${className}`}>
@@ -217,7 +214,7 @@ export function DatePicker({
               <div className="grid grid-cols-4 gap-1">
                 {Array.from({ length: 12 }, (_, i) => viewYear - 5 + i).map(y => {
                   const isSelected = y === Number(value.slice(0, 4))
-                  const isThisYear = y === new Date().getFullYear()
+                  const isThisYear = y === Number(cnToday().slice(0, 4))
                   return (
                     <button
                       key={y}

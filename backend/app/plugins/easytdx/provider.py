@@ -259,6 +259,14 @@ class EasyTdxProvider:
         records = [r for r in (_map_snapshot_row(row, fallback_ms) for row in rows) if r]
         if not records:
             logger.warning("EasyTdx 实时行情本轮 0 条(原始 %d 行), 疑似协议结构变化", len(rows))
+        # 全市场分类列表偶发同一标的多行 (实测 5572 条记录 / 5559 个唯一 symbol)。
+        # 不去重会在下游按 symbol 的 join 里平方放大, 落盘分区出现重复行,
+        # 回测矩阵直接拒绝 (MarketDataMatrix requires unique timestamp/symbol rows)。
+        if len(records) > 1:
+            deduped = {r["symbol"]: r for r in records}
+            if len(deduped) != len(records):
+                logger.info("EasyTdx 实时快照去重: %d → %d 条", len(records), len(deduped))
+            records = list(deduped.values())
         return records
 
     def get_realtime_indices(self, symbols: list[str]) -> list[dict] | None:

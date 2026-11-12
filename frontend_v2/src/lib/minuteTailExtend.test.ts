@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { extendMinuteTail, type TailExtendLiveRow } from './minuteTailExtend'
 import type { MinuteKlineRow } from '@/lib/api'
 
-const NOW = new Date(2026, 9, 8, 10, 30) // 2026-10-08 10:30 (连续竞价时段)
+// 绝对时刻: 北京 2026-10-08 10:30 (连续竞价时段); 续画按北京时区判定, 不能用本地构造
+const NOW = new Date('2026-10-08T02:30:00Z')
 const TODAY = '2026-10-08'
 
 function bars(...datetimes: string[]): MinuteKlineRow[] {
@@ -85,10 +86,19 @@ describe('extendMinuteTail 新鲜度守卫', () => {
   })
 
   it('非连续竞价时段 (午休/收盘后) 不续画', () => {
-    const lunch = new Date(2026, 9, 8, 12, 0)
+    const lunch = new Date('2026-10-08T04:00:00Z')      // 北京 12:00 午休
     expect(extendMinuteTail(BASE, LIVE, DATES_FRESH_STOCK_STALE_ETF, lunch)).toBe(BASE)
-    const afterClose = new Date(2026, 9, 8, 15, 30)
+    const afterClose = new Date('2026-10-08T07:30:00Z') // 北京 15:30 收盘后
     expect(extendMinuteTail(BASE, LIVE, DATES_FRESH_STOCK_STALE_ETF, afterClose)).toBe(BASE)
+  })
+
+  it('连续竞价时段按北京时间判定, 与浏览器时区无关', () => {
+    // 北京 09:30 开盘集合竞价尾段 → 未进入连续竞价, 不续画
+    const preOpen = new Date('2026-10-08T01:30:00Z')
+    expect(extendMinuteTail(BASE, LIVE, DATES_FRESH_STOCK_STALE_ETF, preOpen)).toBe(BASE)
+    // 北京 09:31 → 连续竞价开始, 续画
+    const open = new Date('2026-10-08T01:31:00Z')
+    expect(extendMinuteTail(BASE, LIVE, DATES_FRESH_STOCK_STALE_ETF, open)).not.toBe(BASE)
   })
 
   it('liveRows 为空时不续画', () => {

@@ -14,14 +14,10 @@ import { FactorGroupNavChart } from './charts/FactorGroupNavChart'
 import { factorResultCandidate } from './researchCandidates'
 import { INPUT_MD, SELECT_MD } from '@/components/controls'
 import { cn } from '@/lib/cn'
+import { cnAddMonths, cnToday } from '@/lib/cnDate'
 
-const formatDate = (date: Date) => date.toISOString().slice(0, 10)
-const monthsAgo = (months: number) => {
-  const date = new Date()
-  date.setMonth(date.getMonth() - months)
-  return formatDate(date)
-}
-const TODAY = formatDate(new Date())
+const monthsAgo = (months: number) => cnAddMonths(cnToday(), -months)
+const TODAY = cnToday()
 const THREE_MONTHS_AGO = monthsAgo(3)
 
 const INPUT_CLS = cn(INPUT_MD, 'w-full transition-colors duration-150 ease-smooth')
@@ -181,12 +177,12 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
 
   const applyRange = (months: number) => {
     setStart(monthsAgo(months))
-    setEnd(formatDate(new Date()))
+    setEnd(cnToday())
   }
 
   const applyAllRange = () => {
     setStart('')
-    setEnd(formatDate(new Date()))
+    setEnd(cnToday())
   }
 
   const rangeKey = end === TODAY && start === THREE_MONTHS_AGO

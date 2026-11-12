@@ -1,8 +1,10 @@
-// 启动闸门 — 数据不完整时的入口拦截
+// 启动闸门 — 数据不完整 / 缺失时的入口拦截
 //
-// 两条要守住的线:
+// 三条要守住的线:
 //   1. 有未完成修补的日K → 入口必须弹阻塞弹窗, 不能让用户进到算不动的页面;
-//   2. 修补失败 (数据源不返回那几天的日K) → 必须还能退出, 否则用户被锁死在入口。
+//   2. 本地一条日K都没有 → 同样弹窗, 并跑一次全量同步 (不能放行到空页面);
+//   3. 弹窗不可关闭 (无 X / ESC / 遮罩 /「仍要进入应用」); 失败后自动退避重试,
+//      活路是修好数据或退出应用, 不是绕过闸门。
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -10,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { api, type DataStatus, type IntegrityReport, type PipelineJob } from '@/lib/api'
+import { QK } from '@/lib/queryKeys'
 import { BootGate } from './BootGate'
 
 vi.mock('@/lib/api', async importOriginal => {
@@ -23,6 +26,7 @@ vi.mock('@/lib/api', async importOriginal => {
       pipelineJobs: vi.fn(),
       pipelineJob: vi.fn(),
       repairDataIntegrity: vi.fn(),
+      pipelineRun: vi.fn(),
     },
   }
 })
@@ -51,6 +55,7 @@ let client: QueryClient
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   sessionStorage.clear()
+  vi.clearAllMocks()   // 调用记录不跨用例累积 (实现不受影响, 下面重新设)
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -120,11 +125,55 @@ it('入口自动起一次修补, 弹窗切到进度视图', async () => {
   await until(() => host.textContent?.includes('同步日 K') ?? false)
 })
 
-it('修补失败 → 仍能退出, 不把用户锁在入口', async () => {
+it('修补失败 → 弹窗保留且无关闭口, 只能重试', async () => {
   vi.mocked(api.dataIntegrity).mockResolvedValue({ report: REPORT, blocking_assets: ['stock'] })
   vi.mocked(api.repairDataIntegrity).mockRejectedValue(new Error('数据源未返回 2026-11-10 的修补日K'))
   await render()
   await until(() => host.textContent?.includes('数据源未返回') ?? false)
-  await click('仍要进入应用')
-  expect(dialog()).toBeFalsy()
+  expect(dialog()).toBeTruthy()   // 修补失败后弹窗不能被关掉
+  expect(host.textContent).not.toContain('仍要进入应用')   // 不留绕过闸门的出口
+  await click('立即重试')
+  await until(() => vi.mocked(api.repairDataIntegrity).mock.calls.length >= 2)
+})
+
+it('弹窗不可关闭: ESC 也不放行', async () => {
+  vi.mocked(api.dataIntegrity).mockResolvedValue({ report: REPORT, blocking_assets: ['stock'] })
+  vi.mocked(api.repairDataIntegrity).mockReturnValue(new Promise(() => {}) as never)
+  await render()
+  await until(() => !!dialog())
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+  expect(dialog()).toBeTruthy()
+})
+
+it('本地没有日K → 弹窗并跑一次全量同步', async () => {
+  vi.mocked(api.dataStatus).mockResolvedValue({
+    daily: { trading_days: 0 }, enriched: { trading_days: 0 },
+  } as unknown as DataStatus)
+  vi.mocked(api.dataIntegrity).mockResolvedValue({ report: null, blocking_assets: [] })
+  vi.mocked(api.pipelineRun).mockResolvedValue({ job_id: 'j1', reused: false })
+  await render()
+  await until(() => !!dialog())
+  await until(() => vi.mocked(api.pipelineRun).mock.calls.length > 0)
+  expect(vi.mocked(api.repairDataIntegrity)).not.toHaveBeenCalled()
+})
+
+it('修复进行中 (统计处于中间态) 弹窗不消失', async () => {
+  vi.mocked(api.dataStatus).mockResolvedValue({
+    daily: { trading_days: 0 }, enriched: { trading_days: 0 },
+  } as unknown as DataStatus)
+  vi.mocked(api.dataIntegrity).mockResolvedValue({ report: null, blocking_assets: [] })
+  vi.mocked(api.pipelineRun).mockResolvedValue({ job_id: 'j1', reused: false })
+  await render()
+  await until(() => !!dialog())
+
+  // 后端开始同步 → 统计进入中间态 (stats_pending, 已有部分行)
+  vi.mocked(api.dataStatus).mockResolvedValue({
+    stats_pending: true, daily: { trading_days: 3 }, enriched: { trading_days: 3 },
+  } as unknown as DataStatus)
+  await act(async () => { await client.invalidateQueries({ queryKey: QK.dataStatus }) })
+  await until(() => vi.mocked(api.dataStatus).mock.calls.length > 1)
+
+  expect(dialog()).toBeTruthy(), '修复进行中弹窗消失了, 用户能带着半份数据进应用'
 })
