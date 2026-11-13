@@ -17,12 +17,13 @@
  * 统计预热中 (stats_pending) → 不判, 放行等真实统计就绪再判。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { Modal } from '@/components/Modal'
-import { BTN_MD, BTN_PRIMARY } from '@/components/controls'
+import { BTN_GHOST_MD, BTN_MD, BTN_PRIMARY } from '@/components/controls'
 import { ActiveJobCard } from '@/components/data/ActiveJobCard'
 import { isDataStatusPending, resolveHasNoData } from '@/lib/useSharedQueries'
 import { cn } from '@/lib/cn'
@@ -36,9 +37,13 @@ const RETRY_BACKOFF_S = [15, 30, 60, 120, 300]
 
 export function BootGate() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [jobId, setJobId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
   const attempts = useRef(0)
+  // 「我知道了」: 用户看过之后不再拦, 自己去数据页补数据。
+  // 只在 null→true 时置位 (组件常驻挂载, 卸载清不掉状态), 所以两个方向都显式处理。
+  const [acknowledged, setAcknowledged] = useState(false)
 
   const status = useQuery({
     queryKey: QK.dataStatus, queryFn: api.dataStatus,
@@ -79,6 +84,8 @@ export function BootGate() {
   const [noData, setNoData] = useState(false)
   const observed = settled ? resolveHasNoData(status.data) : null
   if (observed !== null && observed !== noData) setNoData(observed)
+  // 数据补齐了就把「我知道了」清掉: 下次再清库应当是全新的一次拦截
+  if (observed === false && acknowledged) setAcknowledged(false)
 
   const { mutate: startRepair, isPending: repairing, error: startError } = useMutation({
     mutationFn: (reportId: string) => api.repairDataIntegrity(reportId),
@@ -105,7 +112,7 @@ export function BootGate() {
   // 两种动作各只自动起一次: 首次同步成功但仍有未完成分区时, 定点修补还能自动接上;
   // 再之后就交给用户点按钮 (否则成功→仍阻塞→再修补会打成死循环)。
   useEffect(() => {
-    if (!blocked || trackedId || repairing || piping || failed) return
+    if (!blocked || acknowledged || trackedId || repairing || piping || failed) return
     if (noData) {
       if (sessionStorage.getItem(PIPELINE_KEY)) return
       sessionStorage.setItem(PIPELINE_KEY, '1')
@@ -116,7 +123,7 @@ export function BootGate() {
     if (sessionStorage.getItem(REPAIR_KEY)) return
     sessionStorage.setItem(REPAIR_KEY, '1')
     startRepair(report.id)
-  }, [blocked, trackedId, repairing, piping, failed, noData, report?.id, report?.repairable_count, covered, startPipeline, startRepair])
+  }, [blocked, acknowledged, trackedId, repairing, piping, failed, noData, report?.id, report?.repairable_count, covered, startPipeline, startRepair])
 
   // 任务收尾后重新自检: 成功要刷新阻塞条目; 失败也要刷新 —— 后端失败时会重存一份
   // 新报告 (报告 id 变了), 不刷新的话下一次修补会被「自检报告已变化」挡下。
@@ -147,7 +154,8 @@ export function BootGate() {
     return () => window.clearTimeout(timer)
   }, [countdown])
 
-  if (!blocked) return null
+  // 点过「我知道了」就不再拦 (后端自检/修补路径不受影响, 只是不再挡住页面)
+  if (!blocked || acknowledged) return null
 
   const assetsText = blocking.map(a => ASSET_LABELS[a] ?? a).join('、')
   const canRepair = !!report?.repairable_count && covered && !running
@@ -243,6 +251,19 @@ export function BootGate() {
             >
               <RefreshCw className={cn('h-[12px] w-[12px]', piping && 'animate-spin')} />
               重新同步全部数据
+            </button>
+          )}
+          {/* 带数据不完整的弹窗不给出口 (坏数据进计算页会 500); 没有数据时给 ——
+              用户可能只是还没决定用哪个数据源, 逼他先跑一次同步没有意义。
+              同步进行中也给: 关掉弹窗去数据页看进度, 比锁在弹窗里干等强。 */}
+          {noData && (
+            <button
+              type="button"
+              className={cn(BTN_GHOST_MD, 'inline-flex items-center gap-1.5')}
+              onClick={() => { setAcknowledged(true); navigate('/data') }}
+            >
+              我知道了，去数据页
+              <ArrowRight className="h-[12px] w-[12px]" />
             </button>
           )}
         </div>

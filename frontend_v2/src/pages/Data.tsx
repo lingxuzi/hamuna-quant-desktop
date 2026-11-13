@@ -36,6 +36,7 @@ import { SettingsModal } from '@/components/data/SettingsModal'
 import { ScheduleEditor } from '@/components/data/ScheduleEditor'
 import { ExtendHistoryPanel } from '@/components/data/ExtendHistoryPanel'
 import { RepairDailyPanel } from '@/components/data/RepairDailyPanel'
+import { SignalHealthPanel } from '@/components/data/SignalHealthPanel'
 import { DataIntegrityPanel } from '@/components/data/DataIntegrityPanel'
 import { EnrichedRebuildPanel } from '@/components/data/EnrichedRebuildPanel'
 import { FinancialSyncPanel } from '@/components/data/FinancialSyncPanel'
@@ -1231,6 +1232,10 @@ export function Data() {
                 ...(prefs.data?.pipeline_pull_index !== false ? ['index' as const] : []),
               ]}
               onStart={id => { setActiveJobId(id); qc.invalidateQueries({ queryKey: QK.pipelineJobs }) }} />
+            <details className="mt-5 border-t border-border pt-4">
+              <summary className="cursor-pointer text-xs text-secondary">修正策略信号</summary>
+              <div className="mt-4"><SignalHealthPanel isRunning={!!activeJobId} /></div>
+            </details>
             <details className="mt-5 border-t border-border pt-4">
               <summary className="cursor-pointer text-xs text-secondary">手动指定起点修正数据</summary>
               <div className="mt-4"><RepairDailyPanel

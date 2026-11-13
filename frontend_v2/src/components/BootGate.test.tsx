@@ -177,3 +177,25 @@ it('修复进行中 (统计处于中间态) 弹窗不消失', async () => {
 
   expect(dialog()).toBeTruthy(), '修复进行中弹窗消失了, 用户能带着半份数据进应用'
 })
+
+it('无数据时「我知道了」放行并跳到数据页', async () => {
+  vi.mocked(api.dataStatus).mockResolvedValue({
+    daily: { trading_days: 0 }, enriched: { trading_days: 0 },
+  } as unknown as DataStatus)
+  vi.mocked(api.dataIntegrity).mockResolvedValue({ report: null, blocking_assets: [] })
+  // 本会话已自动起过一次同步 (标记在) → 不再自动起, 停在「待用户处理」态, 放行按钮可见
+  sessionStorage.setItem('tf_boot_gate_pipeline', '1')
+  await render()
+  await until(() => !!dialog())
+  await click('我知道了')
+  await until(() => !dialog())
+  expect(dialog()).toBeFalsy()
+})
+
+it('数据不完整时不给「我知道了」出口', async () => {
+  vi.mocked(api.dataIntegrity).mockResolvedValue({ report: REPORT, blocking_assets: ['stock'] })
+  vi.mocked(api.repairDataIntegrity).mockReturnValue(new Promise(() => {}) as never)
+  await render()
+  await until(() => host.textContent?.includes('本地数据不完整') ?? false)
+  expect(host.textContent).not.toContain('我知道了')
+})

@@ -4055,6 +4055,19 @@ export const api = {
     }),
   dataClear: () => request<{ deleted_files: number }>('/api/data/clear', { method: 'POST' }),
   refreshCache: () => request<{ ok: boolean }>('/api/data/refresh-cache', { method: 'POST' }),
+  signalHealth: () => request<{
+    ok: boolean
+    as_of: string | null
+    missing: string[]
+    today_degraded: string[]
+  }>('/api/data/signal-health'),
+  repairSignalSnapshot: () => request<{
+    ok: boolean
+    as_of: string | null
+    repaired: boolean
+    rows?: number
+    missing_before?: string[]
+  }>('/api/data/signal-repair', { method: 'POST' }),
   enrichedSchema: (table: string) => request<EnrichedField[]>(`/api/data/schema/${table}`),
   // ===== 扩展数据 =====
   extDataList: () =>

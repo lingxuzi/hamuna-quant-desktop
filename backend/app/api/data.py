@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.enriched_generation import EnrichedPublication
-from app.indicators.pipeline import ENRICHED_COLUMNS
+from app.indicators.pipeline import ENRICHED_COLUMNS, custom_signals_missing_today
 from app.services.data_status_cache import DataStatusCache
 from app.services.pipeline_jobs import job_store
 
@@ -991,3 +991,91 @@ def refresh_cache(request: Request) -> dict:
     ScreenerService.clear_history_cache()
     logger.info("refresh-cache: Polars 缓存已重建")
     return {"ok": True}
+
+def check_signal_snapshot(repo) -> dict:
+    """检查最新 enriched 快照的信号列是否与信号定义一致。
+
+    盘中增量路径靠 join 上一交易日的指标算交叉类信号; 这一步失败时信号列
+    缺席, 消费端按 false 处理 —— 「今天没金叉」和「根本算不出来」看起来一样。
+    判据取三方交集, 避免误报:
+      · 当前活跃信号定义里的 signal_* 列
+      · 历史路径 (allow_shift) 能算出来的列 —— 这些列本该存在于快照
+      · 快照磁盘分区里缺席的列
+    """
+    from app.strategy import custom_signals
+
+    data_dir = repo.store.data_dir
+    root = data_dir / "kline_daily_enriched"
+    try:
+        latest = repo._latest_enriched_date_duckdb()
+    except Exception:  # noqa: BLE001
+        latest = None
+    if latest is None:
+        return {"ok": True, "as_of": None, "missing": [], "today_degraded": []}
+    partition = root / f"date={latest.isoformat()}" / "part.parquet"
+    if not partition.exists():
+        return {"ok": True, "as_of": latest.isoformat(), "missing": [], "today_degraded": []}
+    import polars as pl
+
+    try:
+        present = set(pl.read_parquet_schema(partition).keys())
+    except Exception as e:  # noqa: BLE001
+        return {"ok": True, "as_of": latest.isoformat(), "missing": [], "error": str(e)}
+    sigs = custom_signals.load_all(data_dir)
+    expected = set(custom_signals.build_expressions(sigs).keys())
+    missing = sorted(expected - present)
+    return {
+        "ok": not missing,
+        "as_of": latest.isoformat(),
+        "missing": missing,
+        # 当日路径当前是否算得出这些交叉类信号; 非空则修复不止是重算, 还要看昨日值来源
+        "today_degraded": custom_signals_missing_today() if missing else [],
+    }
+
+@router.get("/signal-health")
+def signal_health(request: Request) -> dict:
+    return check_signal_snapshot(request.app.state.repo)
+
+def repair_signal_snapshot_impl(state) -> dict:
+    """按历史口径重算最新 enriched 分区 (信号列与指标同口径补齐) 并重建缓存。
+
+    启动守护与手动修复共用。抛出 RuntimeError 表示重算结果为空、未写入。
+    """
+    repo = state.repo
+    qs = state.quote_service
+    report = check_signal_snapshot(repo)
+    if report.get("ok"):
+        return {"ok": True, "as_of": report.get("as_of"), "repaired": False}
+    latest = repo._latest_enriched_date_duckdb()
+    if latest is None:
+        raise RuntimeError("没有 enriched 数据可修")
+    from app.indicators.pipeline import invalidate_custom_signals
+
+    invalidate_custom_signals()
+    with qs.paused():
+        frame = qs._recompute_today_full(latest, repo.get_instruments())
+        if frame.is_empty():
+            raise RuntimeError("重算最新 enriched 为空, 未写入")
+        repo.flush_live_enriched_asset("stock", frame)
+    invalidate_data_cache("enriched")
+    repo.clear_cache()
+    repo.refresh_cache()
+    from app.api.overview import invalidate_overview_cache
+    from app.services.screener import ScreenerService
+
+    invalidate_overview_cache()
+    ScreenerService.clear_history_cache()
+    logger.info("signal-repair: 已按历史口径重算 %s 的 enriched", latest)
+    return {
+        "ok": True, "as_of": latest.isoformat(), "repaired": True,
+        "rows": len(frame), "missing_before": report.get("missing", []),
+    }
+
+@router.post("/signal-repair")
+def repair_signal_snapshot(request: Request) -> dict:
+    if getattr(request.app.state, "quote_service", None) is None:
+        raise HTTPException(status_code=503, detail="行情服务未初始化")
+    try:
+        return repair_signal_snapshot_impl(request.app.state)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e

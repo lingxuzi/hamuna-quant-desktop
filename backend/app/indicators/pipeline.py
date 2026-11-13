@@ -88,9 +88,16 @@ def _get_custom_signal_exprs_today() -> dict[str, pl.Expr]:
             sigs = custom_signals.load_all(settings.data_dir)
             prev_fields = custom_signals.prev_day_fields(sigs)
             _custom_prev_fields_cache = prev_fields
+            custom_signals.missing_today_signals.clear()
             _custom_signal_exprs_today = custom_signals.build_expressions_prev(
                 sigs, prev_fields
             )
+            if custom_signals.missing_today_signals:
+                logger.warning(
+                    "当日路径 %d 个信号无法编译, 盘中/当日 enriched 的这些列将是 false: %s",
+                    len(custom_signals.missing_today_signals),
+                    sorted(custom_signals.missing_today_signals),
+                )
         except Exception as e:
             logger.warning("custom signals load failed (today): %s", e)
             _custom_signal_exprs_today = {}
@@ -104,12 +111,29 @@ def _custom_prev_fields_today() -> set[str]:
     return _custom_prev_fields_cache or set()
 
 
+def custom_signals_missing_today() -> list[str]:
+    """当日(实时)路径未能编译的信号列名; 非空即说明昨日值没有 join 上。
+
+    这些列在盘中/当日 enriched 里恒为 false, 而按 as_of 重算 (历史路径) 正常 ——
+    两者结果不一致时, 应以此表定位并触发重新计算。
+    """
+    try:
+        _get_custom_signal_exprs_today()
+        from app.strategy import custom_signals
+    except Exception:  # noqa: BLE001
+        return []
+    return sorted(custom_signals.missing_today_signals)
+
+
 def invalidate_custom_signals() -> None:
     """失效自定义信号缓存（保存/删除信号后调用，下次计算重新加载）。"""
     global _custom_signal_exprs, _custom_signal_exprs_today, _custom_prev_fields_cache
     _custom_signal_exprs = None
     _custom_signal_exprs_today = None
     _custom_prev_fields_cache = None
+    from app.strategy import custom_signals
+
+    custom_signals.missing_today_signals.clear()
 
 
 # enriched parquet 仅存储的列 (14 列)

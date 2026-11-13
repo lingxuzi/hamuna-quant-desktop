@@ -469,6 +469,11 @@ def prev_day_fields(signals: list[dict]) -> set[str]:
     return fields
 
 
+# 当日(实时)路径编译失败而缺席的信号列 (如昨日值 join 未生效)。
+# 缺席的列在帧上会被消费端统一置 false —— 若静默缺席, 所有含昨日条件的
+# 信号当日恒不成立, 与「今日确实没命中」无法区分。此处记名供诊断与自动修复。
+missing_today_signals: set[str] = set()
+
 def build_expressions_prev(
     signals: list[dict],
     prev_available: set[str],
@@ -491,8 +496,8 @@ def build_expressions_prev(
     for sig in signals:
         if sig.get("enabled") is False:
             continue
+        col_name = resolve_column(sig)
         try:
-            col_name = resolve_column(sig)
             parts: list[pl.Expr] = []
             for c in sig["conditions"]:
                 left_days = int(c.get("leftDays", 0) or 0)
@@ -517,6 +522,7 @@ def build_expressions_prev(
             out[col_name] = combined
         except Exception as e:
             logger.warning("custom signal (today) compile failed %s: %s", sig.get("id"), e)
+            missing_today_signals.add(col_name)
     return out
 
 

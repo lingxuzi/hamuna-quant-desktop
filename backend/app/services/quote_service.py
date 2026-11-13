@@ -1895,6 +1895,51 @@ class QuoteService:
             self._etf_history_cache = (key, frame)
         return frame
 
+    def _recompute_today_full(
+        self, today: date, instruments: pl.DataFrame | None,
+    ) -> pl.DataFrame:
+        """从近 90 天日线重算今天整套指标+信号 (与历史路径同口径)。"""
+        from datetime import timedelta
+
+        from app.data_providers.repository import _live_agg_window_start
+        from app.indicators.pipeline import compute_enriched
+
+        ohlcv_cols = ["symbol", "date", "open", "high", "low", "close", "volume", "amount"]
+        # 一次扫描取窗口内全部列 (含今日), 再在内存里切「历史 / 今日」两份
+        all_df = guarded_collect(
+            scan_daily_parquet(str(self._repo.store.data_dir / "kline_daily" / "**" / "*.parquet"))
+            .filter(pl.col("date") >= today - timedelta(days=90))
+            .select(ohlcv_cols)
+            .sort(["symbol", "date"]),
+            priority="background",
+        )
+        if all_df.is_empty():
+            return pl.DataFrame()
+        hist_df = all_df.filter(pl.col("date") < today)
+        if hist_df.is_empty():
+            return pl.DataFrame()
+        window_start = _live_agg_window_start(hist_df["date"], today, today - timedelta(days=90))
+        hist_df = hist_df.filter(pl.col("date") >= window_start)
+        today_ohlcv = all_df.filter(pl.col("date") == today)
+        if today_ohlcv.is_empty():
+            return pl.DataFrame()
+        factor_path = self._repo.store.data_dir / "adj_factor" / "all.parquet"
+        factors = pl.DataFrame()
+        if factor_path.exists():
+            try:
+                factors = pl.read_parquet(factor_path)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("复权因子读取失败, 补算今日 enriched 退化为不复权口径: %s", e)
+        enriched_full = compute_enriched(
+            pl.concat([hist_df, today_ohlcv], how="diagonal_relaxed").sort(["symbol", "date"]),
+            factors=factors,
+            instruments=instruments,
+            historical_shares=self._repo.get_historical_shares(),
+        )
+        return enriched_full.sort(["symbol", "date"]).with_columns(
+            (pl.col("close") / pl.col("close").shift(3).over("symbol") - 1).alias("momentum_3d")
+        ).filter(pl.col("date") == today)
+
     def _flush_live_enriched(self, daily_df: pl.DataFrame, quote_extra: pl.DataFrame = None, asset_type: str = "stock", merge: bool = False) -> None:
         """增量计算今天的 enriched: 用昨天的递推状态 + 今天 OHLCV → 只算今天 5500 行。
 
@@ -1912,6 +1957,16 @@ class QuoteService:
                 if asset_type == "stock"
                 else self._repo.get_enriched_latest_asset(asset_type)
             )
+            # 缓存已被本轮盘中刷新推进到今天时, 它就不是「昨天」: 昨日值必须回取历史。
+            # 否则 _prev_* 等于今日值, 交叉类信号 (金叉/突破) 当日恒 false 且落盘。
+            if asset_type == "stock" and prev_date is not None and prev_date >= today:
+                prev_enriched, prev_date = self._repo.get_enriched_history(today, 60), None
+                history = prev_enriched
+                if history is not None and not history.is_empty():
+                    prev_date = history["date"].max()
+                    prev_enriched = history.filter(pl.col("date") == prev_date)
+                else:
+                    prev_enriched = pl.DataFrame()
 
             use_incremental = (
                 asset_type == "stock"
@@ -1921,7 +1976,10 @@ class QuoteService:
             )
 
             if use_incremental:
-                from app.indicators.pipeline import compute_enriched_today
+                from app.indicators.pipeline import (
+                    compute_enriched_today,
+                    custom_signals_missing_today,
+                )
                 from app.market_time import trading_minutes_elapsed, trading_minutes_elapsed_from_ts
                 instruments = self._repo.get_instruments()
                 # 将 API 直接提供的补充字段 JOIN 到 daily_df
@@ -1946,6 +2004,17 @@ class QuoteService:
                 if enriched_today.is_empty():
                     logger.warning("增量计算结果为空, 回退到全量计算")
                     use_incremental = False
+                elif missing := custom_signals_missing_today():
+                    # 交叉类信号编译失败 (昨日值没 join 上): 这些列会以 false 落盘,
+                    # 而历史路径能算对 —— 直接把今日帧补算成与历史同口径再写。
+                    logger.warning(
+                        "当日信号缺昨日值 (%d 个), 改为按历史口径补算今日: %s",
+                        len(missing), missing,
+                    )
+                    enriched_today = self._recompute_today_full(today, instruments)
+                    if enriched_today.is_empty():
+                        logger.warning("补算今日 enriched 失败, 放弃本轮落盘")
+                        return
 
             # ---- 全量回退路径 ----
             if not use_incremental:
