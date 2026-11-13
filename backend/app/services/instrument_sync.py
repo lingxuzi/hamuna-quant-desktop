@@ -93,6 +93,7 @@ def sync_instruments(data_dir: Path) -> int:
 
     df = pl.DataFrame(all_rows)
     df = _preserve_share_fields(df, data_dir)
+    df = _derive_float_shares(df, data_dir)
     df = _backfill_listing_dates(df, data_dir)
     today = cn_today()
     df = df.with_columns(pl.lit(today).alias("as_of"))
@@ -175,6 +176,69 @@ def _preserve_share_fields(df: pl.DataFrame, data_dir: Path) -> pl.DataFrame:
         )
     return merged
 
+
+def _derive_float_shares(df: pl.DataFrame, data_dir: Path) -> pl.DataFrame:
+    """用当日 enriched 的 turnover_rate 反推流通股本, 补 provider 拿不到的标的。
+
+    没有任何数据源提供股本 (easytdx 维表不含, fuyao 无 shares 接口), 换手率只能
+    由实时快照的 turnover 字段直接写下。反过来, 有了 volume 与 turnover_rate 就能
+    还原 float_shares = volume(手) * 10000 / turnover_rate(%) —— 用最新一个有
+    换手率的 enriched 分区做, 只补仍然为空的标的。
+
+    反推值同时填入 total_shares: 策略的市值条件用 close * total_shares, 只补
+    float_shares 照样筛不出标的。总股本通常大于等于流通股本, 用流通股本做下限
+    只会低估市值, 比留空 (市值条件直接判 false) 更接近真实。
+    """
+    if "float_shares" not in df.columns or "symbol" not in df.columns:
+        return df
+    missing = df.filter(
+        pl.col("float_shares").is_null()
+        | ("total_shares" in df.columns and pl.col("total_shares").is_null())
+    )
+    if missing.is_empty():
+        return df
+
+    enriched_dir = data_dir / "kline_daily_enriched"
+    if not enriched_dir.exists():
+        return df
+    snapshots = sorted(enriched_dir.glob("date=*/part.parquet"), reverse=True)[:5]
+    derived = pl.DataFrame()
+    for path in snapshots:
+        try:
+            frame = pl.read_parquet(path, columns=["symbol", "volume", "turnover_rate"])
+        except Exception:  # noqa: BLE001
+            continue
+        valid = frame.filter(
+            (pl.col("turnover_rate") > 0) & (pl.col("volume") > 0)
+        )
+        if valid.is_empty():
+            continue
+        derived = valid.with_columns(
+            (pl.col("volume") * 10000.0 / pl.col("turnover_rate")).alias("float_shares")
+        ).select("symbol", "float_shares")
+        break
+    if derived.is_empty():
+        logger.warning(
+            "维表缺股本且无带换手率的 enriched 分区可反推: "
+            "市值/换手率条件将筛不出标的 (先跑一轮实时行情)"
+        )
+        return df
+
+    merged = df.join(
+        derived.unique(subset=["symbol"]), on="symbol", how="left", suffix="_derived",
+    )
+    filled = merged.with_columns(
+        pl.coalesce(pl.col("float_shares"), pl.col("float_shares_derived")).alias("float_shares")
+    )
+    if "total_shares" in filled.columns:
+        filled = filled.with_columns(
+            pl.coalesce(pl.col("total_shares"), pl.col("float_shares")).alias("total_shares")
+        )
+    filled = filled.drop("float_shares_derived")
+    added = int(filled["float_shares"].is_not_null().sum() - df["float_shares"].is_not_null().sum())
+    if added:
+        logger.info("维表股本反推: %d 只标的从 enriched 换手率补齐 float_shares/total_shares", added)
+    return filled
 
 def load_name_history(data_dir: Path) -> pl.DataFrame:
     """读取名称变更历史 (symbol, name, as_of); 未生成时返回空表。"""

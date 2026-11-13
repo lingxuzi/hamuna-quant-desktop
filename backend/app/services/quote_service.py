@@ -2049,6 +2049,12 @@ class QuoteService:
                 window_start = _live_agg_window_start(hist_df["date"], today, cutoff)
                 hist_df = hist_df.filter(pl.col("date") >= window_start)
                 daily_ohlcv = daily_df.select([c for c in ohlcv_cols if c in daily_df.columns])
+                # 实时快照的换手率/前收盘等补充字段必须一起算: 全量路径的输入只取
+                # OHLCV 时, 换手率只能靠维表股本反算 —— 股本缺失的部署 (easytdx/
+                # fuyao 都不提供) 会让 turnover_rate 整列 null, 依赖换手率与市值的
+                # 策略直接筛不出任何标的。
+                if quote_extra is not None and not quote_extra.is_empty():
+                    daily_ohlcv = daily_ohlcv.join(quote_extra, on="symbol", how="left")
                 full_df = pl.concat([hist_df, daily_ohlcv], how="diagonal_relaxed")
                 full_df = full_df.sort(["symbol", "date"])
 

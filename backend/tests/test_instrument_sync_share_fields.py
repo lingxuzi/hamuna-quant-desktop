@@ -158,3 +158,50 @@ def test_empty_daily_dir_does_not_break_instrument_sync(tmp_path, monkeypatch):
     assert isync._local_first_trade_dates(tmp_path) == {}
     assert isync.sync_instruments(tmp_path) == 1
     assert (tmp_path / "instruments/instruments.parquet").exists()
+
+def test_float_shares_derived_from_enriched_turnover(tmp_path, monkeypatch):
+    """无任何股本源时, 用当日 enriched 的 volume/turnover 反推 float_shares。
+
+    换手率 = volume(手) * 10000 / float_shares → float_shares = volume * 10000 / turnover。
+    """
+    part = tmp_path / "kline_daily_enriched/date=2026-11-13/part.parquet"
+    part.parent.mkdir(parents=True)
+    pl.DataFrame({
+        "symbol": ["600000.SH", "000001.SZ"],
+        "volume": [1000.0, 2000.0],
+        "turnover_rate": [0.5, None],
+    }).write_parquet(part)
+    item = {"symbol": "600000.SH", "name": "浦发银行", "ext": {}}
+    monkeypatch.setattr(isync, "fetch_instruments_via_provider",
+                        lambda *_: isync._flatten_instruments([item]))
+    isync.sync_instruments(tmp_path)
+    row = pl.read_parquet(tmp_path / "instruments/instruments.parquet").row(0, named=True)
+    assert row["float_shares"] == pytest.approx(2.0e7)
+
+def test_derived_float_shares_never_overwrites_provider_value(tmp_path, monkeypatch):
+    """provider 已有股本的标的保持原值, 反推只补空缺。"""
+    part = tmp_path / "kline_daily_enriched/date=2026-11-13/part.parquet"
+    part.parent.mkdir(parents=True)
+    pl.DataFrame({"symbol": ["600000.SH"], "volume": [1000.0],
+                  "turnover_rate": [0.5]}).write_parquet(part)
+    item = {"symbol": "600000.SH", "name": "浦发银行",
+            "ext": {"float_shares": 5.0e8}}
+    monkeypatch.setattr(isync, "fetch_instruments_via_provider",
+                        lambda *_: isync._flatten_instruments([item]))
+    isync.sync_instruments(tmp_path)
+    row = pl.read_parquet(tmp_path / "instruments/instruments.parquet").row(0, named=True)
+    assert row["float_shares"] == 5.0e8
+
+def test_derived_float_shares_also_fills_total_shares(tmp_path, monkeypatch):
+    """反推值同时补 total_shares: 市值条件用 close * total_shares, 只补流通股本不够。"""
+    part = tmp_path / "kline_daily_enriched/date=2026-11-13/part.parquet"
+    part.parent.mkdir(parents=True)
+    pl.DataFrame({"symbol": ["600000.SH"], "volume": [1000.0],
+                  "turnover_rate": [0.5]}).write_parquet(part)
+    item = {"symbol": "600000.SH", "name": "浦发银行", "ext": {}}
+    monkeypatch.setattr(isync, "fetch_instruments_via_provider",
+                        lambda *_: isync._flatten_instruments([item]))
+    isync.sync_instruments(tmp_path)
+    row = pl.read_parquet(tmp_path / "instruments/instruments.parquet").row(0, named=True)
+    assert row["float_shares"] == pytest.approx(2.0e7)
+    assert row["total_shares"] == pytest.approx(2.0e7)

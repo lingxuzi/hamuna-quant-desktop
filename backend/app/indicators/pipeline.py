@@ -895,13 +895,18 @@ def compute_limit_signals(
         df = apply_historical_float_shares(df, historical_shares, today=cn_today())
 
     # 计算换手率(%) = volume(手) * 10000 / float_shares(股)
+    # 存储列优先, 但其值为空时回退计算: 维表股本补齐之前落盘的历史分区 turnover
+    # 整列 null, 只认存储列会让这些日期永远算不出换手率。
     if "turnover_rate" in want and "float_shares" in df.columns and "volume" in df.columns:
-        df = df.with_columns(
+        computed = (
             pl.when(pl.col("float_shares") > 0)
               .then(pl.col("volume") * 10000.0 / pl.col("float_shares"))
               .otherwise(None)
-              .alias("turnover_rate")
         )
+        if "turnover_rate" in df.columns:
+            df = df.with_columns(pl.coalesce(pl.col("turnover_rate"), computed).alias("turnover_rate"))
+        else:
+            df = df.with_columns(computed.alias("turnover_rate"))
     elif "turnover_rate" in want and "turnover_rate" not in df.columns:
         df = df.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_rate"))
 
