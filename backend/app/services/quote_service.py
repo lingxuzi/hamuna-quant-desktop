@@ -1923,6 +1923,18 @@ class QuoteService:
         today_ohlcv = all_df.filter(pl.col("date") == today)
         if today_ohlcv.is_empty():
             return pl.DataFrame()
+        # 当日分区里已落盘的 turnover_rate 是实时快照直接给的, 比按股本反算更权威
+        # (股本在多数部署里根本拿不到)。重算时带上它, 否则修复会把它冲成空值。
+        today_part = self._repo.store.data_dir / "kline_daily_enriched" / f"date={today.isoformat()}" / "part.parquet"
+        if today_part.exists():
+            try:
+                stored = pl.read_parquet(today_part, columns=["symbol", "turnover_rate"])
+                today_ohlcv = today_ohlcv.join(
+                    stored.filter(pl.col("turnover_rate").is_not_null()),
+                    on="symbol", how="left",
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("当日 turnover_rate 读取失败, 换手率将按股本反算: %s", e)
         factor_path = self._repo.store.data_dir / "adj_factor" / "all.parquet"
         factors = pl.DataFrame()
         if factor_path.exists():

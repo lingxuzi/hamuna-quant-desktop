@@ -240,6 +240,38 @@ def _derive_float_shares(df: pl.DataFrame, data_dir: Path) -> pl.DataFrame:
         logger.info("维表股本反推: %d 只标的从 enriched 换手率补齐 float_shares/total_shares", added)
     return filled
 
+def backfill_shares(data_dir: Path) -> int:
+    """用已落盘的 enriched 换手率反推股本并回写维表, 返回补齐只数。
+
+    管道 Step 0 同步维表时, 当日日K/实时快照还没把 turnover_rate 写进
+    enriched → 无从反推 → 股本留空。而市值/换手率条件遇到空值一律判 false,
+    结果是选股一只不出 (新部署: 全市场股本为空)。日K与快照写盘后需要再反推一次。
+
+    只做本地计算, 不拉 provider: 维表的代码/名称刚同步过, 这里只补股本。
+
+    不改 as_of: 它标的是「维表同步日」, 决定 limit_up/limit_down 对哪一天算权威
+    (indicators/pipeline.py 的 _instrument_as_of 守卫)。这里没重新同步维表, 改成
+    今天会让昨天的涨跌停价被当成今天的权威价。
+    """
+    path = data_dir / "instruments" / "instruments.parquet"
+    if not path.exists():
+        return 0
+    try:
+        df = pl.read_parquet(path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("维表读取失败, 股本回填跳过: %s", e)
+        return 0
+    if "float_shares" not in df.columns:
+        return 0
+    before = int(df["float_shares"].is_not_null().sum())
+    filled = _derive_float_shares(df, data_dir)
+    added = int(filled["float_shares"].is_not_null().sum() - before)
+    if added <= 0:
+        return 0
+    atomic_write_parquet(filled, path)
+    logger.info("维表股本回填: %d 只标的补齐 float_shares/total_shares", added)
+    return added
+
 def load_name_history(data_dir: Path) -> pl.DataFrame:
     """读取名称变更历史 (symbol, name, as_of); 未生成时返回空表。"""
     path = data_dir / "instrument_name_history" / "part.parquet"

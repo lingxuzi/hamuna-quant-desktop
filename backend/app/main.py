@@ -187,6 +187,18 @@ async def _application_lifespan(app: FastAPI):
     app.state.indicators_ready = False
     repo._on_warmup_done = lambda: setattr(app.state, "indicators_ready", True)  # noqa: SLF001
 
+    # 维表股本回填: 维表同步跑在日K写入之前 → 股本滞后一轮 (新部署: 全市场为空)
+    # → 市值/换手率条件恒 false → 选股一只不出。启动时用已落盘的 enriched 换手率
+    # 补一次, 必须在下面 refresh_cache 之前 —— 缓存帧会把维表字段烘焙进去。
+    try:
+        from app.services import instrument_sync as _isync
+
+        _filled_shares = _isync.backfill_shares(store.data_dir)
+        if _filled_shares:
+            logger.info("启动股本回填: 补齐 %d 只标的的 float_shares/total_shares", _filled_shares)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("启动股本回填失败 (忽略): %s", e)
+
     # Polars 缓存预热 — enriched 的重计算 (107万行 compute_indicators) 推后台,
     # instruments/index/ETF 仍同步 (毫秒级)。应用立即 ready, 指标算完后自动替换。
     repo.refresh_cache(background=True)
@@ -197,25 +209,6 @@ async def _application_lifespan(app: FastAPI):
         logger.info("custom data sources loaded: %d", len(custom_sources.list_sources()))
     except Exception as e:  # noqa: BLE001
         logger.warning("custom data sources init failed: %s", e)
-
-    def _signal_snapshot_guard() -> None:
-        # 最新分区若在「交叉类信号算不出来」的状态下落盘 (盘中昨日值没 join 上),
-        # 页面会把这些信号一律当 false 展示。启动后自检一次, 命中则按历史口径重算。
-        try:
-            from app.api.data import check_signal_snapshot, repair_signal_snapshot_impl
-
-            report = check_signal_snapshot(repo)
-            if report.get("ok"):
-                return
-            logger.warning(
-                "enriched 快照缺信号列 %d 个 (as_of=%s), 按历史口径重算",
-                len(report.get("missing") or []), report.get("as_of"),
-            )
-            repair_signal_snapshot_impl(app)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("enriched 快照信号自检失败 (忽略): %s", e)
-
-    app.state.start_signal_snapshot_guard = _signal_snapshot_guard
 
     # 自定义源必须先注册,能力探测才能补充其数据集能力。
     capset = detect_capabilities()
@@ -260,14 +253,36 @@ async def _application_lifespan(app: FastAPI):
     strategy_monitor = StrategyMonitorService()
     app.state.strategy_monitor = strategy_monitor
     qs.set_app_state(app.state)
-    guard = getattr(app.state, "start_signal_snapshot_guard", None)
-    if callable(guard):
-        import threading
 
+    def _signal_snapshot_guard() -> None:
+        # 最新分区若在「交叉类信号算不出来」的状态下落盘 (盘中昨日值没 join 上),
+        # 页面会把这些信号一律当 false 展示。启动后自检一次, 命中则按历史口径重算。
+        # 预热期间缓存是空表, 检查无意义 —— 先等预热线程结束。
+        warmup = getattr(repo, "_warmup_thread", None)
+        if warmup is not None and warmup.is_alive():
+            warmup.join(timeout=600)
         try:
-            threading.Thread(target=guard, daemon=True, name="signal-snapshot-guard").start()
-        except RuntimeError:
-            logger.warning("无法启动 enriched 快照信号自检线程")
+            from app.api.data import check_signal_snapshot, repair_signal_snapshot_impl
+
+            report = check_signal_snapshot(repo)
+            if report.get("ok"):
+                return
+            logger.warning(
+                "enriched 快照信号异常 (as_of=%s): 缺失 %s, 盘中降级 %s — 按历史口径重算",
+                report.get("as_of"),
+                report.get("missing") or "无",
+                report.get("today_degraded") or "无",
+            )
+            repair_signal_snapshot_impl(app.state)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("enriched 快照信号自检失败 (忽略): %s", e)
+
+    import threading
+
+    try:
+        threading.Thread(target=_signal_snapshot_guard, daemon=True, name="signal-snapshot-guard").start()
+    except RuntimeError:
+        logger.warning("无法启动 enriched 快照信号自检线程")
 
     # 五档盘口 sealed 服务(真假涨停/跌停, 独立旁路线)
     from app.services.depth_service import DepthService

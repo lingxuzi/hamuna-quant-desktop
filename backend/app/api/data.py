@@ -993,43 +993,45 @@ def refresh_cache(request: Request) -> dict:
     return {"ok": True}
 
 def check_signal_snapshot(repo) -> dict:
-    """检查最新 enriched 快照的信号列是否与信号定义一致。
+    """检查最新一天的 enriched 快照里信号列是否齐全。
 
-    盘中增量路径靠 join 上一交易日的指标算交叉类信号; 这一步失败时信号列
-    缺席, 消费端按 false 处理 —— 「今天没金叉」和「根本算不出来」看起来一样。
-    判据取三方交集, 避免误报:
-      · 当前活跃信号定义里的 signal_* 列
-      · 历史路径 (allow_shift) 能算出来的列 —— 这些列本该存在于快照
-      · 快照磁盘分区里缺席的列
+    signal_* 是查询时现算的, 不落盘 —— 只能用内存缓存判断, 读 parquet 的列
+    必然缺全部信号列 (那是设计如此, 不是故障)。
+
+    两类故障:
+      · missing       列压根没算出来 (自定义信号定义改了、编译失败)
+      · today_degraded 当日路径编译不出 (昨日值没 join 上, 交叉类信号恒不成立)
     """
     from app.strategy import custom_signals
 
+    empty = {"ok": True, "as_of": None, "missing": [], "today_degraded": []}
     data_dir = repo.store.data_dir
-    root = data_dir / "kline_daily_enriched"
     try:
-        latest = repo._latest_enriched_date_duckdb()
+        frame, as_of = repo.get_enriched_latest_asset("stock")
     except Exception:  # noqa: BLE001
-        latest = None
-    if latest is None:
-        return {"ok": True, "as_of": None, "missing": [], "today_degraded": []}
-    partition = root / f"date={latest.isoformat()}" / "part.parquet"
-    if not partition.exists():
-        return {"ok": True, "as_of": latest.isoformat(), "missing": [], "today_degraded": []}
-    import polars as pl
+        return empty
+    if frame is None or frame.is_empty():
+        # 缓存预热中返回空表: 既不能判「正常」也不能判「异常」, 标记 pending。
+        if getattr(repo, "_enriched_warming", False):
+            return {**empty, "pending": True}
+        return empty
 
-    try:
-        present = set(pl.read_parquet_schema(partition).keys())
-    except Exception as e:  # noqa: BLE001
-        return {"ok": True, "as_of": latest.isoformat(), "missing": [], "error": str(e)}
     sigs = custom_signals.load_all(data_dir)
     expected = set(custom_signals.build_expressions(sigs).keys())
-    missing = sorted(expected - present)
+    # 区分两种故障: 定义在盘上但编译不出 (表达式层失败, 全链路都缺列),
+    # 与编译成功但当前缓存帧没注入 (缓存帧来自降级路径)。只看 missing 无法分辨。
+    defined = len([s for s in sigs if s.get("enabled") is not False])
+    diag = {"defined": defined, "compiled": len(expected)}
+    if not expected:
+        return {**empty, "as_of": as_of.isoformat() if as_of else None, **diag}
+    missing = sorted(expected - set(frame.columns))
+    degraded = sorted(set(custom_signals_missing_today()) & expected)
     return {
-        "ok": not missing,
-        "as_of": latest.isoformat(),
+        "ok": not missing and not degraded,
+        "as_of": as_of.isoformat() if as_of else None,
         "missing": missing,
-        # 当日路径当前是否算得出这些交叉类信号; 非空则修复不止是重算, 还要看昨日值来源
-        "today_degraded": custom_signals_missing_today() if missing else [],
+        "today_degraded": degraded,
+        **diag,
     }
 
 @router.get("/signal-health")
@@ -1068,7 +1070,9 @@ def repair_signal_snapshot_impl(state) -> dict:
     logger.info("signal-repair: 已按历史口径重算 %s 的 enriched", latest)
     return {
         "ok": True, "as_of": latest.isoformat(), "repaired": True,
-        "rows": len(frame), "missing_before": report.get("missing", []),
+        "rows": len(frame),
+        "missing_before": report.get("missing", []),
+        "degraded_before": report.get("today_degraded", []),
     }
 
 @router.post("/signal-repair")

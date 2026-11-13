@@ -16,7 +16,7 @@ export function SignalHealthPanel({ isRunning }: { isRunning: boolean }) {
   })
 
   const h = health.data
-  const broken = h ? !h.ok || (h.today_degraded?.length ?? 0) > 0 : false
+  const broken = !!h && !h.ok
   const canRepair = !!h && !isRunning && !repair.isPending
 
   return (

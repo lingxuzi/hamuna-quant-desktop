@@ -797,6 +797,23 @@ def run_now(
         logger.warning("paper_settle failed (soft): %s", e)
         stage_errors.append(f"paper_settle: {e}")
 
+    # Step 2.9: 股本回填 —— 日K/实时快照已把 turnover_rate 写进 enriched,
+    # 此时才能反推股本。Step 0 的维表同步跑在写入之前 → 股本永远滞后一轮
+    # (新部署: 全市场股本为空 → 市值/换手率条件恒 false → 选股一只不出)。
+    try:
+        emit("sync_instruments", 95, "回填股本…")
+        added = instrument_sync.backfill_shares(repo.store.data_dir)
+        if added:
+            _refresh_instruments_view(repo)
+            _invalidate("instruments")
+            # 缓存帧里的股本是预热时烘焙的 → 必须重建, 否则选股仍读旧股本
+            repo.clear_cache()
+            repo.refresh_cache()
+        emit("sync_instruments", 95, f"股本回填完成,补齐 {added} 只标的")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("股本回填失败 (soft): %s", e)
+        stage_errors.append(f"backfill_shares: {e}")
+
     # Step 3: 刷新视图
     emit("refresh_views", 95, "刷新 DuckDB 视图…")
     _refresh_views(repo)
