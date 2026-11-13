@@ -148,3 +148,13 @@ def test_provider_metadata_supplies_price_limits(tmp_path, monkeypatch):
     assert row["limit_up"] == 6.50
     assert row["limit_down"] == 5.32
     assert row["float_shares"] == 765140730.0
+
+def test_empty_daily_dir_does_not_break_instrument_sync(tmp_path, monkeypatch):
+    """全新部署: kline_daily 目录存在但无分区, 维表同步不得抛错 (DuckDB 空匹配 IOException)。"""
+    (tmp_path / "kline_daily").mkdir()
+    item = {"symbol": "600519.SH", "name": "贵州茅台", "ext": {}}
+    monkeypatch.setattr(isync, "fetch_instruments_via_provider",
+                        lambda *_: isync._flatten_instruments([item]))
+    assert isync._local_first_trade_dates(tmp_path) == {}
+    assert isync.sync_instruments(tmp_path) == 1
+    assert (tmp_path / "instruments/instruments.parquet").exists()

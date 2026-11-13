@@ -189,9 +189,14 @@ def load_name_history(data_dir: Path) -> pl.DataFrame:
 
 
 def _local_first_trade_dates(data_dir: Path) -> dict[str, date]:
-    """本地日K 每标的的首个交易日 (上市日的近似)。"""
+    """本地日K 每标的的首个交易日 (上市日的近似)。
+
+    全新部署 (目录已建但一个分区都没有) 是正常状态, 不是错误: DuckDB 的
+    read_parquet 对空匹配会抛 IOException, 这里直接返回空表, 让上市日回填
+    跳过, 不阻断维表同步与整条盘后管道。
+    """
     daily_dir = data_dir / "kline_daily"
-    if not daily_dir.exists():
+    if not daily_dir.exists() or not any(daily_dir.glob("date=*")):
         return {}
     import duckdb
 
