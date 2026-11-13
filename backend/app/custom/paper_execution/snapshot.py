@@ -33,6 +33,19 @@ RISK_FIELDS = (
     "trailing_take_profit_drawdown",
     "max_hold_days",
 )
+# 挖掘候选的元数据与因子定义: 描述"这个候选是什么", 不是回测执行配置。
+# 候选的因子池/权重已固化在发布策略的模块常量 SCORING/DIRECTIONS 里, 跟单执行
+# 只用策略本身; 这些键从执行配置里剥离, 只做同源核对 (_check_candidate_metadata)。
+CANDIDATE_METADATA_FIELDS = (
+    "factor_names",
+    "directions",
+    "weights",
+    "origin_run_id",
+    "candidate_signature",
+    "regime_state",
+    "algorithm_version",
+    "methodology_version",
+)
 
 
 def digest(value) -> str:
@@ -116,12 +129,38 @@ def definition_revision(strategy) -> str:
     )
 
 
+def _check_candidate_metadata(strategy, metadata: dict) -> None:
+    """候选元数据必须与已发布策略同源 (fail-closed, 不静默纠正)。
+
+    候选与策略的对应关系由发布时写入的 META.provenance + 模块 SCORING 因子集合决定;
+    对不上说明绑的不是这个候选验证过的东西, 拒绝而不是照跑。
+    """
+    signature = metadata.get("candidate_signature")
+    if signature is not None:
+        if strategy.meta.get("candidate_signature") != signature:
+            raise ValueError("候选与策略来源不一致, 请重新发布候选后再绑定")
+        origin = metadata.get("origin_run_id")
+        if origin is not None and strategy.meta.get("origin_run_id") != origin:
+            raise ValueError("候选与策略来源不一致, 请重新发布候选后再绑定")
+    factor_names = metadata.get("factor_names")
+    if factor_names is not None:
+        if not isinstance(factor_names, list) or not all(
+            isinstance(item, str) and item for item in factor_names
+        ):
+            raise ValueError("候选因子清单非法")
+        if set(factor_names) != set(strategy.scoring_columns):
+            raise ValueError("候选因子与策略评分口径不一致, 请重新发布候选后再绑定")
+    # ponytail: 只核对因子集合与溯源, 权重/方向未核验 —— 引擎未暴露模块 SCORING 的
+    # 权重与方向; 需要严格核验时在 StrategyDef 增加 scoring_weights/scoring_directions。
+
+
 def make_snapshot(data_dir: Path, engine, source: dict, account: dict | None = None) -> dict:
     raw = source.get("config")
     current = raw is None
     if raw is not None and not isinstance(raw, dict):
         raise ValueError("回测配置必须是对象")
     raw = deepcopy(raw or {})
+    metadata = {key: raw.pop(key) for key in CANDIDATE_METADATA_FIELDS if key in raw}
     if current and account:
         raw.update(
             initial_capital=account["initial_cash"],
@@ -137,6 +176,7 @@ def make_snapshot(data_dir: Path, engine, source: dict, account: dict | None = N
         "timeframes", ["1d"]
     ):
         raise ValueError("当前跟单仅支持 A 股日线策略")
+    _check_candidate_metadata(s, metadata)
     valid = {f.name for f in fields(StrategyBacktestConfig)} | {
         "score_min",
         "score_max",

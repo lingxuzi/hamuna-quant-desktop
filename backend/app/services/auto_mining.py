@@ -20,7 +20,7 @@ from datetime import date, timedelta
 from typing import Any, Literal
 
 from app.backtest.factor import FactorBacktestService, FactorBatchConfig
-from app.factors.registry import factor_columns_view
+from app.factors.registry import all_factors
 
 Profile = Literal["exploratory", "balanced", "strict"]
 
@@ -119,11 +119,9 @@ def screen_all_factors(
     if gate is None:
         raise ValueError(f"unknown mining profile: {profile}")
 
-    candidates = [
-        str(item["id"])
-        for item in factor_columns_view()
-        if asset_type in item.get("asset_types", ["stock"])
-    ]
+    # 用 all_factors 而非 factor_columns_view: 后者不返回 asset_types (ETF 池恒空),
+    # 且不触发扩展表因子同步 (ext 因子进池依赖进程内调用顺序)。
+    candidates = [spec.id for spec in all_factors(asset_type=asset_type)]
     screen_start = max(start or date.min, end - timedelta(days=SCREEN_WINDOW_DAYS))
     began = time.perf_counter()
     service = FactorBacktestService(engine)

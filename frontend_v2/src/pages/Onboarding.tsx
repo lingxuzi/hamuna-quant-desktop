@@ -344,6 +344,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
                     placeholder="粘贴 fuyao API Key"
                     autoComplete="off"
                     aria-label="fuyao API Key"
+                    className="ctl ctl-sm ctl-input min-w-0 flex-1"
                   />
                   <button type="submit" className="ctl-btn ctl-sm pri" disabled={!fyKey.trim() || saveKey.isPending}>
                     {saveKey.isPending ? '验证中…' : '验证并保存'}

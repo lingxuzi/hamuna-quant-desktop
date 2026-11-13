@@ -62,7 +62,7 @@ export function DataIntegrityPanel({ hasCap, isRunning, job, defaultAssets, onSt
           </select>
         </div>
         <button onClick={() => scan.mutate()} disabled={pending || !assets.length}
-          className="ctl ctl-sm ctl-btn pri inline-flex items-center gap-1.5 px-1.5 hover:bg-accent/90 disabled:opacity-40 focus:ring-2 focus:ring-accent/40">
+          className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:opacity-40 focus:ring-2 focus:ring-accent/40">
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5" />}
           {pending ? '任务进行中…' : '开始自检'}
         </button>

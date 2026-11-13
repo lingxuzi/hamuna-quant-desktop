@@ -135,6 +135,8 @@ class MiningAutoStartRequest(BaseModel):
     stamp_tax_pct: float = Field(0.0005, ge=0.0, le=0.05, allow_inf_nan=False)
     slippage_bps: float = Field(5.0, ge=0.0, le=1000.0, allow_inf_nan=False)
     correlation_threshold: float = Field(0.75, gt=0.0, le=1.0, allow_inf_nan=False)
+    # 可选定股票池 (如市场感知生成的强势板块成分); None = 全市场
+    symbols: list[str] | None = Field(None, max_length=10_000)
     force: bool = False
 
     @field_validator("start", "end", mode="before")
@@ -146,6 +148,16 @@ class MiningAutoStartRequest(BaseModel):
             except ValueError as exc:
                 raise ValueError("dates must use ISO YYYY-MM-DD format") from exc
         return value
+
+    @field_validator("symbols")
+    @classmethod
+    def _symbols(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        cleaned = [value for value in values if value]
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("symbols must be unique")
+        return cleaned or None
 
     @model_validator(mode="after")
     def _date_range(self) -> MiningAutoStartRequest:
@@ -382,7 +394,7 @@ def start_auto_run(payload: MiningAutoStartRequest, request: Request) -> dict[st
     worker_request = {
         "factor_names": screening["pool"],
         "strategy_ids": [],
-        "symbols": None,
+        "symbols": payload.symbols,
         "asset_type": payload.asset_type,
         "start": payload.start.isoformat() if payload.start else None,
         "end": payload.end.isoformat() if payload.end else None,

@@ -479,7 +479,7 @@ export function ReviewPage() {
                       onChange={e => setPromptDraft(e.target.value)}
                       spellCheck={false}
                       placeholder="留空使用内置默认提示词；也可点下方「填入默认模板」后在其基础上修改"
-                      className="h-44 w-full resize-y rounded-btn bg-base border border-border p-2.5 font-mono text-[11px] leading-relaxed text-foreground outline-none placeholder:text-muted/60 focus:border-accent/50"
+                      className="ctl-textarea ctl-textarea-sm h-44 w-full resize-y bg-base leading-relaxed placeholder:text-muted/60 focus:border-accent/50"
                     />
                     <div className="mt-1.5 flex items-center justify-between">
                       <span className="text-[9px] text-muted/70">

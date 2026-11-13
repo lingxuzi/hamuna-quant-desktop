@@ -1725,7 +1725,92 @@ export interface MiningAutoStartPayload {
   end?: string | null
   budget_profile?: MiningBudgetProfile
   correlation_threshold?: number
+  /** 限定股票池 (市场感知生成: 强势板块成分); 不传 = 全市场 */
+  symbols?: string[] | null
   force?: boolean
+}
+
+/** 市场感知生成: 参考维度 / 标的 */
+export type MarketDimension = 'market' | 'sector' | 'money_flow'
+
+export interface MarketFactsPayload {
+  dimensions: MarketDimension[]
+  asset_type: 'stock' | 'etf'
+  window_days?: number
+}
+
+export interface MarketSectorFact {
+  member: string
+  days: number
+  avg_score: number | null
+  best_rank: number
+  limit_up_sum: number
+  momentum: number | null
+}
+
+export interface MarketFacts {
+  window: { start: string; end: string; days: number }
+  as_of: string
+  asset_type: 'stock' | 'etf'
+  dimensions: MarketDimension[]
+  market?: {
+    bars: number
+    states: { state: string; days: number }[]
+    phases: { phase: string; days: number }[]
+    score: { mean: number | null; last: number | null }
+    up_ratio: { mean: number | null; last: number | null }
+    avg_pct: { mean: number | null; last: number | null }
+    above_ma20_pct: { mean: number | null; last: number | null }
+    phase_last: string | null
+    recent: Record<string, unknown>[]
+  }
+  sector?: {
+    sectors: MarketSectorFact[]
+    rising: { member: string; momentum: number | null }[]
+    fading: { member: string; momentum: number | null }[]
+    pool: { members: string[]; symbols: string[]; size: number; note: string }
+  }
+  money_flow?: {
+    tables: {
+      table: string
+      field: string
+      points: number
+      mean: number | null
+      last: number | null
+      recent_vs_earlier: number | null
+    }[]
+    coverage: { points: number; tables: number }
+  }
+}
+
+export interface MarketAwareDecisions {
+  name: string | null
+  description: string
+  params: { entry_score: number; exit_score: number; top_rank: number }
+  basic_filter: Record<string, number>
+  risk: { stop_loss: number; max_hold_days: number }
+}
+
+export interface MarketAwareBuildResult {
+  ok: boolean
+  strategy_id: string
+  champion: {
+    run_id: string
+    signature: string
+    name: string
+    score: number | null
+    factors: Record<string, number>
+    directions: Record<string, 'high' | 'low'>
+    provenance: {
+      origin_run_id: string
+      candidate_signature: string
+      mining_algorithm_version: string
+      factor_methodology_version: string
+    }
+    metrics: Record<string, unknown>
+  }
+  decisions: MarketAwareDecisions
+  facts: MarketFacts
 }
 
 export interface MiningAutoStartResponse {
@@ -3354,6 +3439,12 @@ export const api = {
       `/api/index/sync_daily?days=${days}`,
       { method: 'POST' },
     ),
+  /** ETF 日K 历史补拉 (后台任务, 返回 job_id 轮询进度)。 */
+  syncEtfDaily: (payload: { days: number; batch_size: number }) =>
+    request<{ job_id: string }>('/api/etf/sync_daily', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   syncSymbol: (symbol: string, days = 250) =>
     request<{ symbol: string; rows_written: number }>(
       `/api/kline/sync?symbol=${encodeURIComponent(symbol)}&days=${days}`,
@@ -3811,6 +3902,19 @@ export const api = {
 
   miningResult: (runId: string) =>
     request<MiningResult>(`/api/backtest/mining/runs/${encodeURIComponent(runId)}/result`),
+
+  marketFacts: (payload: MarketFactsPayload) =>
+    request<{ ok: boolean; facts: MarketFacts }>('/api/strategies/market-aware/facts', {
+      method: 'POST',
+      quiet: true,
+      body: JSON.stringify(payload),
+    }),
+
+  marketAwareBuild: (payload: MarketFactsPayload & { run_id: string }) =>
+    request<MarketAwareBuildResult>('/api/strategies/market-aware/build', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   miningCancel: (runId: string) =>
     request<MiningRun>(`/api/backtest/mining/runs/${encodeURIComponent(runId)}/cancel`, {

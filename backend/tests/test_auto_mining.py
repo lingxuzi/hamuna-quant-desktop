@@ -78,8 +78,8 @@ def _stub_batch(monkeypatch: pytest.MonkeyPatch) -> type[_StubService]:
 
 
 def test_screen_pool_order_truncation_and_reasons(monkeypatch: pytest.MonkeyPatch, _stub_batch: type[_StubService]) -> None:
-    monkeypatch.setattr(auto_mining, "factor_columns_view", lambda: [
-        {"id": name, "asset_types": ["stock"]} for name in ("a", "b", "c", "d", "e", "f")
+    monkeypatch.setattr(auto_mining, "all_factors", lambda asset_type=None: [
+        SimpleNamespace(id=name) for name in ("a", "b", "c", "d", "e", "f")
     ])
     items = [
         _batch_item("a", ic_mean=0.10, ir=0.8),   # |ic|*|ir|=0.08 → 第 1
@@ -123,6 +123,29 @@ def test_screen_window_capped_and_daily_rebalance(monkeypatch: pytest.MonkeyPatc
     assert (config.end - config.start).days <= auto_mining.SCREEN_WINDOW_DAYS
     # 因子清单来自注册表 (动态视图, 数量与内置一致量级)
     assert len(config.factor_names) >= 50
+
+def test_screen_pool_respects_asset_type(monkeypatch: pytest.MonkeyPatch, _stub_batch: type[_StubService]) -> None:
+    """ETF 必须有自己的因子池: 旧实现读 column_view() (无 asset_types) 导致 ETF 池恒空。"""
+    _stub_batch.results = []
+    seen: dict[str, Any] = {}
+
+    def _all_factors(asset_type: str | None = None) -> list[Any]:
+        seen["asset_type"] = asset_type
+        return [SimpleNamespace(id="etf_a"), SimpleNamespace(id="etf_b")]
+
+    monkeypatch.setattr(auto_mining, "all_factors", _all_factors)
+    screen_all_factors(
+        object(), asset_type="etf", start=None, end=date.today(), profile="exploratory",
+    )
+    assert seen["asset_type"] == "etf"
+    assert _stub_batch.calls[0].factor_names == ["etf_a", "etf_b"]
+
+def test_registry_asset_type_pools_are_not_empty() -> None:
+    """注册表真值: 个股与 ETF 都有可用因子池 (ETF 曾因 asset_types 缺失恒空)。"""
+    from app.factors.registry import all_factors
+
+    assert all_factors(asset_type="stock")
+    assert all_factors(asset_type="etf")
 
 
 # ── API 契约: /api/backtest/mining/auto ──

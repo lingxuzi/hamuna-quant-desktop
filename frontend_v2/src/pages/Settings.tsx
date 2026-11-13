@@ -178,7 +178,7 @@ export function Settings() {
                   onClick={() => setSearchParams({ tab: key }, { replace: true })}
                   title={collapsed ? label : undefined}
                   className={cn(
-                    'group relative flex items-center text-[11px] leading-[1.4] transition-colors duration-150 ease-smooth',
+                    'group relative flex items-center leading-[1.4] transition-colors duration-150 ease-smooth',
                     collapsed ? 'ctl ctl-sm ctl-ghost justify-center px-1.5' : 'ctl ctl-md ctl-ghost pl-2.5 pr-1 text-left border-l-2',
                     activeTab.key === key
                       ? 'border-accent text-accent bg-accent/[0.055]'

@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.backtest.minute_trigger import MINUTE_EXIT_TRIGGER_SIGNALS
@@ -1452,3 +1452,112 @@ def reload_strategies(request: Request):
         raise HTTPException(status_code=400, detail=str(e)) from e
     _invalidate_strategy_runtime(request)
     return {"ok": True, "count": len(engine.list_strategies())}
+
+
+# ── 市场感知生成: 近 120 天事实 + 挖掘冠军 → 合并策略 ──
+
+class MarketFactsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    dimensions: list[Literal["market", "sector", "money_flow"]]
+    asset_type: Literal["stock", "etf"] = "stock"
+    window_days: int = Field(120, ge=20, le=500)
+
+
+class MarketAwareBuildRequest(MarketFactsRequest):
+    run_id: str
+
+
+def _market_facts(payload: MarketFactsRequest, request: Request) -> dict:
+    from app.services.market_facts import build_market_facts
+
+    return build_market_facts(
+        _data_dir(request),
+        request.app.state.repo,
+        dimensions=payload.dimensions,
+        asset_type=payload.asset_type,
+        window_days=payload.window_days,
+    )
+
+
+@router.post("/market-aware/facts")
+def market_aware_facts(payload: MarketFactsRequest, request: Request) -> dict:
+    """市场事实预览: 只聚合描述, 不生成策略。缺数据的维度返回带指路文案的 400。"""
+    from app.services.market_facts import MarketFactsUnavailableError
+
+    try:
+        return {"ok": True, "facts": _market_facts(payload, request)}
+    except MarketFactsUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/market-aware/build")
+async def market_aware_build(payload: MarketAwareBuildRequest, request: Request) -> dict:
+    """挖掘成功后: 事实 + 冠军因子池 → AI 决策 → 渲染落盘为因子排名策略。"""
+    from app.services.ai_provider import generate_ai_text
+    from app.services.market_aware import (
+        champion_from_run,
+        new_market_aware_id,
+        render_market_aware_strategy,
+        validate_decisions,
+    )
+    from app.services.market_facts import MarketFactsUnavailableError
+    from app.services.mining_jobs import MiningRunStore
+    from app.strategy.market_plan import build_messages, parse_and_validate
+
+    data_dir = _data_dir(request)
+    run_store = MiningRunStore(data_dir)
+    try:
+        facts = _market_facts(payload, request)
+        champion = champion_from_run(run_store, payload.run_id)
+    except (MarketFactsUnavailableError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        text = await generate_ai_text(
+            build_messages(
+                facts,
+                factors=champion["factors"],
+                directions=champion["directions"],
+                asset_type=payload.asset_type,
+            ),
+            temperature=0.2,
+            max_tokens=None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"AI 生成失败: {exc}") from exc
+    try:
+        decisions = validate_decisions(
+            parse_and_validate(text, factors=champion["factors"]), champion["factors"]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    strategy_id = new_market_aware_id()
+    source = render_market_aware_strategy(
+        champion, decisions, strategy_id=strategy_id, asset_type=payload.asset_type
+    )
+    # 复用唯一落盘实现 (校验链 + 回滚 + engine.reload)
+    try:
+        save_strategy_code_core(
+            StrategyCodeSaveRequest(
+                code=source,
+                strategy_id=strategy_id,
+                target_source="custom",
+                mode="create",
+                name=decisions.get("name") or "",
+                description=decisions.get("description") or "",
+            ),
+            _get_engine(request),
+            data_dir,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _invalidate_strategy_runtime(request)
+    return {
+        "ok": True,
+        "strategy_id": strategy_id,
+        "champion": champion,
+        "decisions": decisions,
+        "facts": facts,
+    }

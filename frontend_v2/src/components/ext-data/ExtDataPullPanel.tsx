@@ -554,7 +554,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   value={headerStr} onChange={e => setHeaderStr(e.target.value)}
                   placeholder='{"X-Custom": "value"}'
                   rows={3}
-                  className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                  className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                 />
               </div>
               <div>
@@ -566,7 +566,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   placeholder='{"page": 1}'
                   rows={3}
                   disabled={method !== 'POST'}
-                  className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                  className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 disabled:opacity-40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                 />
               </div>
             </div>
@@ -840,7 +840,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
                   value={fieldMapStr} onChange={e => setFieldMapStr(e.target.value)}
                   placeholder='{"code": "symbol", "val": "score"}'
                   rows={2}
-                  className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                  className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                 />
               </div>
               <div>

@@ -157,15 +157,16 @@ export function Analysis() {
             <div className="tool-a md:grid-cols-3 grid-cols-1">
               <label>
                 <span className="text-[11px] text-muted">菜单标识</span>
-                <input value={id} onChange={e => setId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} placeholder="如 concept_hot" />
+                <input value={id} onChange={e => setId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} placeholder="如 concept_hot" className="ctl ctl-md ctl-input w-full" />
               </label>
               <label>
                 <span className="text-[11px] text-muted">菜单名称</span>
-                <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" />
+                <input value={label} onChange={e => setLabel(e.target.value)} placeholder="如 概念热度" className="ctl ctl-md ctl-input w-full" />
               </label>
               <label>
                 <span className="text-[11px] text-muted">扩展数据源</span>
                 <select
+                  className="ctl ctl-md ctl-select w-full"
                   value={dataSource || activeConfig?.id || ''}
                   onChange={e => {
                     const cfg = configs.find(c => c.id === e.target.value)
@@ -182,7 +183,7 @@ export function Analysis() {
             <div className="tool-a md:grid-cols-3 grid-cols-1">
               <label>
                 <span className="text-[11px] text-muted">模板</span>
-                <select value={template} onChange={e => setTemplate(e.target.value as any)}>
+                <select value={template} onChange={e => setTemplate(e.target.value as any)} className="ctl ctl-md ctl-select w-full">
                   <option value="dimension_rank">维度热度榜</option>
                   <option value="ranking">指标排名榜</option>
                   <option value="table">明细表</option>
@@ -190,14 +191,14 @@ export function Analysis() {
               </label>
               <label>
                 <span className="text-[11px] text-muted">分组字段</span>
-                <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="ctl ctl-md ctl-select">
+                <select value={dimensionField} onChange={e => setDimensionField(e.target.value)} disabled={template !== 'dimension_rank'} className="ctl ctl-md ctl-select w-full">
                   <option value="">请选择</option>
                   {fields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
                 </select>
               </label>
               <label>
                 <span className="text-[11px] text-muted">排名字段</span>
-                <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="ctl ctl-md ctl-select">
+                <select value={rankField} onChange={e => setRankField(e.target.value)} disabled={template !== 'ranking'} className="ctl ctl-md ctl-select w-full">
                   <option value="">请选择</option>
                   {numericFields.map(f => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
                 </select>

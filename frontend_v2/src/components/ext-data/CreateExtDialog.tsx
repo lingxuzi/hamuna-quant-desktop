@@ -661,7 +661,7 @@ export function CreateExtDialog({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setHeaderStr(e.target.value)}
                     rows={2}
                     placeholder='{"Authorization":"Bearer xxx"}'
-                    className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                    className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                   />
                 </div>
                 <div>
@@ -671,7 +671,7 @@ export function CreateExtDialog({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setFieldMapStr(e.target.value)}
                     rows={2}
                     placeholder='{"code":"symbol","val":"score"}'
-                    className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                    className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                   />
                 </div>
               </div>
@@ -683,7 +683,7 @@ export function CreateExtDialog({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setBody(e.target.value)}
                     rows={3}
                     placeholder='{"page":1}'
-                    className="w-full rounded-lg border border-border bg-base px-2.5 py-1.5 text-[10px] font-mono text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
+                    className="ctl-textarea ctl-textarea-md w-full resize-none bg-base placeholder:text-muted/40 focus:ring-1 focus:ring-accent/25 focus:border-accent/50 transition-shadow"
                   />
                 </div>
               )}

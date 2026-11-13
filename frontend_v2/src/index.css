@@ -426,9 +426,7 @@ nav :focus-visible { outline-offset: -2px; }
     display: flex; align-items: center; gap: 8px;
     margin-top: 8px; padding-top: 8px; border-top: 1px solid hsl(var(--border));
   }
-  /* 皮肤分段与并排的图标按钮同高 (24px): .seg 按钮 24px + 容器上下边框 = 26px,
-     并排时比图标按钮高 2px —— 这里压到 22px 让容器回到 24px。 */
-  .toc-foot .seg button { height: 22px; line-height: 20px; }
+  /* 皮肤分段与并排的图标按钮同高 (24px): .seg 按钮 22px + 容器上下边框 = 24px。 */
   .toc-foot-set {
     display: flex; margin-left: auto; align-items: center; gap: 6px;
     font-size: 10px; color: hsl(var(--fg-secondary)); transition: color .15s ease;
@@ -1048,10 +1046,11 @@ nav :focus-visible { outline-offset: -2px; }
 
   /* ---- 分段控件 / 开关 ---- */
   /* 分段控件 (两~四档切换) —— 全站唯一一套。24px 高 / 11px 字, 与 .ctl-sm 同刻度。
+     容器自带 1px 描边, 所以按钮压到 22px —— 整组才是 24px, 与旁边的 ctl-sm 控件齐平。
      选中态只认 aria-pressed (或 .on): 白字压深底, 对比度拉满。 */
   .seg { display: inline-flex; vertical-align: middle; border: 1px solid hsl(var(--border)); justify-self: start; align-self: flex-start; }
   .seg button {
-    font-family: var(--font-sans); font-size: 11px; line-height: 22px; height: 24px;
+    font-family: var(--font-sans); font-size: 11px; line-height: 20px; height: 22px;
     color: hsl(var(--fg-secondary));
     background: transparent; border: 0; padding: 0 10px; cursor: pointer;
     transition: background .12s ease, color .12s ease;
@@ -1131,10 +1130,7 @@ nav :focus-visible { outline-offset: -2px; }
   .rowset .r b { display: block; font-size: 11.5px; font-weight: 500; color: var(--ink); }
   .rowset .r small { display: block; font-size: 10px; color: var(--ink-3); line-height: 1.65; margin-top: 2px; max-width: 58ch; }
   .rowset .r > .ctl { display: flex; align-items: center; gap: 8px; justify-self: end; flex-wrap: wrap; justify-content: flex-end; }
-  .rowset input[type=text], .rowset input[type=password] {
-    font: inherit; font-size: 11px; background: var(--leaf); color: var(--ink);
-    border: 1px solid var(--rule); padding: 5px 7px; border-radius: 0; width: 180px;
-  }
+  /* 行内输入框走 .ctl-input (原来在这里自绘: 11px 字 + 0 圆角, 与全站刻度脱节) */
   .rowset .v { font-family: var(--mono); font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .rowset .v.dim { color: var(--ink-3); }
 
@@ -1197,11 +1193,8 @@ nav :focus-visible { outline-offset: -2px; }
     border-top: 1px solid var(--rule-strong); padding: 12px 0 14px; border-bottom: 1px solid var(--rule);
   }
   .tool-a label { display: block; font-size: 10px; color: var(--ink-2); margin-bottom: 4px; }
-  .tool-a input, .tool-a select {
-    width: 100%; font: inherit; font-size: 11px; background: var(--leaf); color: var(--ink);
-    border: 1px solid var(--rule); padding: 5px 7px; border-radius: 0; outline: none;
-  }
-  .tool-a input:focus-visible, .tool-a select:focus-visible { outline: 2px solid var(--ochre); outline-offset: 1px; }
+  /* input / select 的外观交给 .ctl-* 基类 (原来在这里自绘: 11px 字 + 0 圆角,
+     与全站控件刻度脱节, 同一行里能并排放出两种高度两种圆角) */
   .tool-a > div:last-child { display: flex; gap: 6px; }
 
   /* 步骤条: 5 步当前态 */
@@ -1265,10 +1258,6 @@ nav :focus-visible { outline-offset: -2px; }
   .auth-card > p { font-size: 11px; color: var(--ink-3); margin: 0; }
   .auth-form { text-align: left; margin-top: 24px; border-top: 1px solid var(--rule-strong); padding-top: 14px; }
   .auth-form label { display: block; font-size: 10px; color: var(--ink-2); margin-bottom: 5px; }
-  .auth-form input {
-    width: 100%; font: inherit; font-size: 12px; letter-spacing: .18em; background: var(--leaf);
-    color: var(--ink); border: 1px solid var(--rule); padding: 8px 9px; border-radius: 0;
-  }
   /* 密码框的显隐钮: 贴在输入框右缘内 */
   .auth-pw { position: relative; }
   .auth-pw input { padding-right: 30px; }
@@ -1405,13 +1394,13 @@ nav :focus-visible { outline-offset: -2px; }
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   }
   .drv-ft .inp {
-    flex: 1; font: inherit; font-size: 11.5px; min-height: 30px; padding: 6px 10px;
-    border: 1px solid var(--rule); border-radius: 0; background: var(--paper); color: var(--ink);
+    flex: 1; font: inherit; font-size: 11px; min-height: 30px; padding: 6px 10px;
+    border: 1px solid var(--rule); border-radius: 2px; background: var(--paper); color: var(--ink);
     resize: none;
   }
   .drv-ft .inp::placeholder { color: var(--ink-3); }
   .drv-ft .send {
-    font: inherit; font-size: 11.5px; padding: 0 16px; height: 30px;
+    font: inherit; font-size: 11px; padding: 0 16px; height: 30px;
     background: var(--ink); color: var(--paper); border: 0; cursor: pointer;
   }
   .drv-ft .send[disabled] { background: var(--leaf-2); color: var(--ink-3); cursor: default; }
@@ -1465,6 +1454,15 @@ nav :focus-visible { outline-offset: -2px; }
  * 未分层才压得过 text-white 原子类 (utility 层优先级高于 components 层)。 */
 .bg-accent, .bg-danger, .bg-warning, .bg-foreground { color: hsl(var(--on-solid)); }
 
+/* 复选框: 全站同一尺寸与勾选色 —— 原生默认 13px, 但站点里散着 12 / 14 / 16px
+ * 三种, 还有只写宽度把方块拉成 12×13 的。统一成 13px 方块, 勾选色走赭石。
+ * 选择器带元素+属性 (0,1,1), 比 h-[12px] / h-3.5 这类尺寸原子类 (0,1,0) 重,
+ * 所以散落的显式尺寸会一并被压回 13px。 */
+input[type='checkbox'] {
+  width: 13px; height: 13px; flex: 0 0 auto;
+  accent-color: hsl(var(--accent));
+}
+
 /* === 控件基线 —— 全站 button / input / select 的唯一刻度 ===
  * 三档, 高度与字号绑定 (不许单独改其中一项):
  *   sm  24px / 11px / 左右 6px   表格内、极密集筛选条
@@ -1488,9 +1486,10 @@ nav :focus-visible { outline-offset: -2px; }
     padding-left: var(--ctl-px);
     padding-right: var(--ctl-px);
   }
-  .ctl-sm { --ctl-h: 24px; --ctl-px: 6px;  --ctl-fs: 11px; }
-  .ctl-md { --ctl-h: 28px; --ctl-px: 10px; --ctl-fs: 12px; }
-  .ctl-lg { --ctl-h: 36px; --ctl-px: 14px; --ctl-fs: 14px; }
+  /* 刻度只有这三行 —— textarea 复用同一组变量, 不另立一套字号 */
+  .ctl-sm, .ctl-textarea-sm { --ctl-h: 24px; --ctl-px: 6px;  --ctl-fs: 11px; }
+  .ctl-md, .ctl-textarea-md { --ctl-h: 28px; --ctl-px: 10px; --ctl-fs: 12px; }
+  .ctl-lg, .ctl-textarea-lg { --ctl-h: 36px; --ctl-px: 14px; --ctl-fs: 14px; }
 
   /* 按钮: 描边次要 (默认) —— 平时透明, hover 才浮出浅底 */
   .ctl-btn {
@@ -1526,7 +1525,8 @@ nav :focus-visible { outline-offset: -2px; }
   .ctl-ghost {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     border: 1px solid transparent; border-radius: 2px; background: transparent;
-    color: hsl(var(--fg-secondary)); cursor: pointer; text-align: center;
+    color: hsl(var(--fg-secondary)); font-weight: 500;
+    cursor: pointer; text-align: center;
     transition: background .12s ease, color .12s ease;
   }
   .ctl-ghost:hover { background: hsl(var(--elevated)); color: hsl(var(--fg-primary)); }
@@ -1543,6 +1543,18 @@ nav :focus-visible { outline-offset: -2px; }
   .ctl-input:focus { border-color: hsl(var(--accent) / .5); }
   .ctl-input:disabled { opacity: .45; cursor: not-allowed; }
   .ctl-input::placeholder { color: hsl(var(--fg-muted)); }
+
+  /* 多行输入: 与输入框同壳同字体, 高度由内容定 (不锁 --ctl-h) */
+  .ctl-textarea {
+    font-size: var(--ctl-fs, 12px);
+    padding: 6px var(--ctl-px, 10px);
+    border: 1px solid hsl(var(--border)); border-radius: 2px;
+    background: hsl(var(--surface)); color: hsl(var(--fg-primary));
+    font-family: var(--font-mono); outline: none; resize: vertical;
+    transition: border-color .12s ease;
+  }
+  .ctl-textarea:focus { border-color: hsl(var(--accent) / .5); }
+  .ctl-textarea::placeholder { color: hsl(var(--fg-muted)); }
 
   /* 原生下拉 (<select>): 与输入框同壳同高同底色。
      选项文本用正文字族 —— 等宽字体没有中文字形, 选项行会字宽不齐;

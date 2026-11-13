@@ -524,7 +524,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
                       {operators.map(op => <option key={op} value={op}>{op}</option>)}
                     </select>
                     <input type="number" value={c.value ?? 0} onChange={e => updateCond(realIdx, { value: parseFloat(e.target.value) })} step="any" className="ctl ctl-md ctl-input w-24 px-2.5 bg-base font-mono text-center focus:border-accent/50" />
-                    <button onClick={() => removeCond(realIdx)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
+                    <button onClick={() => removeCond(realIdx)} className="ctl ctl-md ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -536,7 +536,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
 
         <label className="space-y-1.5">
           <span className="text-[11px] text-muted">备注 (可选)</span>
-          <input value={draft.message} onChange={e => setDraft(d => ({ ...d, message: e.target.value }))} placeholder="给这条监控加个备注" className="ctl ctl-lg ctl-input w-full px-3.5 bg-base" />
+          <input value={draft.message} onChange={e => setDraft(d => ({ ...d, message: e.target.value }))} placeholder="给这条监控加个备注" className="ctl ctl-md ctl-input w-full px-2.5 bg-base" />
         </label>
 
         {error && <div className="rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</div>}
@@ -1307,7 +1307,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
                       {operators.map(op => <option key={op} value={op}>{op}</option>)}
                     </select>
                     <input type="number" value={c.value ?? 0} onChange={e => updateCond(realIdx, { value: parseFloat(e.target.value) })} step="any" className="ctl ctl-md ctl-input w-24 px-2.5 bg-base font-mono text-center focus:border-accent/50" />
-                    <button onClick={() => removeCond(realIdx)} className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
+                    <button onClick={() => removeCond(realIdx)} className="ctl ctl-md ctl-ghost ctl-icon text-muted hover:text-danger hover:bg-danger/10">
                       <X className="h-[12px] w-[12px]" />
                     </button>
                   </div>

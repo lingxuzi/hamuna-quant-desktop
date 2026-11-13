@@ -151,6 +151,9 @@ export function Data() {
   const [showInstScheduleEdit, setShowInstScheduleEdit] = useState(false)
   const [indexExtendValue, setIndexExtendValue] = useState(6)
   const [indexExtendUnit, setIndexExtendUnit] = useState<'month' | 'year'>('month')
+  const [etfExtendValue, setEtfExtendValue] = useState(2)
+  const [etfExtendUnit, setEtfExtendUnit] = useState<'month' | 'year'>('year')
+  const [etfBatchInput, setEtfBatchInput] = useState('200')
   const [schemaTable, setSchemaTable] = useState<string | null>(null)
   const [showCreateExt, setShowCreateExt] = useState(false)
   const [showImportExt, setShowImportExt] = useState(false)
@@ -174,6 +177,16 @@ export function Data() {
       qc.invalidateQueries({ queryKey: QK.dataStatus })
       qc.invalidateQueries({ queryKey: QK.indexQuotes })
       qc.invalidateQueries({ queryKey: ['index-daily'] })
+    },
+  })
+
+  // ETF 历史补拉: 后台任务, 用 activeJobId 轮询进度
+  const syncEtfDaily = useMutation({
+    mutationFn: () => api.syncEtfDaily({ days: etfSyncDays, batch_size: etfBatchSize }),
+    onSuccess: ({ job_id }) => {
+      setActiveJobId(job_id)
+      setOpenSettings(null)
+      qc.invalidateQueries({ queryKey: QK.dataStatus })
     },
   })
 
@@ -336,6 +349,20 @@ export function Data() {
     5000,
     Math.max(30, Math.ceil((Date.now() - new Date(indexTargetDateText).getTime()) / 86_400_000) + 1),
   )
+  // ETF 历史补拉: 窗口 = (当前最早日 - 往前偏移) 到今天; 无数据时从今天往前推
+  const etfEarliestDate = s?.etf_daily?.earliest_date ?? s?.etf_enriched?.earliest_date ?? null
+  const etfOffsetDays = etfExtendUnit === 'month' ? etfExtendValue * 30 : etfExtendValue * 365
+  const etfTargetDateText = cnAddDays(etfEarliestDate ?? cnToday(), -etfOffsetDays)
+  const etfSyncDays = Math.min(
+    4000,
+    Math.max(
+      30,
+      Math.ceil(
+        (new Date(cnToday()).getTime() - new Date(etfTargetDateText).getTime()) / 86_400_000,
+      ) + 1,
+    ),
+  )
+  const etfBatchSize = Math.max(20, Math.min(500, Number(etfBatchInput) || 200))
 
   // 「字段」列只对三张增强表取 schema 计数 (设计稿: 增强 15 / 11 / 12, 原表为 —)
   const [schemaCounts, setSchemaCounts] = useState<Record<string, number>>({})
@@ -548,6 +575,8 @@ export function Data() {
               { label: '指标', table: 'etf_enriched' },
             ] as FieldTab[]}
             onShowFields={(t) => setSchemaTable(t ?? 'etf_daily')}
+            onSettings={() => setOpenSettings(v => v === 'etf' ? null : 'etf')}
+            settingsOpen={openSettings === 'etf'}
           />
         )
       case 'minute':
@@ -1364,6 +1393,93 @@ export function Data() {
                   <MissingCapChip capKey="kline.daily.batch" />
                 )}
               </div>
+            </div>
+          </SettingsModal>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {openSettings === 'etf' && (
+          <SettingsModal title="ETF · 历史补拉" onClose={() => setOpenSettings(null)}>
+            <div className="rounded-card border border-border bg-base/30 p-4 space-y-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">ETF 日 K 历史</div>
+                <div className="text-[11px] text-muted mt-1">
+                  盘后管道只会把 ETF 行情往后延，历史不够时用这里向前补齐；补拉完成会一并重算指标。
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setEtfExtendValue(v => Math.max(1, v - 1))}
+                    disabled={!hasDailyBatchCap || !!activeJobId || syncEtfDaily.isPending}
+                    className="ctl ctl-sm ctl-btn filled w-[24px] px-0 rounded-l-btn hover:bg-border/50 disabled:opacity-30"
+                  >−</button>
+                  <div className="h-ctl-sm w-[32px] flex items-center justify-center border-y border-border text-[11px] font-mono tabular-nums text-foreground bg-base">
+                    {etfExtendValue}
+                  </div>
+                  <button
+                    onClick={() => setEtfExtendValue(v => Math.min(etfExtendUnit === 'year' ? 10 : 36, v + 1))}
+                    disabled={!hasDailyBatchCap || !!activeJobId || syncEtfDaily.isPending}
+                    className="ctl ctl-sm ctl-btn filled w-[24px] px-0 rounded-r-btn hover:bg-border/50 disabled:opacity-30"
+                  >+</button>
+                </div>
+
+                <div className="flex rounded-btn border border-border overflow-hidden">
+                  {(['month', 'year'] as const).map(u => (
+                    <button
+                      key={u}
+                      onClick={() => { setEtfExtendUnit(u); if (u === 'year' && etfExtendValue > 10) setEtfExtendValue(1); if (u === 'month' && etfExtendValue > 36) setEtfExtendValue(6) }}
+                      disabled={!hasDailyBatchCap || !!activeJobId || syncEtfDaily.isPending}
+                      className={`ctl ctl-sm ctl-ghost px-1.5 disabled:opacity-40 ${
+                        etfExtendUnit === u ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-elevated'
+                      }`}
+                    >{u === 'month' ? '月' : '年'}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-[10px] text-muted">
+                预计扩展至 <span className="font-mono text-secondary">{etfTargetDateText}</span>
+                {etfEarliestDate && <span> (当前最早: <span className="font-mono text-secondary">{etfEarliestDate}</span>)</span>}
+              </div>
+
+              <div className="rounded-btn border border-border bg-base/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium text-foreground">批次大小</div>
+                    <div className="text-[10px] text-muted mt-0.5">每批同步的 ETF 数量，20–500。</div>
+                  </div>
+                  <input
+                    type="number"
+                    min={20}
+                    max={500}
+                    value={etfBatchInput}
+                    onChange={e => setEtfBatchInput(e.target.value)}
+                    disabled={!!activeJobId || syncEtfDaily.isPending}
+                    className="ctl ctl-sm ctl-input w-20 px-1.5 font-mono focus:border-accent disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => syncEtfDaily.mutate()}
+                disabled={!hasDailyBatchCap || !!activeJobId || syncEtfDaily.isPending}
+                className="ctl ctl-md ctl-btn soft w-full inline-flex items-center justify-center gap-1.5 px-2.5 hover:bg-accent disabled:opacity-40 disabled:pointer-events-none duration-150"
+              >
+                {syncEtfDaily.isPending ? (
+                  <>
+                    <Loader2 className="h-[12px] w-[12px] animate-spin" />
+                    启动中…
+                  </>
+                ) : (
+                  <>开始补拉</>
+                )}
+              </button>
+              {!hasDailyBatchCap && (
+                <MissingCapChip capKey="kline.daily.batch" />
+              )}
             </div>
           </SettingsModal>
         )}

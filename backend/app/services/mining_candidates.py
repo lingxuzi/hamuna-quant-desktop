@@ -25,6 +25,7 @@ from app.backtest.mining import compute_candidate_signature, evaluate_candidate_
 from app.services.mining_jobs import SUCCESS_RUN_STATUSES, MiningRunStore
 from app.strategy.ai_generator import AIStrategyGenerator
 from app.strategy.engine import StrategyEngine
+from app.strategy.factor_rank_render import render_factor_rank_strategy
 
 _MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
 _MAX_ARTIFACT_ROWS = 32
@@ -652,65 +653,18 @@ class MiningCandidateService:
             name: float(definition["scoring"][name]) for name in factor_names
         }
         directions = {name: definition["directions"][name] for name in factor_names}
-        meta = {
-            "id": strategy_id,
-            "name": row["name"],
-            "description": "Published mining factor-rank candidate",
-            "tags": ["mining", "factor-rank"],
-            "asset_types": [asset_type],
-            "timeframes": ["1d"],
-            "research_only": False,
-            "origin_run_id": manifest["run_id"],
-            "candidate_signature": row["signature"],
-            "mining_algorithm_version": summary["algorithm_version"],
-            "factor_methodology_version": summary["methodology_version"],
-            "params": [
-                {
-                    "id": "entry_score",
-                    "label": "Entry minimum score",
-                    "type": "float",
-                    "default": 70.0,
-                    "min": 0.0,
-                    "max": 100.0,
-                    "step": 5.0,
-                },
-                {
-                    "id": "exit_score",
-                    "label": "Exit maximum score",
-                    "type": "float",
-                    "default": 40.0,
-                    "min": 0.0,
-                    "max": 100.0,
-                    "step": 5.0,
-                },
-                {
-                    "id": "top_rank",
-                    "label": "Daily selection limit",
-                    "type": "int",
-                    "default": 20,
-                    "min": 1,
-                    "max": 100,
-                    "step": 1,
-                },
-            ],
-            "scoring": {},
-            "order_by": "score",
-            "descending": True,
-            "limit": 100,
-        }
-        return (
-            '"""Trusted factor-rank strategy published from a mining run."""\n'
-            "from app.strategy.research.factor_rank_research import "
-            "FactorRankResearchMatrixStrategy\n\n"
-            f"META = {meta!r}\n\n"
-            'EXECUTION_BACKEND = "matrix_native"\n'
-            'ENTRY_SIGNALS = ["signal_factor_rank_entry"]\n'
-            'EXIT_SIGNALS = ["signal_factor_rank_exit"]\n'
-            "STOP_LOSS = -0.08\n"
-            "MAX_HOLD_DAYS = 30\n\n"
-            f"SCORING = {scoring!r}\n"
-            f"DIRECTIONS = {directions!r}\n"
-            "MATRIX_STRATEGY = FactorRankResearchMatrixStrategy(SCORING, DIRECTIONS)\n"
+        return render_factor_rank_strategy(
+            strategy_id=strategy_id,
+            name=row["name"],
+            scoring=scoring,
+            directions=directions,
+            asset_type=asset_type,
+            provenance={
+                "origin_run_id": manifest["run_id"],
+                "candidate_signature": row["signature"],
+                "mining_algorithm_version": summary["algorithm_version"],
+                "factor_methodology_version": summary["methodology_version"],
+            },
         )
 
     def _publish_or_verify_source(

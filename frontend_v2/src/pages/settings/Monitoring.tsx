@@ -624,7 +624,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     <button
                       onClick={submitFeishu}
                       disabled={saveFeishuWebhook.isPending || (feishuDraft.trim() === feishuWebhookUrl && feishuSecretDraft.trim() === feishuWebhookSecret)}
-                      className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-50 hover:bg-accent/90"
+                      className="ctl ctl-lg ctl-btn pri px-3.5 disabled:opacity-50 hover:bg-accent/90"
                     >
                       {saveFeishuWebhook.isPending ? '保存中…' : '保存'}
                     </button>
@@ -700,7 +700,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     <button
                       onClick={submitWecom}
                       disabled={saveWecomWebhook.isPending || wecomDraft.trim() === wecomWebhookUrl}
-                      className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-50 hover:bg-accent/90"
+                      className="ctl ctl-lg ctl-btn pri px-3.5 disabled:opacity-50 hover:bg-accent/90"
                     >
                       {saveWecomWebhook.isPending ? '保存中…' : '保存'}
                     </button>
@@ -782,7 +782,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     <button
                       onClick={submitCustom}
                       disabled={saveCustomWebhook.isPending || (customDraft.trim() === customWebhookUrl && !customSecretDraft)}
-                      className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-50 hover:bg-accent/90"
+                      className="ctl ctl-lg ctl-btn pri px-3.5 disabled:opacity-50 hover:bg-accent/90"
                     >
                       {saveCustomWebhook.isPending ? '保存中…' : '保存'}
                     </button>
@@ -865,7 +865,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   </div>
                   {emailError && <div className="mt-2 text-[11px] text-danger">{emailError}</div>}
                   <div className="mt-2 flex items-center gap-2">
-                    <button onClick={submitEmail} disabled={saveEmailSmtp.isPending} className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-50 hover:bg-accent/90">
+                    <button onClick={submitEmail} disabled={saveEmailSmtp.isPending} className="ctl ctl-lg ctl-btn pri px-3.5 disabled:opacity-50 hover:bg-accent/90">
                       {saveEmailSmtp.isPending ? '保存中…' : '保存'}
                     </button>
                     <TestSendButton test={testEmail} configured={emailConfigured} />
@@ -937,7 +937,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     <button
                       onClick={submitBot}
                       disabled={saveWecomBot.isPending || (botIdDraft.trim() === wecomBotId && botSecretDraft.trim() === wecomBotSecret)}
-                      className="ctl ctl-md ctl-btn pri px-2.5 disabled:opacity-50 hover:bg-accent/90"
+                      className="ctl ctl-lg ctl-btn pri px-3.5 disabled:opacity-50 hover:bg-accent/90"
                     >
                       {saveWecomBot.isPending ? '保存中…' : '保存并连接'}
                     </button>
@@ -989,7 +989,7 @@ function TestSendButton({ test, configured }: {
       onClick={() => test.mutate()}
       disabled={test.isPending || !configured}
       title={!configured ? '请先完成该渠道配置' : '发送测试消息'}
-      className="ctl ctl-md ctl-ghost inline-flex items-center gap-1 px-2.5 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed bg-elevated"
+      className="ctl ctl-lg ctl-ghost inline-flex items-center gap-1 px-3.5 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed bg-elevated"
     >
       {test.isPending ? '测试中…' : '测试'}
     </button>

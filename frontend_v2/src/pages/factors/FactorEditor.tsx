@@ -292,7 +292,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
             onChange={event => { setFormula(event.target.value); setValidation(null); setTrial(null); setSavedId('') }}
             spellCheck={false}
             rows={5}
-            className="w-full resize-y rounded-input border border-border bg-base/60 px-3 py-2 font-mono text-xs leading-relaxed text-foreground focus:border-accent focus:outline-none"
+            className="ctl-textarea ctl-textarea-md w-full resize-y bg-base/60 leading-relaxed focus:border-accent"
             placeholder="例如: rank(-ts_sum(change_pct, 5))"
           />
         </div>

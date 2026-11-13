@@ -115,6 +115,7 @@ export function Auth() {
             <div className="auth-pw">
               <input
                 id="pw"
+                className="ctl ctl-md ctl-input w-full tracking-[.18em]"
                 type={showPwd ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -136,6 +137,7 @@ export function Auth() {
                 <label htmlFor="pw2" className="mt-4">确认密码</label>
                 <input
                   id="pw2"
+                  className="ctl ctl-md ctl-input w-full tracking-[.18em]"
                   type={showPwd ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}

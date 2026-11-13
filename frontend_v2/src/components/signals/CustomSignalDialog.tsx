@@ -190,7 +190,7 @@ export function CustomSignalDialog({ open, signal, defaultKind = 'exit', onClose
                           onChange={e => setAiDesc(e.target.value)}
                           placeholder="例如：收盘价回踩20日均线，且量比≥2 放量"
                           rows={2}
-                          className="w-full rounded-btn border border-border bg-base px-3 py-2 text-xs text-foreground focus:outline-none focus:border-amber-400/50 resize-none"
+                          className="ctl-textarea ctl-textarea-md w-full bg-base focus:border-amber-400/50 resize-none"
                         />
                         {aiError && <div className="text-xs text-danger">{aiError}</div>}
                         <div className="flex justify-end">

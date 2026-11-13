@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ScanSearch, Clock, TrendingUp, Star, Filter, Layers, Network, Sparkles, RefreshCw, Settings2, Store, RotateCcw, X, SlidersHorizontal } from 'lucide-react'
+import { ScanSearch, Clock, TrendingUp, Star, Filter, Layers, Network, Sparkles, Radar, RefreshCw, Settings2, Store, RotateCcw, X, SlidersHorizontal } from 'lucide-react'
 import { api, genRuleId, type ScreenerStrategy, type ScreenerResult } from '@/lib/api'
 import { useMinuteBatchQuery } from '@/lib/useMinuteBatchQuery'
 import { fetchDailyBatchChunked } from '@/lib/klineBatchChunked'
@@ -16,8 +16,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Chip, Note } from '@/components/Toolbar'
 import { EmptyState } from '@/components/EmptyState'
 import { DatePicker } from '@/components/DatePicker'
-import { BTN_LG } from '@/components/controls'
-import { cn } from '@/lib/cn'
+import { BTN_GHOST_LG, BTN_LG } from '@/components/controls'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { type NavItem } from '@/lib/listNav'
 import { WatchlistAddMenu } from '@/components/WatchlistAddMenu'
@@ -31,6 +30,7 @@ import { DefaultStrategyParamsDialog } from '@/components/screener/DefaultStrate
 import { ResourceTransferButton } from '@/components/ResourceTransferDialog'
 import { StrategyPoolDialog } from '@/components/screener/StrategyPoolDialog'
 import { StrategyBuilderDialog } from '@/components/screener/StrategyBuilderDialog'
+import { MarketAwareDialog } from '@/components/screener/MarketAwareDialog'
 import { StrategyStoreDialog } from '@/components/screener/StrategyStoreDialog'
 import { CompositeStrategyDialog } from '@/components/screener/CompositeStrategyDialog'
 import { ListColumnCustomizer } from '@/components/ListColumnCustomizer'
@@ -70,6 +70,7 @@ export function Screener() {
   const [settingsStrategyId, setSettingsStrategyId] = useState<string | null>(null)
   const [showPoolDialog, setShowPoolDialog] = useState(false)
   const [showBuilder, setShowBuilder] = useState(false)
+  const [showMarketAware, setShowMarketAware] = useState(false)
   const [builderMode, setBuilderMode] = useState<'create' | 'modify'>('create')
   const [showStore, setShowStore] = useState(false)
   const [showDefaultParams, setShowDefaultParams] = useState(false)
@@ -1074,6 +1075,14 @@ export function Screener() {
               <Sparkles className="h-3.5 w-3.5" />
               创建策略 · AI
             </button>
+            {/* 市场感知生成 */}
+            <button
+              onClick={() => setShowMarketAware(true)}
+              className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 text-accent border-accent/25 bg-accent/5 hover:bg-accent/15 bg-surface"
+            >
+              <Radar className="h-3.5 w-3.5" />
+              市场感知生成
+            </button>
             {/* 获取策略（占位,敬请期待）— 暂时隐藏 */}
             {SHOW_STRATEGY_STORE && (
               <button
@@ -1398,7 +1407,7 @@ export function Screener() {
                   <>
                     <button className={BTN_LG} onClick={handleRunAll}>运行全部策略</button>
                     {maStackStrategy && (
-                      <button className={cn(BTN_LG, 'ctl-ghost')} onClick={() => handleRun(maStackStrategy)}>
+                      <button className={BTN_GHOST_LG} onClick={() => handleRun(maStackStrategy)}>
                         只跑{maStackStrategy.name}
                       </button>
                     )}
@@ -1506,6 +1515,9 @@ export function Screener() {
           }}
           onClose={() => setShowPoolDialog(false)}
         />
+      )}
+      {showMarketAware && (
+        <MarketAwareDialog onClose={() => setShowMarketAware(false)} />
       )}
       <StrategyBuilderDialog
         open={showBuilder}

@@ -310,7 +310,7 @@ function RightValueInput({ cond, fields, groups, maxDays, hideDays, onChangeRigh
         <>
           {!hideDays && <DaysInput value={cond.rightDays ?? 0} max={maxDays} onChange={onChangeDays} />}
           <FieldPicker value={fieldValue} fields={fields} groups={groups} onChange={v => onChangeRight(`field:${v}`)} />
-          <button onClick={() => onChangeRight('0')} title="切换为数字" className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
+          <button onClick={() => onChangeRight('0')} title="切换为数字" className="ctl ctl-md ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
             <ArrowRight className="h-[12px] w-[12px] rotate-90" />
           </button>
         </>
@@ -320,7 +320,7 @@ function RightValueInput({ cond, fields, groups, maxDays, hideDays, onChangeRigh
           {!hideDays && <div className="shrink-0" style={{ width: 44 }} />}
           <input type="number" value={numValue} onChange={e => onChangeRight(e.target.value)} step="any"
             className="ctl ctl-md ctl-input flex-1 min-w-0 px-2.5 font-mono text-center focus:border-accent/50 bg-base" />
-          <button onClick={() => onChangeRight('field:close')} title="切换为字段" className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
+          <button onClick={() => onChangeRight('field:close')} title="切换为字段" className="ctl ctl-md ctl-ghost ctl-icon text-muted hover:text-accent shrink-0">
             <ArrowRight className="h-[12px] w-[12px] -rotate-90" />
           </button>
         </>

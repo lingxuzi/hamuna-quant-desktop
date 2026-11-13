@@ -20,6 +20,7 @@ from app.api import (
     data,
     definitions,
     events,
+    etf,
     ext_data,
     ext_pages,
     factors,
@@ -698,6 +699,7 @@ app.include_router(guardian.router)
 app.include_router(lab.router)
 app.include_router(intraday.router)
 app.include_router(indices.router)
+app.include_router(etf.router)
 app.include_router(overview.router)
 app.include_router(pages_admin.router)
 app.include_router(paper.router)

@@ -599,3 +599,91 @@ def test_negative_trailing_thresholds_normalize_like_backtest(env):
     assert preview["snapshot"]["overrides"][
         "trailing_stop"
     ] == StrategyBacktestService._normalize_pct(-0.05, 0.005, 0.5)
+
+
+MINED_STRATEGY_SOURCE = '''import numpy as np
+from app.backtest.matrix import make_signal_matrix
+META = {
+    "id": "mined_demo",
+    "name": "挖掘示例",
+    "description": "Published mining factor-rank candidate",
+    "tags": ["mining", "factor-rank"],
+    "asset_types": ["stock"],
+    "timeframes": ["1d"],
+    "research_only": False,
+    "origin_run_id": "run_1",
+    "candidate_signature": "sig_1",
+    "params": [{"id": "entry_score", "label": "Entry minimum score", "type": "float", "default": 70.0, "min": 0.0, "max": 100.0, "step": 5.0}],
+    "scoring": {},
+    "order_by": "score",
+    "descending": True,
+    "limit": 100,
+}
+EXECUTION_BACKEND = "matrix_native"
+BASIC_FILTER = {"enabled": False}
+ENTRY_SIGNALS = ["entry"]
+EXIT_SIGNALS = ["exit"]
+STOP_LOSS = -0.08
+MAX_HOLD_DAYS = 30
+SCORING = {"momentum_5d": 0.6, "rsi_14": 0.4}
+class Native:
+    def required_fields(self):
+        return frozenset({"close"})
+    def required_warmup_bars(self, params):
+        return 1
+    def compute_signals(self, market, params):
+        return make_signal_matrix(market.shape, entry=(market.close > 0).astype(np.uint8), exit=np.zeros(market.shape, dtype=np.uint8))
+MATRIX_STRATEGY = Native()
+'''
+
+MINED_CANDIDATE_CONFIG = {
+    "strategy_id": "mined_demo",
+    "start": "2026-01-01",
+    "end": "2026-10-26",
+    "asset_type": "stock",
+    "matching": "open_t+1",
+    "entry_fill": "open_t+1",
+    "exit_fill": "open_t+1",
+    "commission_pct": 0.0002,
+    "stamp_tax_pct": 0.0005,
+    "slippage_bps": 5.0,
+    "mode": "position",
+    "minute_fill": False,
+    "factor_names": ["momentum_5d", "rsi_14"],
+    "directions": ["high", "low"],
+    "weights": [0.6, 0.4],
+    "origin_run_id": "run_1",
+    "candidate_signature": "sig_1",
+    "regime_state": "range",
+    "algorithm_version": "mining-v3",
+    "methodology_version": "factor_v2",
+}
+
+
+def _load_mined_strategy(env):
+    (env.path.parent / "mined.py").write_text(MINED_STRATEGY_SOURCE)
+    env.engine.reload()
+
+
+def test_mining_candidate_metadata_is_accepted_for_following(env):
+    """挖掘候选的元数据字段 (因子池 + 溯源) 不是回测执行配置, 不该被拒。"""
+    _load_mined_strategy(env)
+    preview = env.service.preview({"config": dict(MINED_CANDIDATE_CONFIG)})
+    assert preview["snapshot"]["strategy_id"] == "mined_demo"
+
+
+def test_candidate_metadata_must_match_the_published_strategy(env):
+    _load_mined_strategy(env)
+    with pytest.raises(ValueError, match="来源不一致"):
+        env.service.preview(
+            {"config": {**MINED_CANDIDATE_CONFIG, "candidate_signature": "sig_other"}}
+        )
+    with pytest.raises(ValueError, match="评分口径不一致"):
+        env.service.preview(
+            {
+                "config": {
+                    **MINED_CANDIDATE_CONFIG,
+                    "factor_names": ["momentum_5d", "vol_ratio_5d"],
+                }
+            }
+        )

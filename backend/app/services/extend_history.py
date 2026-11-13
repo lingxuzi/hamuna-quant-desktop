@@ -40,7 +40,7 @@ def _resolve_universe(capset: CapabilitySet, repo=None) -> list[str]:
     """解析标的池 — 与 daily_pipeline 同口径: instruments 维表 + 自选 (单一来源)。
 
     不再拉 CN_Equity_A 池 (含 SW1 聚合兜底); 维表由盘后管道同步维护。
-    repo 传入时过滤自选里的指数 symbol (指数日K走独立存储)。
+    repo 传入时过滤自选里的指数/ETF symbol (两者日K都走独立存储)。
     """
     from pathlib import Path
 
@@ -59,6 +59,7 @@ def _resolve_universe(capset: CapabilitySet, repo=None) -> list[str]:
             logger.warning("instruments 维表读取失败, 标的池仅剩自选: %s", e)
     if repo is not None:
         base -= set(repo.get_index_symbol_set())
+        base -= set(repo.get_etf_symbol_set())
     return sorted(base)
 
 

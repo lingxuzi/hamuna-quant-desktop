@@ -554,7 +554,7 @@ export function WatchlistImportDialog({
                 }}
                 placeholder={'示例：\n600519\n000001 平安银行\n515880 通信ETF国泰'}
                 rows={4}
-                className="w-full resize-y rounded-btn border border-border bg-surface px-3 py-2 text-xs text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none"
+                className="ctl-textarea ctl-textarea-md w-full resize-y bg-surface placeholder:text-muted focus:border-accent/50"
               />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-muted">空格 / 逗号 / 换行分隔，Ctrl/⌘+Enter 解析</span>

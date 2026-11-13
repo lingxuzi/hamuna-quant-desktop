@@ -906,6 +906,16 @@ export function Watchlist() {
     },
   })
 
+  // 搜索框直接加自选: 落到当前分组 (全部/未分组页签下为未分组)
+  const addSymbol = useMutation({
+    mutationFn: (sym: string) => api.watchlistAdd(sym, '', activeGroupId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.watchlist })
+      qc.invalidateQueries({ queryKey: ['watchlist-enriched'] })
+      qc.invalidateQueries({ queryKey: ['kline-batch'] })
+    },
+  })
+
   const moveToTop = useMutation({
     mutationFn: (sym: string) => api.watchlistMoveToTop(sym),
     onSuccess: (data) => {
@@ -1000,8 +1010,10 @@ export function Watchlist() {
     setGroupCardsOpen(false)
   }, [])
 
-  const listEntries = list.data?.symbols ?? []
+  // listEntries 保持稳定引用: 下面多个 useMemo 以它为依赖, 每次渲染新建数组会让它们全部失效
+  const listEntries = useMemo(() => list.data?.symbols ?? [], [list.data])
   const allSymbols = listEntries.map(s => s.symbol)
+  const watchlistSymbolSet = useMemo(() => new Set(listEntries.map(e => e.symbol)), [listEntries])
   const rows = enriched.data?.rows ?? []
   const groupBySymbol = useMemo(
     () => new Map(listEntries.map(entry => [entry.symbol, entry.group_ids ?? []])),
@@ -1487,6 +1499,9 @@ export function Watchlist() {
         onReorder={orderedIds => reorderGroup.mutateAsync(orderedIds).then(() => undefined)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        watchlistSymbols={watchlistSymbolSet}
+        onAddSymbol={(sym) => addSymbol.mutate(sym)}
+        addPending={addSymbol.isPending}
       />
 
       {/* 筛选栏 */}

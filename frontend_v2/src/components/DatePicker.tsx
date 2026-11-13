@@ -8,8 +8,9 @@ import { cnToday } from '@/lib/cnDate'
 
 /** 弹层固定宽度(px) — 与下方 w-[260px] 保持一致,用于水平边界裁剪计算 */
 const POPUP_WIDTH = 260
-/** 弹层预估高度(px) — 用于判断是否需要向上翻转 */
-const POPUP_HEIGHT = 320
+/** 弹层预估高度(px) — 用于判断是否需要向上翻转。
+ *  实测: 上下内边距 24 + 月份导航 32 + 星期头 16 + 6 行日期格 (28×6 + 间隙 6) ≈ 246 */
+const POPUP_HEIGHT = 250
 /** 弹层与触发按钮的间距(px) */
 const POPUP_GAP = 6
 
@@ -193,7 +194,7 @@ export function DatePicker({
               <button
                 type="button"
                 onClick={() => setShowYearPicker(v => !v)}
-                className="text-sm font-medium text-foreground num hover:text-accent transition-colors cursor-pointer"
+                className="text-xs font-medium text-foreground num hover:text-accent transition-colors cursor-pointer"
               >
                 {showYearPicker
                   ? `${viewYear - 5} - ${viewYear + 6}`
@@ -224,7 +225,7 @@ export function DatePicker({
                         setShowYearPicker(false)
                       }}
                       className={`ctl ctl-md ctl-ghost duration-100
-                        ${isSelected ? 'bg-accent text-white font-bold' : ''}
+                        ${isSelected ? 'bg-accent font-medium' : ''}
                         ${isThisYear && !isSelected ? 'border border-accent/40' : ''}
                         ${!isSelected ? 'hover:bg-elevated cursor-pointer text-foreground' : ''}
                       `}
@@ -236,8 +237,8 @@ export function DatePicker({
               </div>
             ) : (
               <>
-                {/* 星期头 */}
-                <div className="grid grid-cols-7 text-center text-[10px] text-muted mb-1">
+                {/* 星期头 —— 跟日期格同样的 gap-px, 星期才落在对应列上 */}
+                <div className="grid grid-cols-7 gap-px text-center text-[11px] text-muted mb-1">
                   {WEEKDAYS.map((w) => (
                     <div key={w}>{w}</div>
                   ))}
@@ -260,9 +261,9 @@ export function DatePicker({
                       }
                     }}
                     className={`
-                      ctl ctl-md ctl-ghost w-full duration-100
+                      ctl ctl-md ctl-ghost w-full px-0 duration-100
                       ${c.cur ? 'text-foreground' : 'text-muted/40'}
-                      ${isSelected ? 'bg-accent text-white font-bold' : ''}
+                      ${isSelected ? 'bg-accent font-medium' : ''}
                       ${isToday && !isSelected ? 'border border-accent/40' : ''}
                       ${!isSelected && !c.disabled ? 'hover:bg-elevated' : ''}
                       ${c.disabled ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}

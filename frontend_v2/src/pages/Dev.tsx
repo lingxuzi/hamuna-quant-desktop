@@ -91,7 +91,7 @@ function MinuteProbePanel({ days, base, onDays, onBase, results, onResults, minu
 
       <div className="tool-a grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
         <Field label="标的">
-          <input
+          <input className="ctl ctl-md ctl-input w-full"
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
             placeholder="600519.SH"
@@ -99,10 +99,10 @@ function MinuteProbePanel({ days, base, onDays, onBase, results, onResults, minu
           />
         </Field>
         <Field label="基准日">
-          <input type="date" value={base} onChange={(e) => onBase(e.target.value || base)} />
+          <input className="ctl ctl-md ctl-input w-full" type="date" value={base} onChange={(e) => onBase(e.target.value || base)} />
         </Field>
         <Field label="回溯天数">
-          <input
+          <input className="ctl ctl-md ctl-input w-full"
             type="number"
             min={1}
             max={30}
@@ -111,7 +111,7 @@ function MinuteProbePanel({ days, base, onDays, onBase, results, onResults, minu
           />
         </Field>
         <div>
-          <button type="button" className="ctl-btn ctl-sm pri" onClick={runProbe} disabled={loading || !symbol.trim()}>
+          <button type="button" className="ctl-btn ctl-md pri" onClick={runProbe} disabled={loading || !symbol.trim()}>
             {loading ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : <Search className="mr-1 inline h-3.5 w-3.5" />}
             {loading ? '探测中…' : '开始探测'}
           </button>
@@ -246,7 +246,7 @@ function SeedPanel() {
 
       <div className="tool-a grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         <Field label="规则条数">
-          <input
+          <input className="ctl ctl-md ctl-input w-full"
             type="number"
             min={1}
             max={50}
@@ -255,17 +255,17 @@ function SeedPanel() {
           />
         </Field>
         <Field label="时间戳">
-          <select value={recent ? 'now' : 'real'} onChange={(e) => setRecent(e.target.value === 'now')}>
+          <select className="ctl ctl-md ctl-select w-full" value={recent ? 'now' : 'real'} onChange={(e) => setRecent(e.target.value === 'now')}>
             <option value="now">刚刚 (测试闪烁)</option>
             <option value="real">按真实时间 (近 3 天)</option>
           </select>
         </Field>
         <div>
-          <button type="button" className="ctl-btn ctl-sm" onClick={() => seedMut.mutate()} disabled={seedMut.isPending}>
+          <button type="button" className="ctl-btn ctl-md" onClick={() => seedMut.mutate()} disabled={seedMut.isPending}>
             {seedMut.isPending ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 inline h-3.5 w-3.5" />}
             生成
           </button>
-          <button type="button" className="ctl-btn ctl-sm ctl-ghost" onClick={() => clearMut.mutate()} disabled={clearMut.isPending}>
+          <button type="button" className="ctl-btn ctl-md ctl-ghost" onClick={() => clearMut.mutate()} disabled={clearMut.isPending}>
             清空演示数据
           </button>
         </div>
@@ -279,10 +279,10 @@ function SeedPanel() {
       <div className="sec-h">监 控 规 则</div>
       <div className="tool-a grid-cols-[minmax(0,1fr)_auto]">
         <Field label="规则类型">
-          <input value="信号 / 价格 / 市场异动 / 策略变更" readOnly />
+          <input className="ctl ctl-md ctl-input w-full" value="信号 / 价格 / 市场异动 / 策略变更" readOnly />
         </Field>
         <div>
-          <button type="button" className="ctl-btn ctl-sm" onClick={() => ruleSeedMut.mutate()} disabled={ruleSeedMut.isPending}>
+          <button type="button" className="ctl-btn ctl-md" onClick={() => ruleSeedMut.mutate()} disabled={ruleSeedMut.isPending}>
             {ruleSeedMut.isPending ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 inline h-3.5 w-3.5" />}
             生成演示规则
           </button>
@@ -331,16 +331,16 @@ function LadderTestPanel({ ladderCount }: { ladderCount: number }) {
 
       <div className="tool-a grid-cols-[minmax(0,1fr)_auto]">
         <Field label="封单额阈值">
-          <input value="1.0 亿" readOnly />
+          <input className="ctl ctl-md ctl-input w-full" value="1.0 亿" readOnly />
         </Field>
         <div>
-          <button type="button" className="ctl-btn ctl-sm" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
+          <button type="button" className="ctl-btn ctl-md" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
             {testMut.isPending ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : <Bell className="mr-1 inline h-3.5 w-3.5" />}
             运行评估
           </button>
           <button
             type="button"
-            className="ctl-btn ctl-sm"
+            className="ctl-btn ctl-md"
             onClick={() => {
               if (confirm('将真实推送飞书 + 写入监控中心 + 触发 SSE 通知。确认?')) {
                 triggerMut.mutate()

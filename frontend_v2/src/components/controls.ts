@@ -15,6 +15,7 @@
  * 控件形态一一对应, 不要混用:
  *   INPUT_*  文本输入 (发丝线 + 纸底)
  *   SELECT_* 原生 <select> (同输入框外壳, 正文字族)
+ *   TEXTAREA_* 多行输入 (同输入框外壳, 高度随内容)
  *   FIELD_*  按钮型字段外壳 (下拉触发器 / 日期选择器) —— 内容排成一行
  *   BTN_*    按钮 (描边次要 / .pri 赭石实心)
  *
@@ -38,6 +39,14 @@ export const SELECT_SM = `ctl-select ${CTL_SM}`
 export const SELECT_MD = `ctl-select ${CTL_MD}`
 export const SELECT_LG = `ctl-select ${CTL_LG}`
 
+/**
+ * 多行输入: 与输入框同壳同字体, 高度由内容定。
+ * 不用 CTL_* —— .ctl 会锁死高度, 多行框必须能长高。
+ */
+export const TEXTAREA_SM = 'ctl-textarea ctl-textarea-sm'
+export const TEXTAREA_MD = 'ctl-textarea ctl-textarea-md'
+export const TEXTAREA_LG = 'ctl-textarea ctl-textarea-lg'
+
 /** 按钮型字段外壳: 下拉触发器 / 日期选择器 —— 内容必须排成一行 */
 export const FIELD_SM = `ctl-field ${CTL_SM}`
 export const FIELD_MD = `ctl-field ${CTL_MD}`
@@ -50,6 +59,11 @@ export const BTN_LG = `ctl-btn ${CTL_LG}`
 
 /** 主要按钮 = 同档按钮 + .pri 赭石实心; 三档同值, 留成三个名字是为了与 BTN_* 成对读 */
 export const BTN_PRIMARY = 'pri'
+
+/** 无框按钮: 去掉描边只留字 (次要动作), 与 BTN_* 同档 */
+export const BTN_GHOST_SM = `ctl-btn ctl-ghost ${CTL_SM}`
+export const BTN_GHOST_MD = `ctl-btn ctl-ghost ${CTL_MD}`
+export const BTN_GHOST_LG = `ctl-btn ctl-ghost ${CTL_LG}`
 
 /** 图标按钮: 正方形, 边长跟文字按钮同档 (不靠 padding 撑, 免得大小随图标变) */
 export const ICON_BTN_SM = `ctl-btn ctl-icon ${CTL_SM}`

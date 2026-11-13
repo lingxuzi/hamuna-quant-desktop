@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronUp, FolderInput, Pencil, Plus, Trash2, X, Eraser } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, ChevronDown, ChevronUp, FolderInput, LoaderCircle, Pencil, Plus, Trash2, X, Eraser } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { Switch } from '@/components/Switch'
 import { api } from '@/lib/api'
@@ -39,6 +39,11 @@ interface GroupBarProps {
   /** 代码/名称过滤 (`.wl-tools` 搜索框); 缺省不渲染搜索框 */
   searchQuery?: string
   onSearchChange?: (value: string) => void
+  /** 已在自选的 symbol 集合 — 搜索结果里已存在的标的不再显示「+」 */
+  watchlistSymbols?: Set<string>
+  /** 把搜索到的标的加入自选 (由宿主决定目标分组) */
+  onAddSymbol?: (symbol: string) => void
+  addPending?: boolean
 }
 
 export function WatchlistGroupBar({
@@ -55,9 +60,32 @@ export function WatchlistGroupBar({
   onReorder,
   searchQuery = '',
   onSearchChange,
+  watchlistSymbols,
+  onAddSymbol,
+  addPending = false,
 }: GroupBarProps) {
   const [managerOpen, setManagerOpen] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  // 搜索下拉: 除过滤当前列表外, 还能从全市场搜出未持有的标的并直接加入自选
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRootRef = useRef<HTMLDivElement>(null)
+  const trimmedQuery = searchQuery.trim()
+  const marketSearch = useQuery({
+    queryKey: QK.instrumentSearch(searchQuery, 'stock,etf,index'),
+    queryFn: () => api.instrumentSearch(searchQuery, 20, 'stock,etf,index'),
+    enabled: trimmedQuery.length > 0,
+    staleTime: 30_000,
+  })
+  const marketResults = marketSearch.data?.results ?? []
+
+  useEffect(() => {
+    if (!searchOpen) return
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!searchRootRef.current?.contains(event.target as Node)) setSearchOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside)
+    return () => document.removeEventListener('mousedown', closeOnOutside)
+  }, [searchOpen])
   const tabs = [
     { id: 'all', name: '全部', count: total, color: null },
     { id: 'ungrouped', name: '未分组', count: counts.ungrouped ?? 0, color: null },
@@ -99,14 +127,66 @@ export function WatchlistGroupBar({
       {/* design/v2/02-watchlist.html 的 .wl-tools: 搜索在左, 分组在右 */}
       <div className="wl-tools">
         {onSearchChange && (
-          <input
-            type="search"
-            className="ctl ctl-md ctl-input wl-search"
-            placeholder="搜索代码或名称"
-            value={searchQuery}
-            onChange={e => onSearchChange(e.target.value)}
-            aria-label="搜索自选代码或名称"
-          />
+          <div ref={searchRootRef} className="relative w-[200px] shrink-0">
+            <input
+              type="search"
+              className="ctl ctl-md ctl-input wl-search w-full"
+              placeholder="搜索代码或名称"
+              value={searchQuery}
+              onChange={e => { onSearchChange(e.target.value); setSearchOpen(true) }}
+              onFocus={() => { if (trimmedQuery) setSearchOpen(true) }}
+              aria-label="搜索自选代码或名称"
+            />
+            {searchOpen && trimmedQuery && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-[300px] max-h-[320px] overflow-y-auto rounded-card border border-border bg-base shadow-xl">
+                {marketSearch.isFetching && marketResults.length === 0 ? (
+                  <div className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] text-muted">
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    搜索中…
+                  </div>
+                ) : marketResults.length === 0 ? (
+                  <div className="px-3 py-2.5 text-[11px] text-muted">未找到匹配的标的</div>
+                ) : (
+                  marketResults.map(item => {
+                    const inWatchlist = watchlistSymbols?.has(item.symbol) ?? false
+                    return (
+                      <div
+                        key={item.symbol}
+                        className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-elevated"
+                      >
+                        <span className="w-[76px] shrink-0 truncate font-mono text-[11px] text-muted">
+                          {item.symbol}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+                          {item.name}
+                        </span>
+                        {item.asset_type === 'etf' && (
+                          <span className="shrink-0 rounded border border-accent/40 px-1 text-[10px] leading-none text-accent">ETF</span>
+                        )}
+                        {item.asset_type === 'index' && (
+                          <span className="shrink-0 rounded border border-sky-500/40 px-1 text-[10px] leading-none text-sky-400">指数</span>
+                        )}
+                        {inWatchlist ? (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="已在自选" />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onAddSymbol?.(item.symbol)}
+                            disabled={addPending || !onAddSymbol}
+                            className="ctl ctl-sm ctl-btn pri shrink-0 px-1.5 disabled:opacity-40"
+                            title="加入自选"
+                            aria-label={`加入自选 ${item.symbol}`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+          </div>
         )}
         <div
           ref={tablistRef}
