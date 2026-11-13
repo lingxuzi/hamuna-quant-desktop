@@ -44,22 +44,27 @@ async def trigger_pipeline_job(repo, capset, quote_service=None) -> dict:
     return await _submit_job(
         repo, quote_service,
         lambda progress: (lambda: daily_pipeline.run_now(repo, capset, on_progress=progress)),
+        # 首次全量同步要拉全市场历史 (20 分钟起), 普通任务的 1200s 停滞阈值会
+        # 在拉取中途把任务判死。取长任务档, 与分钟K全市场同步同口径。
+        long_running=True,
     )
 
 
-async def _submit_job(repo, quote_service, make_run) -> dict:
+async def _submit_job(repo, quote_service, make_run, *, long_running: bool = False) -> dict:
     """任务化执行公共机制: 单飞 create → 重任务槽 → 行情暂停 → 缓存失效。
 
     make_run(progress) 返回实际执行闭包(阻塞 IO + CPU, 在 executor 里跑)。
     盘后管道与独立除权因子同步共用 —— 两者写同一批 parquet, 必须共享
     单飞与重任务槽防并发覆写。
+
+    long_running: 是否按长任务取卡死阈值 (默认 1800s 而非 1200s)。
     """
     # 检测卡死的 running job (如 reload 后孤儿 task / 网络读无限阻塞)。
     # reap_stale 会在 /run 和 /jobs/{id} 轮询端点都调用,保证卡死后能自愈。
     job_store.reap_stale()
 
     # 单飞: 复用任何活跃 (pending∨running) 任务, is_new=False 时不再调度新任务
-    job_id, is_new = job_store.create()
+    job_id, is_new = job_store.create(long_running=long_running)
     if not is_new:
         return {"job_id": job_id, "reused": True}
 

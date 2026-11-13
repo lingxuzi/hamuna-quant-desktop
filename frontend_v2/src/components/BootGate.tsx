@@ -65,8 +65,10 @@ export function BootGate() {
   const blocking = integrity.data?.blocking_assets ?? []
   const issues = report?.issues ?? []
   const jobStatus = job.data?.status
-  // 任务查不到 (id 失效) 时别一直停在「正在修补」—— 没有进度就按没有任务处理
-  const running = !!trackedId && !job.isError && jobStatus !== 'succeeded' && jobStatus !== 'failed'
+  // 任务查不到 (id 失效) 时别一直停在「正在修补」—— 没有进度就按没有任务处理。
+  // 任务列表本身查失败 (jobs.isError) 时 trackedId 恒为 null, 同样不能算「在跑」,
+  // 否则弹窗永久停在「正在同步数据」, 自动重试也被 running 挡住。
+  const running = !!trackedId && !job.isError && !jobs.isError && jobStatus !== 'succeeded' && jobStatus !== 'failed'
   const failed = jobStatus === 'failed'
   // 报告是修补的确认凭证: 它必须覆盖全部阻塞资产, 否则修补不到那些分区
   const covered = blocking.every(a => report?.asset_types?.includes(a))

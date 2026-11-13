@@ -304,6 +304,13 @@ class JobStore:
             j["status"] = "failed"
             j["finished_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
             j["error"] = error
+            # 终态也进日志: 前端靠 job.log 渲染任务卡片, 失败任务没有一条日志时
+            # 只显示标题(「本地还没有数据」), 用户看不到失败原因。
+            j["log"].append({
+                "ts": j["finished_at"],
+                "stage": j["stage"],
+                "msg": f"失败: {error}",
+            })
             j["duration_s"] = _duration_s(j)
             if self._active_id == job_id:
                 self._active_id = None

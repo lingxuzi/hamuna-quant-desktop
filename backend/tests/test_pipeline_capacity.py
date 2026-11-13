@@ -353,3 +353,38 @@ def test_rebuild_enriched_refreshes_repo_memory_cache(capacity, monkeypatch, tmp
         wait_for(lambda: store.get(jid)["status"] in ("succeeded", "failed"))
         assert store.get(jid)["status"] == "succeeded", store.get(jid)
     assert calls == ["clear", "refresh"]
+
+
+def test_fail_records_terminal_log_entry(capacity):
+    """失败任务必须带一条日志: 前端靠 job.log 渲染任务卡片, 空日志只剩标题。"""
+    store, _ = capacity
+    jid, _ = store.create()
+    store.start(jid)
+    store.fail(jid, "拉取失败: 网络超时")
+    job = store.get(jid)
+    assert job["status"] == "failed"
+    assert job["error"] == "拉取失败: 网络超时"
+    assert job["log"][-1]["msg"] == "失败: 拉取失败: 网络超时"
+
+
+def test_pipeline_job_uses_long_running_timeout(capacity, monkeypatch):
+    """盘后管道是长任务: 必须取长任务档的卡死阈值, 否则首次全量同步会被 1200s 误杀。"""
+    from app.api import pipeline as pipeline_api
+
+    store, _ = capacity
+    seen: list[bool] = []
+    original = store.create
+
+    def spy(timeout_s=None, *, long_running=False):
+        seen.append(long_running)
+        return original(timeout_s, long_running=long_running)
+
+    monkeypatch.setattr(store, "create", spy)
+    monkeypatch.setattr(pipeline_api, "job_store", store)
+    monkeypatch.setattr(pipeline_api.daily_pipeline, "run_now", lambda *a, **k: {"ok": True})
+    capset = SimpleNamespace()
+
+    import asyncio
+
+    asyncio.run(pipeline_api.trigger_pipeline_job(SimpleNamespace(), capset))
+    assert seen == [True]
