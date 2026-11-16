@@ -182,6 +182,19 @@ def infer_filter_history_features(fn) -> frozenset[str] | None:
     return infer_features_from_sources([source])
 
 
+def collect_referenced_columns(sources) -> tuple[frozenset[str], bool]:
+    """收集源码里显式引用的列名 (不做 known 过滤) + 是否存在不可证明形态。
+
+    与 infer_features_from_sources 的区别: 这里返回**原始**引用名 ——
+    包括 enriched 里根本不存在的列 (静态校验要靠它报错), 也不做 `_` 前缀过滤。
+    """
+    try:
+        names, uninferable = _collect_from_sources(sources)
+    except SyntaxError:
+        return frozenset(), True
+    return frozenset(names), uninferable
+
+
 def infer_features_from_sources(sources) -> frozenset[str] | None:
     """对一组源码 (策略主文件 + `_*.py` 依赖) 整体推导输入列。
 

@@ -15,6 +15,7 @@ import types
 from pathlib import Path
 
 from app.indicators.pipeline import ENRICHED_COLUMNS
+from app.strategy.column_guard import check_strategy_source
 from app.strategy.scoring import VIRTUAL_SCORING_DEPENDENCIES
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ _FENCED_CODE_RE = re.compile(
 _POLARS_ENTRYPOINT_ERROR = "找不到策略入口函数 filter() 或 filter_history()"
 _MATRIX_ENTRYPOINT_ERROR = "找不到 Matrix 策略入口 MATRIX_STRATEGY"
 _MINUTE_ENTRYPOINT_ERROR = "分钟策略必须只定义 filter_minute_history() 入口"
+_SOURCE_CHECK_ERROR_PREFIX = "策略静态校验失败: "
 
 _POLARS_SCORING_FIELDS = frozenset(
     name
@@ -262,7 +264,8 @@ class AIStrategyGenerator:
 
     def __init__(self, *, execution_backend: str | None = None) -> None:
         self._guide_cache: str | None = None
-        self._execution_backend = execution_backend
+        # "auto" 与 None 同义: 不锁定后端, 由模型按规则自选。
+        self._execution_backend = None if execution_backend == "auto" else execution_backend
 
     def _get_guide(self) -> str:
         if self._guide_cache is None:
@@ -358,6 +361,16 @@ class AIStrategyGenerator:
                 "error": str(e),
             }
 
+        try:
+            self._validate_source_columns(code, meta)
+        except ValueError as e:
+            return {
+                "code": code,
+                "meta": meta,
+                "valid": False,
+                "error": str(e),
+            }
+
         return {
             "code": code,
             "meta": meta,
@@ -372,7 +385,18 @@ class AIStrategyGenerator:
             _POLARS_ENTRYPOINT_ERROR,
             _MATRIX_ENTRYPOINT_ERROR,
             _MINUTE_ENTRYPOINT_ERROR,
-        } or error.startswith(("META.params", "META.scoring", "生成结果执行后端", "分钟策略 META.timeframes"))
+        } or error.startswith((
+            "META.params", "META.scoring", "生成结果执行后端", "分钟策略 META.timeframes",
+            _SOURCE_CHECK_ERROR_PREFIX,
+        ))
+
+    @staticmethod
+    def _validate_source_columns(code: str, meta: dict) -> None:
+        """静态校验引用的列与后端匹配 (生成期与保存期共用)。"""
+        backend = _strategy_execution_backend(ast.parse(code), meta)
+        problems = check_strategy_source(code, backend, meta)
+        if problems:
+            raise ValueError(_SOURCE_CHECK_ERROR_PREFIX + "; ".join(problems))
 
     @staticmethod
     def _validate_meta_semantics(code: str, meta: dict) -> None:
@@ -422,6 +446,9 @@ class AIStrategyGenerator:
             backend = "polars_expr"
         if self._execution_backend in {"minute_filter", "matrix_native"}:
             backend = self._execution_backend
+        # 跨日需求被塞进 polars_expr 时, 唯一可行的修法是换后端, 不能要求「保留原后端」。
+        # 否则这一轮修复必然二次撞墙, 该类需求永远生成失败。
+        cross_day_blocked = backend == "polars_expr" and "跨日算子" in error
         if backend == "matrix_native":
             entrypoint_requirement = (
                 '保留 EXECUTION_BACKEND = "matrix_native"，定义 MATRIX_STRATEGY，'
@@ -431,6 +458,13 @@ class AIStrategyGenerator:
             entrypoint_requirement = (
                 '保留 EXECUTION_BACKEND = "minute_filter" 和 timeframes=["1m"]，'
                 "只定义 filter_minute_history(df, params)，不得添加 filter() 或 filter_history()"
+            )
+        elif cross_day_blocked:
+            entrypoint_requirement = (
+                '改为 EXECUTION_BACKEND = "python_history_legacy"，删除 filter()，'
+                "只定义 filter_history(df, params) -> pl.DataFrame，声明 "
+                "LOOKBACK_DAYS（≥ 用到的最大滚动窗口）与 REQUIRED_FEATURES；"
+                "所有跨日算子必须带 .over(\"symbol\")"
             )
         else:
             entrypoint_requirement = (

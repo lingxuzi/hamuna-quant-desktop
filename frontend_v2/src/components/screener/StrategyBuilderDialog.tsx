@@ -95,7 +95,7 @@ const DIRECTIONS = [
   { value: 'monitor', label: '监控' },
 ]
 
-type ExecutionBackend = 'polars_expr' | 'matrix_native' | 'minute_filter'
+type ExecutionBackend = 'auto' | 'polars_expr' | 'python_history_legacy' | 'matrix_native' | 'minute_filter'
 
 // ===== 组件 =====
 
@@ -241,14 +241,14 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
   const CUSTOM_TEMPLATE = useMemo(() => buildCustomTemplate(defaultBF), [defaultBF])
   const MATRIX_TEMPLATE = useMemo(() => MATRIX_TEMPLATE_FN(defaultBF), [defaultBF])
   const MINUTE_TEMPLATE = useMemo(() => buildMinuteTemplate(defaultBF), [defaultBF])
-  const templates = { polars_expr: CUSTOM_TEMPLATE, matrix_native: MATRIX_TEMPLATE, minute_filter: MINUTE_TEMPLATE }
+  const templates: Partial<Record<ExecutionBackend, string>> = { polars_expr: CUSTOM_TEMPLATE, matrix_native: MATRIX_TEMPLATE, minute_filter: MINUTE_TEMPLATE }
   const [step, setStep] = useState(1)
   const [tab, setTab] = useState<'ai' | 'custom'>('ai')
   const [customCopied, setCustomCopied] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [direction, setDirection] = useState('long')
-  const [executionBackend, setExecutionBackend] = useState<ExecutionBackend>('polars_expr')
+  const [executionBackend, setExecutionBackend] = useState<ExecutionBackend>('auto')
   const [rules, setRules] = useState('')
   const [code, setCode] = useState('')
   const [instruction, setInstruction] = useState('')
@@ -272,7 +272,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
 
   const resetDraftState = useCallback(() => {
     setStep(1); setTab('ai'); setName(''); setDescription(''); setDirection('long')
-    setExecutionBackend('polars_expr'); setRules(''); setCode(''); setInstruction('')
+    setExecutionBackend('auto'); setRules(''); setCode(''); setInstruction('')
     setPreviewTab('params'); setStrategyId(''); setSource('ai'); setValidated(false); setError('')
     setIterateEnabled(false); setIterateRounds([]); setIterateDraftId('')
     iterateSavedCodeRef.current = ''
@@ -294,10 +294,13 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
       const restoredSource = d.source ?? (d.strategyId?.startsWith('custom_') ? 'custom' : 'ai')
       setStep(d.step ?? 1); setName(d.name ?? ''); setDescription(d.description ?? '')
       setDirection(d.direction ?? 'long')
+      const restoredCode = String(d.code ?? '')
       setExecutionBackend(
         (d as any).executionBackend
-        ?? (String(d.code ?? '').includes('minute_filter') ? 'minute_filter'
-          : String(d.code ?? '').includes('matrix_native') ? 'matrix_native' : 'polars_expr'),
+        ?? (restoredCode.includes('minute_filter') ? 'minute_filter'
+          : restoredCode.includes('matrix_native') ? 'matrix_native'
+          : restoredCode.includes('python_history_legacy') ? 'python_history_legacy'
+          : 'auto'),
       )
       setRules(d.rules ?? ''); setCode(d.code ?? ''); setStrategyId(d.strategyId ?? '')
       setSource(restoredSource)
@@ -346,7 +349,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
   const selectExecutionBackend = (backend: ExecutionBackend) => {
     setExecutionBackend(backend)
     if (tab === 'custom' && (!code || Object.values(templates).includes(code))) {
-      setCode(templates[backend])
+      setCode(templates[backend] ?? '')
     }
   }
 
@@ -367,6 +370,10 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
         setStrategyId(result.draft_strategy_id); setSource('ai')
         setIterateDraftId(result.draft_strategy_id); setIterateRounds(result.rounds ?? [])
         setStep(2); setValidated(true)
+        // 实跑失败: 草稿在真实行情上跑不通, 明确告知用户再修, 别直接发布
+        if (result.smoke && !result.smoke.ok) {
+          setError('策略实跑失败：' + (result.smoke.issues?.[0]?.message ?? '未知错误'))
+        }
         const genDesc = parseMetaField(result.final_code, 'description')
         const genRules = parseRules(result.final_code)
         if (genDesc) setDescription(genDesc)
@@ -524,7 +531,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <button onClick={() => { setTab('ai'); if (mode === 'create') setSource('ai') }} className={cn('ctl ctl-sm ctl-ghost px-1.5 transition-all', tab === 'ai' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
                 <Sparkles className="h-[12px] w-[12px] inline mr-1" />AI 生成
               </button>
-              <button onClick={() => { setTab('custom'); if (mode === 'create') { setSource('custom'); if (!code) setCode(templates[executionBackend]) } }} className={cn('ctl ctl-sm ctl-ghost px-1.5 transition-all', tab === 'custom' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
+              <button onClick={() => { setTab('custom'); if (mode === 'create') { setSource('custom'); if (!code) setCode(templates[executionBackend] ?? '') } }} className={cn('ctl ctl-sm ctl-ghost px-1.5 transition-all', tab === 'custom' ? 'bg-accent/15 text-accent' : 'text-muted hover:text-foreground')}>
                 <FileText className="h-[12px] w-[12px] inline mr-1" />自定义编写
               </button>
             </div>
@@ -603,6 +610,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                 <div>
                   <span className="text-[10px] text-muted/50 uppercase tracking-wider mb-1.5 block">执行后端</span>
                   <div className="flex flex-wrap gap-1">
+                    <button type="button" aria-pressed={executionBackend === 'auto'} onClick={() => selectExecutionBackend('auto')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'auto' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>自动选择</button>
                     <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'polars_expr' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>Polars 表达式</button>
                     <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'matrix_native' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>矩阵原生</button>
                     <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'ctl ctl-sm ctl-btn px-1.5 focus-visible:ring-2 focus-visible:ring-accent' + (executionBackend === 'minute_filter' ? 'border-amber-400/40 bg-amber-400/10 text-amber-400' : 'border-border bg-base text-muted hover:border-amber-400/30')}>一分钟策略</button>
@@ -783,6 +791,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="mr-2 text-[10px] text-muted/50 uppercase tracking-wider">执行后端</span>
+                  <button type="button" aria-pressed={executionBackend === 'auto'} onClick={() => selectExecutionBackend('auto')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'auto' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>自动选择</button>
                   <button type="button" aria-pressed={executionBackend === 'polars_expr'} onClick={() => selectExecutionBackend('polars_expr')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'polars_expr' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>Polars 表达式</button>
                   <button type="button" aria-pressed={executionBackend === 'matrix_native'} onClick={() => selectExecutionBackend('matrix_native')} className={'ctl ctl-sm ctl-btn px-1.5' + (executionBackend === 'matrix_native' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>矩阵原生</button>
                   <button type="button" aria-pressed={executionBackend === 'minute_filter'} onClick={() => selectExecutionBackend('minute_filter')} className={'ctl ctl-sm ctl-btn px-1.5 focus-visible:ring-2 focus-visible:ring-accent' + (executionBackend === 'minute_filter' ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-base text-muted')}>一分钟策略</button>
@@ -794,7 +803,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                       <span className="text-sm font-medium text-foreground">自定义策略代码</span>
                       {validated && <span className="text-[10px] text-emerald-400">已校验</span>}
                     </div>
-                    <button onClick={() => { navigator.clipboard.writeText(code || templates[executionBackend]); setCustomCopied(true); setTimeout(() => setCustomCopied(false), 2000) }}
+                    <button onClick={() => { navigator.clipboard.writeText(code || templates[executionBackend] || ''); setCustomCopied(true); setTimeout(() => setCustomCopied(false), 2000) }}
                       className={cn('ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 transition-all', customCopied ? 'bg-emerald-400/10 text-emerald-400' : 'bg-elevated text-muted hover:text-foreground hover:bg-accent/10')}>
                       {customCopied ? <Check className="h-[12px] w-[12px]" /> : <Copy className="h-[12px] w-[12px]" />}
                       {customCopied ? '已复制' : '复制代码'}
@@ -811,7 +820,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
                   </div>
                   {error && <div className="text-[11px] text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</div>}
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => { setCode(templates[executionBackend]); setStrategyId(''); setSource('custom'); setValidated(false) }}
+                    <button onClick={() => { setCode(templates[executionBackend] ?? ''); setStrategyId(''); setSource('custom'); setValidated(false) }}
                       className="ctl ctl-md ctl-btn px-2.5 hover:text-foreground">
                       使用模板
                     </button>

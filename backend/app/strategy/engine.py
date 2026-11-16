@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import re
 import sys
 import threading
 import time
@@ -52,6 +53,24 @@ DEFAULT_BASIC_FILTER: dict = {
 
 # 叠加策略硬上限：子策略数量。控制信号计算成本与字段并集膨胀，避免 OOM。
 MAX_COMPOSITE_CHILDREN = 8
+
+_MISSING_COLUMN_RE = re.compile(r'unable to find column "([^"]+)"')
+
+
+def strategy_runtime_error(strategy_id: str, exc: Exception) -> ValueError:
+    """把策略执行期的 polars 异常翻译成可读中文错误。
+
+    API 层只捕 ValueError → 不翻译的话缺列错会变成 500 + 英文 traceback,
+    用户看不出是策略引用了哪一列。
+    """
+    message = str(exc)
+    match = _MISSING_COLUMN_RE.search(message)
+    if match:
+        return ValueError(
+            f"策略 {strategy_id} 引用了不存在的列「{match.group(1)}」: "
+            "请只使用 enriched 已有指标列; 需要自算的均线/辅助列请在 filter_history 内用 with_columns 计算"
+        )
+    return ValueError(f"策略 {strategy_id} 执行失败: {message}")
 
 
 def _normalize_param_defs(params: Any) -> list[dict]:
@@ -1075,7 +1094,10 @@ class StrategyEngine:
                     "盘中信号仅可用于分钟策略(timeframes=['1m']), 日线策略不支持: "
                     + ", ".join(sorted(missing_csgi))
                 )
-            df = s.filter_history_fn(df, params)
+            try:
+                df = s.filter_history_fn(df, params)
+            except Exception as exc:  # 统一翻译成可读错误 (API 层只捕 ValueError)
+                raise strategy_runtime_error(strategy_id, exc) from exc
             if "date" in df.columns:
                 df = df.filter(pl.col("date") == as_of)
         else:
@@ -1106,8 +1128,11 @@ class StrategyEngine:
 
         # Stage 2: 策略过滤
         if s.filter_fn:
-            expr = s.filter_fn(df, params)
-            df = df.filter(expr)
+            try:
+                expr = s.filter_fn(df, params)
+                df = df.filter(expr)
+            except Exception as exc:  # 统一翻译成可读错误 (API 层只捕 ValueError)
+                raise strategy_runtime_error(strategy_id, exc) from exc
 
         # Stage 2.5: 叠加条件 (每策略 overlay 硬过滤) — 策略过滤之后、评分之前:
         # 评分 min-max 归一化与 limit 截断都在过滤后的候选上进行; exit_signal_hits

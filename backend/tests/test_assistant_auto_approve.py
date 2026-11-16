@@ -181,7 +181,7 @@ def test_create_strategy_uses_save_core_and_writes_draft(tmp_path: Path, monkeyp
 
     captured: dict[str, Any] = {}
 
-    def fake_core(req, engine, data_dir, *, legacy_ai_path=False):
+    def fake_core(req, engine, data_dir, *, legacy_ai_path=False, repo=None):
         captured["strategy_id"] = req.strategy_id
         captured["target_source"] = req.target_source
         captured["mode"] = req.mode
@@ -217,7 +217,7 @@ def test_create_strategy_propagates_validation_error(tmp_path: Path, monkeypatch
     """校验失败: 错误要透传给模型, 不吞掉。"""
     from app.api import strategy as strategy_api
 
-    def fake_core(req, engine, data_dir, *, legacy_ai_path=False):
+    def fake_core(req, engine, data_dir, *, legacy_ai_path=False, repo=None):
         raise ValueError("策略保存失败: 找不到 META 字典")
 
     monkeypatch.setattr(strategy_api, "save_strategy_code_core", fake_core)

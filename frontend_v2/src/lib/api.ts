@@ -967,11 +967,21 @@ export interface AiIterateRound {
   change_summary: string
 }
 
+export interface AiIterateSmoke {
+  ok: boolean
+  issues?: { code: string; message: string }[]
+  skipped?: string | null
+  hits?: number
+  as_of?: string | null
+}
+
 export interface AiIterateResult {
   draft_strategy_id: string
   rounds: AiIterateRound[]
   final_code: string
   final_meta: Record<string, any>
+  /** 实盘口径实跑结果: ok=false 表示草稿在真实数据上跑不通 */
+  smoke?: AiIterateSmoke
 }
 
 // ===== Custom Signals (自定义信号) =====
@@ -5109,7 +5119,7 @@ export const api = {
     description?: string
     direction?: string
     rules?: string
-    execution_backend?: 'polars_expr' | 'matrix_native' | 'minute_filter'
+    execution_backend?: 'auto' | 'polars_expr' | 'python_history_legacy' | 'matrix_native' | 'minute_filter'
     max_rounds?: number
   }) =>
     request<AiIterateResult>('/api/strategies/ai/iterate', {

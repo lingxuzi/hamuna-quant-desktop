@@ -55,7 +55,12 @@ from app.indicators.pipeline import (
     LIMIT_SIGNAL_OUTPUTS,
     get_signal_dependencies,
 )
-from app.strategy.engine import StrategyDataContext, StrategyDef, StrategyEngine
+from app.strategy.engine import (
+    StrategyDataContext,
+    StrategyDef,
+    StrategyEngine,
+    strategy_runtime_error,
+)
 from app.strategy.scoring import (
     SCORING_DIRECTION_LOW,
     effective_scoring,
@@ -2669,7 +2674,7 @@ class StrategyBacktestService:
         false_mask = pl.Series("_candidate_filter", [False] * len(panel), dtype=pl.Boolean)
         true_mask = pl.Series("_candidate_filter", [True] * len(panel), dtype=pl.Boolean)
 
-        history_failed = False
+        history_error: Exception | None = None
         # 优先: filter_history_fn 策略 (涨停/反包等多日形态, 与策略路径共用同一逻辑)
         if s.filter_history_fn:
             try:
@@ -2688,8 +2693,8 @@ class StrategyBacktestService:
                 )
                 return marked["_hit"].fill_null(False).cast(pl.Boolean)
             except Exception as e:
-                history_failed = True
-                logger.warning("strategy filter_history_fn failed: %s", e)
+                history_error = e
+                logger.exception("strategy filter_history_fn failed: %s", e)
                 # 失败则回退到 filter_fn (若存在)
 
         # 策略 filter_fn: 候选层 (filter_history 不可用或失败时)
@@ -2701,11 +2706,12 @@ class StrategyBacktestService:
                     if not result.is_empty():
                         return result["_candidate_filter"].fill_null(False).cast(pl.Boolean)
             except Exception as e:
-                logger.warning("strategy filter_fn failed: %s", e)
-                return false_mask
+                logger.exception("strategy filter_fn failed: %s", e)
+                # 过滤失败不能静默变成「零候选」: 回测结果会误导 AI 迭代与用户判断
+                raise strategy_runtime_error(str(s.meta.get("id") or "?"), e) from e
 
-        if history_failed:
-            return false_mask
+        if history_error is not None:
+            raise strategy_runtime_error(str(s.meta.get("id") or "?"), history_error) from history_error
 
         # 没有策略候选层时, 由 entry_signals 直接决定买点。
         return true_mask

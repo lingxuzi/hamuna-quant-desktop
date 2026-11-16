@@ -15,7 +15,8 @@ from typing import Any
 
 from app.services import tool_catalog
 from app.services.ai_provider import generate_ai_text_with_tools
-from app.strategy.ai_generator import AIStrategyGenerator, _SYSTEM_PREFIX, find_meta_assignment
+from app.strategy.ai_generator import _SYSTEM_PREFIX, AIStrategyGenerator, find_meta_assignment
+from app.strategy.smoke import smoke_message, smoke_strategy
 
 # 每轮 (生成/诊断/修改一次) 内部的工具调用预算: 至少 2 次 LLM 调用
 # (1 次发起 run_backtest, 1 次读结果产出改进版), 留少量检索/换参余量。
@@ -63,9 +64,11 @@ class AIStrategyIterator:
             "final_meta": dict,
         }
         """
+        # "auto" = 让生成器自己按规则选后端; 只有显式指定时才锁定。
+        fixed_backend = execution_backend if execution_backend not in (None, "auto") else None
         generator = (
-            AIStrategyGenerator(execution_backend=execution_backend)
-            if execution_backend else AIStrategyGenerator()
+            AIStrategyGenerator(execution_backend=fixed_backend)
+            if fixed_backend else AIStrategyGenerator()
         )
         tools = tool_catalog.build_tool_schemas()
 
@@ -80,12 +83,16 @@ class AIStrategyIterator:
         code, meta = result["code"], result["meta"]
         self._save_draft(engine, data_dir, draft_id, code, meta)
         current_code, current_meta = code, {**meta, "id": draft_id}
+        # 实盘口径实跑: 回测喂整段面板, 实盘喂当日快照/历史窗口, 两者能跑通的策略
+        # 不一定在实盘跑得通。实跑失败的原因回灌给模型, 让它在下一轮自己修。
+        smoke = smoke_strategy(engine, repo, draft_id)
+        smoke_issue = "" if smoke["ok"] else smoke_message(smoke)
 
         rounds: list[dict[str, Any]] = []
         final_backtested = False  # final 版(当前 current_code)是否已有回测证据
         for round_no in range(1, self._max_rounds + 1):
             full = await generate_ai_text_with_tools(
-                self._iteration_messages(generator, current_code, prompt, draft_id),
+                self._iteration_messages(generator, current_code, prompt, draft_id, smoke_issue),
                 tools,
                 execute_tool=self._make_execute_tool(engine, data_dir, repo=repo),
                 max_rounds=_CYCLE_TOOL_BUDGET,
@@ -117,6 +124,8 @@ class AIStrategyIterator:
 
             self._save_draft(engine, data_dir, draft_id, new_code, new_meta)
             current_code, current_meta = new_code, {**new_meta, "id": draft_id}
+            smoke = smoke_strategy(engine, repo, draft_id)
+            smoke_issue = "" if smoke["ok"] else smoke_message(smoke)
             rounds.append({
                 "round": round_no,
                 "stats": stats,
@@ -138,6 +147,7 @@ class AIStrategyIterator:
             "rounds": rounds,
             "final_code": current_code,
             "final_meta": current_meta,
+            "smoke": smoke,
         }
 
     async def _backtest_final(self, data_dir: str, draft_id: str, *, engine=None, repo=None) -> dict | None:
@@ -177,8 +187,17 @@ class AIStrategyIterator:
         current_code: str,
         prompt: str,
         draft_id: str,
+        smoke_issue: str = "",
     ) -> list[dict]:
         system = _SYSTEM_PREFIX + generator._get_guide() + _ITERATION_SUFFIX
+        issue_block = ""
+        if smoke_issue:
+            issue_block = (
+                f"\n\n【当前草稿实盘口径实跑失败】{smoke_issue}\n"
+                "实盘口径与回测口径不同: 实盘喂给策略的是当日一行一标的的快照 "
+                "(polars_expr) 或历史窗口 (python_history_legacy), "
+                "不是回测用的整段面板。请按这条报错修正后重新输出完整策略代码。"
+            )
         user = (
             f"策略草稿已保存为 {draft_id}。你可以调用 run_backtest 回测它 "
             f"(strategy_id={draft_id}), 或用 list_factors / list_strategies / "
@@ -187,6 +206,7 @@ class AIStrategyIterator:
             f"当前策略代码:\n```python\n{current_code}\n```\n\n"
             f"请回测当前草稿, 依据指标诊断, 输出改进后的完整策略代码; "
             f"若已无明显改进空间, 原样输出当前代码。"
+            f"{issue_block}"
         )
         return [
             {"role": "system", "content": system},

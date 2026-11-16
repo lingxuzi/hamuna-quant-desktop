@@ -944,7 +944,7 @@ def _create_strategy(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         description=description,
     )
     try:
-        saved = save_strategy_code_core(save_req, ctx.engine, ctx.data_dir)
+        saved = save_strategy_code_core(save_req, ctx.engine, ctx.data_dir, repo=ctx.repo)
     except ValueError as exc:
         raise ValueError(str(exc)) from exc
 

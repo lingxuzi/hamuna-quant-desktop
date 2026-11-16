@@ -13,6 +13,9 @@
 7. `RULES` 用中文列出至少 3 条核心逻辑。
 8. 优先 Polars 向量化，避免逐行循环。
 9. `META` 须为顶层字面量字典（可用 `META: dict = {...}`），禁止改名或动态构造。
+10. 后端按规则自选：只有当日快照条件 → `polars_expr`；含上穿/下穿/金叉/死叉、
+    连续 N 日、N 日新高、前高前低、最近 N 天内出现过等任何多日比较 → `python_history_legacy`。
+    把跨日条件硬写进 `filter()` 一定失败，且之后无法运行。
 
 ## 文件结构
 
@@ -58,6 +61,11 @@ def filter(df: pl.DataFrame, params: dict) -> pl.Expr:
     return pl.lit(True)
 ```
 
+`filter()` 只拿到「当日一行一标的」的快照：不会先跑 `with_columns`，所以不能引用自造辅助列；
+当日没有历史，`shift/rolling_*/diff/cum_*` 等跨日算子取不到值，一律禁用。
+信号列（`signal_*`）本身已含跨日语义，`polars_expr` 里可直接用
+`pl.col("signal_ma_golden_5_20").fill_null(False)` 过滤，不必自己算上穿。
+
 ## 何时使用 filter_history
 
 普通 `filter()` 只判断当日数据。规则涉及以下场景时必须使用 `filter_history(df, params) -> pl.DataFrame`：
@@ -89,6 +97,10 @@ REQUIRED_FEATURES = {"ma20", "momentum_20d"}
 ```
 
 `filter_history()` 必须返回所有匹配行，不要只过滤最新日期；回测需要全区间命中。
+
+enriched 只内置 ma5/10/20/30/60，没有 MA100 等其它均线：窗口内自行计算，
+`pl.col("close").rolling_mean(100).over("symbol")`（跨日算子必须带 `.over("symbol")`）。
+`LOOKBACK_DAYS` 必须 ≥ 用到的最大窗口（引擎按交易日加载 `LOOKBACK_DAYS + 1` 根）。
 
 ## matrix_native 文件结构
 

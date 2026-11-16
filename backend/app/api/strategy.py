@@ -35,6 +35,7 @@ from app.strategy.scoring import (
     effective_scoring,
     effective_scoring_directions,
 )
+from app.strategy.smoke import smoke_strategy
 
 router = APIRouter(prefix="/api/strategies", tags=["strategies"])
 logger = logging.getLogger(__name__)
@@ -278,7 +279,7 @@ class AIIterateRequest(BaseModel):
     description: str = ""
     direction: str = "long"
     rules: str = ""
-    execution_backend: Literal["polars_expr", "matrix_native", "minute_filter"] = "polars_expr"
+    execution_backend: Literal["auto", "polars_expr", "python_history_legacy", "matrix_native", "minute_filter"] = "auto"
     max_rounds: int = Field(default=4, ge=1, le=10)
 
 
@@ -613,7 +614,7 @@ class BuildRequest(BaseModel):
     direction: str = "long"
     rules: str = ""
     strategy_id: str = ""
-    execution_backend: Literal["polars_expr", "matrix_native", "minute_filter"] = "polars_expr"
+    execution_backend: Literal["auto", "polars_expr", "python_history_legacy", "matrix_native", "minute_filter"] = "auto"
     # 用户「默认基础参数」(策略页设置): 生成代码的 META.basic_filter 优先采用
     basic_filter: dict[str, Any] | None = None
     # step2 字段
@@ -815,6 +816,8 @@ def _prepare_strategy_code(req: StrategyCodeValidateRequest | StrategyCodeSaveRe
     AIStrategyGenerator._validate_safety(code)
     meta = AIStrategyGenerator._extract_meta(code)
     AIStrategyGenerator._validate_meta_semantics(code, meta)
+    # 引用列 / 后端匹配静态校验: 运行期才炸的缺列错在这里拦下
+    AIStrategyGenerator._validate_source_columns(code, meta)
     return {"code": code, "meta": meta}
 
 
@@ -828,7 +831,11 @@ def _restore_strategy_file(path: Path, previous_code: str | None) -> None:
 def _save_strategy_code(req: StrategyCodeSaveRequest, request: Request, *, legacy_ai_path: bool = False) -> dict:
     engine = _get_engine(request)
     data_dir = _data_dir(request)
-    result = save_strategy_code_core(req, engine, data_dir, legacy_ai_path=legacy_ai_path)
+    result = save_strategy_code_core(
+        req, engine, data_dir,
+        legacy_ai_path=legacy_ai_path,
+        repo=getattr(request.app.state, "repo", None),
+    )
     _invalidate_strategy_runtime(request)
     return result
 
@@ -839,12 +846,14 @@ def save_strategy_code_core(
     data_dir: Path,
     *,
     legacy_ai_path: bool = False,
+    repo=None,
 ) -> dict:
     """策略落盘 + 校验的**唯一**实现 (API 端点与 AI 助手工具共用)。
 
     校验链: ID 前缀 → 目标目录 → 安全校验与 META 语义 → 写盘 → engine.reload()
-    核对能加载且来源正确 → 引用的自定义信号必须已定义。任何一步失败都回滚文件,
-    不留下半截状态。调用方负责清缓存 (端点走 _invalidate_strategy_runtime)。
+    核对能加载且来源正确 → 引用的自定义信号必须已定义 → 实盘口径实跑一次。
+    任何一步失败都回滚文件, 不留下半截状态。调用方负责清缓存
+    (端点走 _invalidate_strategy_runtime)。
     """
     sid = _validate_strategy_id(req.strategy_id)
     if legacy_ai_path:
@@ -912,6 +921,13 @@ def save_strategy_code_core(
                 "策略引用了未定义的自定义信号: " + ", ".join(sorted(missing))
                 + " — 请先在「自定义信号」管理中创建对应信号后再保存"
             )
+        # 保存期实跑 smoke: 用最近交易日的真实数据按实盘口径跑一次, 跑了就拦。
+        # 静态校验只看得见源码, 运行期才炸的问题 (列在实盘帧里不存在、dtype 不匹配)
+        # 只有真跑一次才暴露。
+        smoke = smoke_strategy(engine, repo, sid)
+        if not smoke["ok"]:
+            detail = "; ".join(str(i.get("message") or "") for i in smoke["issues"])
+            raise ValueError(f"策略实跑失败: {detail}")
     except Exception as e:
         _restore_strategy_file(path, previous_code)
         engine.reload()
@@ -1063,8 +1079,9 @@ def _build_prompt(req: BuildRequest) -> str:
 
 
 def _build_execution_backend(req: BuildRequest) -> str:
-    # 旧客户端修改策略未传后端时，按已有代码保留分钟/矩阵契约。
-    if req.step == 2 and "execution_backend" not in req.model_fields_set:
+    # step2 修改已有策略: 后端必须跟着现有代码走, 不让 AI 在修改时悄悄换后端。
+    if req.step == 2 and (req.execution_backend == "auto"
+                          or "execution_backend" not in req.model_fields_set):
         try:
             meta = AIStrategyGenerator._extract_meta(req.current_code)
             return _strategy_execution_backend(ast.parse(req.current_code), meta)
@@ -1365,6 +1382,13 @@ def publish_ai_strategy(strategy_id: str, request: Request):
     path = s.file_path
     if path is None:
         raise HTTPException(status_code=400, detail="策略源文件路径无效, 无法发布")
+
+    # 发布是上线的最后一道闸: 草稿态策略在迭代里只验证过回测口径, 这里按实盘口径实跑一次。
+    smoke = smoke_strategy(engine, getattr(request.app.state, "repo", None), sid)
+    if not smoke["ok"]:
+        detail = "; ".join(str(i.get("message") or "") for i in smoke["issues"])
+        raise HTTPException(status_code=400, detail=f"策略实跑失败, 不能发布: {detail}")
+
     previous_code = path.read_text(encoding="utf-8")
     path.write_text(_set_meta_bool_field(previous_code, "research_only", False), encoding="utf-8")
 

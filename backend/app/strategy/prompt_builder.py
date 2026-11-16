@@ -21,6 +21,20 @@ def _load_doc(name: str) -> str:
 
 DIRECTION_CN = {"long": "做多", "short": "做空", "monitor": "监控"}
 
+_BACKEND_AUTO_RULE = """执行后端：由你根据规则自行选择（不要向用户索要）——
+- 规则只涉及当日快照（价、量、当日指标、signal_* 信号列）→ polars_expr + filter()
+- 规则含「上穿/下穿/金叉/死叉、连续 N 日、N 日新高、涨停后第 X 日、前高/前低、
+  最近 N 天内出现过」等任何需要多日比较的条件 → python_history_legacy + filter_history()
+- 用户明确点名分钟或矩阵口径时才用 minute_filter / matrix_native"""
+
+_BACKEND_FIXED_RULE = "执行后端：{backend}（必须严格使用，不得自行更换）"
+
+
+def _backend_rule(execution_backend: str) -> str:
+    if execution_backend == "auto":
+        return _BACKEND_AUTO_RULE
+    return _BACKEND_FIXED_RULE.format(backend=execution_backend)
+
 
 def _format_basic_filter(basic_filter: dict) -> str:
     """dict → Python 字面量单行 (True/False/None 保持 Python 语法, 供 AI 直接抄进 META)。"""
@@ -55,13 +69,13 @@ def build_step1(
 策略名称：{name}{id_line}
 策略描述：{description}
 策略方向：{DIRECTION_CN.get(direction, direction)}
-执行后端：{execution_backend}
+{_backend_rule(execution_backend)}
 {bf_line}策略规则：
 {rules}
 
 输出要求：
 1. 严格遵循系统提示中的策略文件结构和安全限制。
-2. 严格使用指定执行后端；matrix_native 只定义 MATRIX_STRATEGY，polars_expr 只定义 filter()。若 polars 规则确需日线历史窗口，改用 python_history_legacy + filter_history()。minute_filter 只定义 filter_minute_history(df, params)，timeframes 必须为 ["1m"]。
+2. 执行后端与入口函数必须一致：matrix_native 只定义 MATRIX_STRATEGY，polars_expr 只定义 filter()，python_history_legacy 只定义 filter_history() 并声明 LOOKBACK_DAYS 与 REQUIRED_FEATURES，minute_filter 只定义 filter_minute_history(df, params) 且 timeframes 必须为 ["1m"]。
 3. META 必须声明 asset_types 和 timeframes，并生成完整执行与交易元数据。
 4. 只输出 Python 代码。"""
 
