@@ -852,7 +852,7 @@ nav :focus-visible { outline-offset: -2px; }
   /* ---- 名录: 两栏, 行优先, 点线分隔 ---- */
   .roster {
     display: grid; grid-template-columns: 1fr 1fr; column-gap: 34px;
-    margin-top: 12px; max-width: 760px;
+    margin-top: 12px; max-width: 100%;
   }
   .roster.one { grid-template-columns: 1fr; }
   .roster .it {
