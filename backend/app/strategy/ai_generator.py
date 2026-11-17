@@ -52,6 +52,9 @@ _FENCED_CODE_RE = re.compile(
 _POLARS_ENTRYPOINT_ERROR = "找不到策略入口函数 filter() 或 filter_history()"
 _MATRIX_ENTRYPOINT_ERROR = "找不到 Matrix 策略入口 MATRIX_STRATEGY"
 _MINUTE_ENTRYPOINT_ERROR = "分钟策略必须只定义 filter_minute_history() 入口"
+_HISTORY_ENTRYPOINT_ERROR = (
+    "python_history_legacy 策略必须定义 filter_history() 入口, 且不能同时定义 filter()"
+)
 _SOURCE_CHECK_ERROR_PREFIX = "策略静态校验失败: "
 
 _POLARS_SCORING_FIELDS = frozenset(
@@ -251,11 +254,17 @@ def _strategy_entrypoint_error(code: str, meta: dict | None = None) -> str | Non
                 or _top_level_assignment(tree, "MATRIX_STRATEGY"):
             return _MINUTE_ENTRYPOINT_ERROR
         return None
-    has_polars_entrypoint = any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name in {"filter", "filter_history"}
-        for node in tree.body
-    )
+    entry_names = {
+        node.name for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    has_polars_entrypoint = bool(entry_names & {"filter", "filter_history"})
+    if backend == "python_history_legacy":
+        # 引擎加载期要求 python_history_legacy 只定义 filter_history ——
+        # 生成期就拦, 否则代码过了校验却在加载时被拒 (smoke 只能报 unknown strategy)。
+        if "filter_history" not in entry_names or "filter" in entry_names:
+            return _HISTORY_ENTRYPOINT_ERROR
+        return None
     return None if has_polars_entrypoint else _POLARS_ENTRYPOINT_ERROR
 
 
@@ -385,9 +394,15 @@ class AIStrategyGenerator:
             _POLARS_ENTRYPOINT_ERROR,
             _MATRIX_ENTRYPOINT_ERROR,
             _MINUTE_ENTRYPOINT_ERROR,
+            _HISTORY_ENTRYPOINT_ERROR,
         } or error.startswith((
             "META.params", "META.scoring", "生成结果执行后端", "分钟策略 META.timeframes",
+            # 语法错误多半是输出被截断, 让模型重写一次完整文件比直接报错强。
+            "Python 语法错误",
             _SOURCE_CHECK_ERROR_PREFIX,
+            # 安全白名单拦截 (禁止 import/引用/访问...): 模型常顺手 import 越界模块,
+            # 直接报错给用户不如让模型自己改一遍。
+            "禁止",
         ))
 
     @staticmethod
@@ -433,7 +448,7 @@ class AIStrategyGenerator:
                 "请使用真实数值字段或受控虚拟字段 ma20_bias"
             )
 
-    async def repair_code(self, code: str, error: str) -> dict:
+    async def repair_code(self, code: str, error: str, *, context: str = "结构校验") -> dict:
         """Ask the model once for a complete replacement after a structural error."""
         try:
             tree = ast.parse(code)
@@ -466,11 +481,16 @@ class AIStrategyGenerator:
                 "LOOKBACK_DAYS（≥ 用到的最大滚动窗口）与 REQUIRED_FEATURES；"
                 "所有跨日算子必须带 .over(\"symbol\")"
             )
+        elif backend == "python_history_legacy":
+            entrypoint_requirement = (
+                '保留 EXECUTION_BACKEND = "python_history_legacy"，只定义 '
+                "filter_history(df, params) -> pl.DataFrame，删除 filter()"
+            )
         else:
             entrypoint_requirement = (
                 "保留原执行后端，并定义对应的 filter() 或 filter_history()"
             )
-        prompt = f"""上一次生成的策略代码未通过结构校验。
+        prompt = f"""上一次生成的策略代码未通过{context}。
 
 校验错误：{error}
 
@@ -529,6 +549,7 @@ META = {{...}}，{entrypoint_requirement}。只输出完整 Python 代码。
         "app.strategy.builtin.factor_rank_research",  # 旧策略使用的同一受控实现转发路径。
         "app.strategy.market_data",   # 新增: 策略可读取指数/ETF 日K
         "datetime",
+        "math",     # 纯数值函数库 (sqrt/log), 模型写 RSI/ATR 时常顺手 import
         "__future__",
     })
 

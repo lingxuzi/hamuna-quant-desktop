@@ -128,6 +128,7 @@ LEGITIMATE_SNIPPETS = {
             return df
     ''',
     "numpy_public_api": "import numpy as np\nx = np.arange(10)\ny = np.float32(1.0)",
+    "math_numeric_helper": "import math\nx = math.sqrt(4.0)\ny = math.log(2.0)",
 }
 
 

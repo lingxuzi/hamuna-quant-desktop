@@ -131,6 +131,23 @@ def test_smoke_message_readable(fake_service):
     assert "实跑通过" in smoke_message(smoke_strategy(_FakeEngine(), object(), "x"))
 
 
+def test_load_failure_carries_engine_load_error(fake_service):
+    """策略没加载上时必须带上真实原因, 只报 unknown strategy 模型没法改。"""
+
+    class _LoadFailedEngine:
+        def get(self, strategy_id):
+            raise ValueError(f"unknown strategy: {strategy_id}")
+
+        def load_errors(self):
+            return [{"file": "/tmp/ai/x.py",
+                     "error": "python_history_legacy strategy must declare only filter_history"}]
+
+    result = smoke_strategy(_LoadFailedEngine(), object(), "x")
+    assert result["ok"] is False
+    assert result["issues"][0]["code"] == "load_failed"
+    assert "must declare only filter_history" in result["issues"][0]["message"]
+
+
 def test_save_is_rolled_back_when_smoke_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "app.api.strategy.smoke_strategy",

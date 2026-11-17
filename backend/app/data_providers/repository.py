@@ -809,7 +809,11 @@ class KlineRepository:
                 df_hist = guarded_collect(lf.select(read_cols), priority="background")
                 logger.info("enriched refresh step done: collect history rows=%d (%.2fs)", len(df_hist), time.perf_counter() - step)
                 if not df_hist.is_empty():
-                    instruments = self._instruments_cache if self._instruments_cache is not None else pl.DataFrame()
+                    # 必须走 get_instruments() 懒加载: 直接用 _instruments_cache 时,
+                    # 若刷新先于 instruments 加载, 空表会让 compute_limit_signals 整段跳过,
+                    # 缓存静默缺 signal_limit_* / consecutive_limit_* / turnover_rate / name,
+                    # 引用这些列的实盘策略直接报缺列。
+                    instruments = self.get_instruments()
 
                     # 分批计算并关联元数据, 保留完整历史, 限制宽表临时副本。
                     step = time.perf_counter()

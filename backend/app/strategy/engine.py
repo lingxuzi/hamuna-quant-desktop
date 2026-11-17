@@ -1096,10 +1096,20 @@ class StrategyEngine:
                 )
             try:
                 df = s.filter_history_fn(df, params)
+                # 缺 date 列 → 引擎无法按 as_of 截取当日行, 会把整段窗口当成当日
+                # 推荐返回。回测路径同样要求 (symbol, date), 这里直接报错让模型改。
+                if not df.is_empty() and "date" not in df.columns:
+                    raise ValueError(
+                        "filter_history 返回的帧必须包含 date 列"
+                        " (引擎按 as_of 取当日行)"
+                    )
             except Exception as exc:  # 统一翻译成可读错误 (API 层只捕 ValueError)
                 raise strategy_runtime_error(strategy_id, exc) from exc
             if "date" in df.columns:
                 df = df.filter(pl.col("date") == as_of)
+            # 策略可能只 select 自己用的列, 引擎后续基础过滤/评分仍要读
+            # close/amount/turnover_rate/name 等 → 从原始历史帧补回。
+            df = self._restore_history_columns(df, history, as_of)
         else:
             if current is None:
                 raise ValueError(f"strategy {strategy_id} requires current data")
@@ -1931,6 +1941,33 @@ class StrategyEngine:
             return df
         extra = current.select(["symbol", *cols]).unique(subset=["symbol"], keep="last")
         return df.join(extra, on="symbol", how="left")
+
+    @staticmethod
+    def _restore_history_columns(
+        df: pl.DataFrame, history: pl.DataFrame | None, as_of: date
+    ) -> pl.DataFrame:
+        """补回 filter_history 裁掉的列 (按 symbol+date 从原始历史帧的 as_of 切片联回)。
+
+        回测路径始终在全量 panel 上取列, 策略裁不裁列都不影响; 实盘路径拿的是
+        filter_history 的返回值, 一旦被 select 裁掉 amount/turnover_rate 等基础列,
+        后续基础过滤会直接报错或静默跳过(口径与回测分叉)。这里补齐后两边一致。
+        """
+        if history is None or history.is_empty() or df.is_empty():
+            return df
+        if not {"symbol", "date"}.issubset(df.columns) or "date" not in history.columns:
+            return df
+        missing = [
+            c for c in history.columns if c not in df.columns and c not in ("symbol", "date")
+        ]
+        if not missing:
+            return df
+        src = history.filter(pl.col("date") == as_of)
+        if src.is_empty():
+            return df
+        extra = src.select(["symbol", "date", *missing]).unique(
+            subset=["symbol", "date"], keep="last"
+        )
+        return df.join(extra, on=["symbol", "date"], how="left")
 
     # ================================================================
     # 内部: 评分

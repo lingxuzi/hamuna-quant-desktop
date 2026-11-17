@@ -27,6 +27,7 @@ from app.strategy.ai_generator import (
     _strategy_execution_backend,
     find_meta_assignment,
 )
+from app.strategy.ai_verify import verify_and_repair
 from app.strategy.engine import StrategyDef, StrategyEngine
 from app.strategy.monitor import StrategyMonitorService
 from app.strategy.prompt_builder import build_step1, build_step2
@@ -1090,6 +1091,22 @@ def _build_execution_backend(req: BuildRequest) -> str:
     return req.execution_backend
 
 
+async def _verify_generated(gen: AIStrategyGenerator, result: dict, request: Request) -> dict:
+    """生成后按实盘口径跑一遍; 跑不通就把报错喂回模型改 (app/strategy/ai_verify.py)。
+
+    静态校验只看源码, 「and/or 误用、辅助列没物化」这类问题只有真跑才炸。
+    """
+    state = getattr(getattr(request, "app", None), "state", None)
+    repo = getattr(state, "repo", None)
+    if repo is None:
+        return result
+    try:
+        return await verify_and_repair(gen, result, repo=repo)
+    except Exception:  # noqa: BLE001 — 校验链路自身出错不该挡住生成
+        logger.exception("AI 策略实跑校验失败")
+        return result
+
+
 @router.post("/build")
 async def build_strategy(req: BuildRequest, request: Request):
     """两步策略构建。
@@ -1105,6 +1122,7 @@ async def build_strategy(req: BuildRequest, request: Request):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    result = await _verify_generated(gen, result, request)
     if req.step == 1:
         result = _normalize_build_result(result, req.strategy_id, req.name, req.description)
     elif req.strategy_id:
@@ -1130,6 +1148,7 @@ async def build_strategy_stream(req: BuildRequest, request: Request):
             result = gen.validate_code("".join(chunks))
             if gen.needs_structural_repair(result):
                 result = await gen.repair_code(result["code"], result["error"])
+            result = await _verify_generated(gen, result, request)
             if req.step == 1:
                 result = _normalize_build_result(result, req.strategy_id, req.name, req.description)
             elif req.strategy_id:
@@ -1163,6 +1182,7 @@ async def ai_generate(req: AIGenerateRequest, request: Request):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI生成失败: {e}") from e
+    result = await _verify_generated(gen, result, request)
     return result
 
 

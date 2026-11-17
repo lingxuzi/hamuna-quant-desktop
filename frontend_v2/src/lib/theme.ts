@@ -122,15 +122,18 @@ export interface ChartTheme {
 }
 
 /* 画布不吃 CSS 变量, 但 index.css 的变量存的是 HSL 三元组(如 "0 45% 39%"),
-   直接拼成 hsl() 就能用 —— 图表与 UI 因此永远同色, 换肤只改 index.css 一处。 */
+   直接拼成 hsl() 就能用 —— 图表与 UI 因此永远同色, 换肤只改 index.css 一处。
+   必须是逗号式 hsl(h, s%, l%): zrender 的颜色解析器只认逗号式, 碰上 CSS Color 4
+   的空格式 hsl(h s% l% / a) 会解析成 undefined, emphasis 态提色时连带整轮重绘
+   崩掉 —— 表现为图表一悬停, 曲线和网格线一起消失。 */
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
+/** 逗号式 hsl / hsla —— 浏览器和 zrender 都认这一种。 */
 function hsl(name: string, alpha = 1): string {
-  const raw = cssVar(name)
-  if (!raw) return alpha === 1 ? 'hsl(0 0% 50%)' : `hsl(0 0% 50% / ${alpha})`
-  return alpha === 1 ? `hsl(${raw})` : `hsl(${raw} / ${alpha})`
+  const parts = (cssVar(name) || '0 0% 50%').split(/\s+/).filter(Boolean)
+  return alpha === 1 ? `hsl(${parts.join(', ')})` : `hsla(${parts.join(', ')}, ${alpha})`
 }
 
 function buildChartTheme(): ChartTheme {
@@ -180,6 +183,10 @@ function parseHsl(v: string): [number, number, number] {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
+/** 逗号式 hsl 三元组 (zrender 只认这一种)。 */
+const hslStr = (h: number, s: number, l: number) =>
+  `hsl(${h.toFixed(0)}, ${s.toFixed(0)}%, ${l.toFixed(0)}%)`
+
 /**
  * 有序色阶取色: 分位、热度这类有顺序的数据要一条由浅到深的单色阶,
  * 不能拿分类色板硬凑 (同色系看不出先后)。在 --ramp-1..5 之间插值出 n 档。
@@ -187,24 +194,28 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 export function rampColors(n: number): string[] {
   const stops = [1, 2, 3, 4, 5].map(i => parseHsl(cssVar(`--ramp-${i}`)))
   if (n <= 0) return []
-  if (n === 1) return [`hsl(${stops[0].join(' ')}%)`]
+  if (n === 1) return [hslStr(...stops[0])]
   return Array.from({ length: n }, (_, i) => {
     const pos = (i / (n - 1)) * (stops.length - 1)
     const lo = Math.floor(pos)
     const hi = Math.min(lo + 1, stops.length - 1)
     const t = pos - lo
     const c = stops[lo].map((v, k) => lerp(v, stops[hi][k], t))
-    return `hsl(${c[0].toFixed(0)} ${c[1].toFixed(0)}% ${c[2].toFixed(0)}%)`
+    return hslStr(c[0], c[1], c[2])
   })
 }
 
 /**
- * 同色系半透明填充: 把 hsl(H S% L%) 变成 hsl(H S% L% / a)。
+ * 同色系半透明填充: 把 hsl(H S% L%) 变成 hsla(H, S%, L%, a)。
  * 图表里的面积渐变必须与线同色相, 另写 rgba 会与皮肤脱钩。
+ * 走逗号式 hsla —— zrender 解析不了空格式 hsl(H S% L% / a)。
  */
 export function alpha(color: string, a: number): string {
-  const m = color.match(/^hsl\(([^)]+)\)$/)
-  return m ? `hsl(${m[1]} / ${a})` : color
+  const m = color.match(/^hsla?\(([^)]+)\)$/)
+  if (!m) return color
+  const p = m[1].split(/[\s,/]+/).filter(Boolean)
+  if (p.length < 3) return color
+  return `hsla(${p[0]}, ${p[1]}, ${p[2]}, ${a})`
 }
 
 /** hook: 当前主题的图表调色板 (主题切换自动触发重渲染)。 */

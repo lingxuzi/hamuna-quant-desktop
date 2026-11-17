@@ -13,6 +13,7 @@ import { fmtPrice, fmtPct, priceColorClass } from '@/lib/format'
 import { useDialogBackdrop } from '@/lib/useDialogBackdrop'
 import { cn } from '@/lib/cn'
 import { cnSignal } from '@/lib/signals'
+import { sourceLabel } from '@/lib/alertSources'
 import { useCustomSignalNames } from '@/lib/useCustomSignalNames'
 import { LEGACY_STRATEGY_NOTIFY_EVENTS, STRATEGY_NOTIFY_EVENT_OPTIONS, strategyEventMeta, strategyName } from '@/lib/strategyMonitorEvents'
 import { boardTag } from '@/components/stock-table/primitives'
@@ -24,9 +25,11 @@ import { toNavItems, type NavItem } from '@/lib/listNav'
 import { DimensionMembersDialog, type DimensionKind, type DimensionMembersTarget } from '@/components/DimensionMembersDialog'
 import { usePreferences, useQuoteStatus } from '@/lib/useSharedQueries'
 
+/** 规则类型筛选/表格用的措辞, 比告警徽标更具体 (如「价格/涨跌」「市场异动」)。 */
 const TYPE_LABEL: Record<string, string> = {
   signal: '信号', price: '价格/涨跌', market: '市场异动', strategy: '策略监控', sector: '板块监控',
-  abnormal: '异动监控', volume_delta: '轮询放量', date: '日期提醒',
+  abnormal: '异动监控', volume_delta: '轮询放量', date: '日期提醒', ladder: '连板梯队',
+  paper: '模拟盘', depth: '五档轮询',
 }
 
 /** 严重级别 → 左侧色条 + 图标 */
@@ -44,6 +47,9 @@ const SOURCE_BADGE_STYLE: Record<string, string> = {
   abnormal: 'bg-orange-500/10 text-orange-500 border-orange-500/20 dark:text-orange-400',
   volume_delta: 'bg-rose-500/10 text-rose-400 border-rose-500/20 dark:text-rose-300',
   date:     'bg-violet-500/10 text-violet-500 border-violet-500/20 dark:text-violet-300',
+  ladder:   'bg-violet-500/10 text-violet-500 border-violet-500/20 dark:text-violet-300',
+  paper:    'bg-sky-400/10 text-sky-500 border-sky-400/20 dark:text-sky-300',
+  depth:    'bg-warning/10 text-warning border-warning/20',
 }
 
 /**
@@ -596,7 +602,7 @@ function AlertsList({ alertsQuery, confirmClear, setConfirmClear, total, enterTs
                             // 优先用规则名 (如 "策略监控 · 空中加油" → "空中加油"); 退回到 type 标签
                             const rn = ev.rule_name ?? ''
                             const dotIdx = rn.indexOf(' · ')
-                            return dotIdx >= 0 ? rn.slice(dotIdx + 3) : (rn || (TYPE_LABEL[ev.source] ?? ev.source))
+                            return dotIdx >= 0 ? rn.slice(dotIdx + 3) : (rn || sourceLabel(ev.source))
                           })()}
                         </span>
                       </div>

@@ -13,6 +13,7 @@ import { fmtBigNum, fmtPct } from '@/lib/format'
 import { dimensionKindForSourceField, type DimensionMembersTarget } from '@/components/DimensionMembersDialog'
 import { cn } from '@/lib/cn'
 import { cnSignal } from '@/lib/signals'
+import { sourceLabel } from '@/lib/alertSources'
 import { useCustomSignalNames } from '@/lib/useCustomSignalNames'
 import { strategyEventMeta, strategyName } from '@/lib/strategyMonitorEvents'
 import { boardTag } from '@/components/stock-table/primitives'
@@ -380,9 +381,12 @@ const _SOURCE_BADGE: Record<string, string> = {
   price: 'bg-emerald-400/10 text-emerald-400',
   market: 'bg-accent/10 text-accent',
   sector: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
-}
-const _SOURCE_LABEL: Record<string, string> = {
-  strategy: '策略', signal: '信号', price: '价格', market: '异动', sector: '板块',
+  ladder: 'bg-violet-500/10 text-violet-500',
+  abnormal: 'bg-orange-500/10 text-orange-500',
+  volume_delta: 'bg-rose-500/10 text-rose-400',
+  date: 'bg-sky-500/10 text-sky-600 dark:text-sky-300',
+  paper: 'bg-sky-400/10 text-sky-500 dark:text-sky-300',
+  depth: 'bg-warning/10 text-warning',
 }
 const _SEVERITY_BAR: Record<string, string> = {
   info: 'bg-accent/40', warn: 'bg-warning', critical: 'bg-danger',
@@ -493,7 +497,7 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
                 <>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span className={cn('shrink-0 rounded px-1 py-px text-[8px] font-medium', _SOURCE_BADGE[ev.source] ?? 'bg-elevated text-muted')}>
-                      {_SOURCE_LABEL[ev.source] ?? ev.source}
+                      {sourceLabel(ev.source)}
                     </span>
                     {ev.message && (
                       <span className="text-[9px] text-muted truncate flex-1">{ev.message}</span>

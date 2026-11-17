@@ -26,6 +26,25 @@ logger = logging.getLogger(__name__)
 _SKIP_BACKENDS = frozenset({"matrix_native", "composite", "minute_filter"})
 
 
+def _load_error_message(engine, strategy_id: str, exc: Exception) -> str:
+    """加载失败时把引擎记录的真实原因带出来。
+
+    只报 "unknown strategy: xxx" 看不出问题 (策略文件根本没加载上),
+    模型拿这个报错没法改 —— 必须带上 load_errors 里的原文。
+    """
+    message = str(exc)
+    try:
+        errors = engine.load_errors() or []
+    except Exception:  # noqa: BLE001 — 取不到就按原样返回
+        errors = []
+    if not errors:
+        return message
+    details = "; ".join(
+        str(item.get("error") or "") for item in errors if item.get("error")
+    )
+    return f"{message}: {details}" if details else message
+
+
 def smoke_strategy(
     engine,
     repo,
@@ -44,7 +63,7 @@ def smoke_strategy(
     except ValueError as exc:
         return {
             "ok": False,
-            "issues": [{"code": "load_failed", "message": str(exc)}],
+            "issues": [{"code": "load_failed", "message": _load_error_message(engine, strategy_id, exc)}],
             "skipped": None,
         }
     except Exception as exc:  # noqa: BLE001 — 引擎接口异常不该让 smoke 变成崩溃源

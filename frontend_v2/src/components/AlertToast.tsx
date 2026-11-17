@@ -11,6 +11,7 @@ import { playNotificationSound } from '@/lib/notificationSound'
 import { speakAlerts } from '@/lib/voiceBroadcast'
 import { usePreferences } from '@/lib/useSharedQueries'
 import { strategyEventMeta, strategyName } from '@/lib/strategyMonitorEvents'
+import { sourceLabel } from '@/lib/alertSources'
 
 /** 通知渠道分发 — 所有副作用渠道在此汇合, 新增渠道只改这里 */
 function dispatchSideEffects(alerts: AlertEvent[]) {
@@ -84,20 +85,25 @@ export function dismiss(id: number) {
 const SEVERITY_BAR: Record<string, string> = {
   info: 'bg-accent', warn: 'bg-warning', critical: 'bg-danger',
 }
-const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
-  strategy:  { label: '策略',   cls: 'bg-amber-400/15 text-amber-400' },
-  signal:    { label: '信号',   cls: 'bg-accent/15 text-accent' },
-  price:     { label: '价格',   cls: 'bg-emerald-400/15 text-emerald-400' },
-  market:    { label: '异动',   cls: 'bg-accent/15 text-accent' },
-  sector:    { label: '板块',   cls: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' },
-  abnormal:  { label: '异动边缘', cls: 'bg-orange-500/15 text-orange-500 dark:text-orange-400' },
-  pool_entry: { label: '进入', cls: 'bg-danger/15 text-danger' },
-  pool_exit:   { label: '移出', cls: 'bg-bear/15 text-bear' },
-  buy_signal: { label: '买入', cls: 'bg-danger/15 text-danger' },
-  sell_signal: { label: '卖出', cls: 'bg-bear/15 text-bear' },
-  new_entry: { label: '进入', cls: 'bg-danger/15 text-danger' },
-  dropped:   { label: '移出', cls: 'bg-bear/15 text-bear' },
-  paper:     { label: '模拟盘', cls: 'bg-sky-400/15 text-sky-500 dark:text-sky-300' },
+/** 徽标键 (source 或策略事件 type) → 颜色; 中文名统一走 lib/alertSources / strategyMonitorEvents。 */
+const SOURCE_BADGE_CLS: Record<string, string> = {
+  strategy:  'bg-amber-400/15 text-amber-400',
+  signal:    'bg-accent/15 text-accent',
+  price:     'bg-emerald-400/15 text-emerald-400',
+  market:    'bg-accent/15 text-accent',
+  sector:    'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
+  ladder:    'bg-violet-500/15 text-violet-500 dark:text-violet-300',
+  abnormal:  'bg-orange-500/15 text-orange-500 dark:text-orange-400',
+  volume_delta: 'bg-rose-500/15 text-rose-400',
+  date:      'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  paper:     'bg-sky-400/15 text-sky-500 dark:text-sky-300',
+  depth:     'bg-warning/15 text-warning',
+  pool_entry: 'bg-danger/15 text-danger',
+  pool_exit:   'bg-bear/15 text-bear',
+  buy_signal: 'bg-danger/15 text-danger',
+  sell_signal: 'bg-bear/15 text-bear',
+  new_entry: 'bg-danger/15 text-danger',
+  dropped:   'bg-bear/15 text-bear',
 }
 
 // ===== 容器 — 挂在 Layout =====
@@ -137,7 +143,10 @@ export function AlertToastContainer() {
           const ev = item.alert
           const sev = SEVERITY_BAR[ev.severity ?? 'info'] ?? SEVERITY_BAR.info
           const badgeKey = (ev.source === 'strategy' && ev.type) ? ev.type : ev.source
-          const badge = SOURCE_BADGE[badgeKey] ?? { label: badgeKey, cls: 'bg-elevated text-muted' }
+          const badgeLabel = ev.source === 'strategy' && ev.type
+            ? strategyEventMeta(ev.type).label
+            : sourceLabel(ev.source)
+          const badgeCls = SOURCE_BADGE_CLS[badgeKey] ?? 'bg-elevated text-muted'
           const pct = ev.change_pct ?? 0
           const isStrategy = ev.source === 'strategy'
           const sname = isStrategy ? strategyName(ev.message ?? '') : ''
@@ -167,8 +176,8 @@ export function AlertToastContainer() {
 
               {/* 顶行: 分类标签 + 代码/名称 + 涨跌幅 + 关闭 */}
               <div className="flex items-center gap-2">
-                <span className={cn('shrink-0 rounded px-1 py-px text-[9px] font-medium', badge.cls)}>
-                  {badge.label}
+                <span className={cn('shrink-0 rounded px-1 py-px text-[9px] font-medium', badgeCls)}>
+                  {badgeLabel}
                 </span>
                 {ev.symbol && <span className="font-mono text-xs font-medium text-foreground shrink-0">{ev.symbol}</span>}
                 {ev.name && <span className="text-xs text-secondary truncate flex-1">{ev.name}</span>}

@@ -30,7 +30,7 @@ it('keeps the full session, gaps and per-day averages without inventing missing 
   expect(model.points.get('2026-11-04 09:30')?.average).toBeNull()
   expect(model.points.get('2026-11-05 09:30')?.average).toBe(2)
   expect(model.latest?.row.open).toBeNull()
-  expect(model.series.find(s => s.id === 'volume')?.data[0]).toMatchObject({ color: 'hsl(30 8% 50% / 0.45)' })
+  expect(model.series.find(s => s.id === 'volume')?.data[0]).toMatchObject({ color: 'hsla(30, 8%, 50%, 0.45)' })
 })
 
 it('does not relabel another date or include out-of-session bars in the average', () => {

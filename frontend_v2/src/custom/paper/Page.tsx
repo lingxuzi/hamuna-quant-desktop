@@ -1824,7 +1824,17 @@ function CompareView({ onCreateSingle }: { onCreateSingle: () => void }) {
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
-                                <ChevronDown className={cn('ml-0.5 inline h-3.5 w-3.5 text-muted transition-transform duration-150', open && 'rotate-180')} />
+                                {/* 箭头是独立可点控件: td 上已 stopPropagation 拦掉冒泡,
+                                    裸 svg 不是可点元素, 展开只能靠点整行. */}
+                                <button
+                                  type="button"
+                                  onClick={() => setExpanded(open ? null : r.account)}
+                                  aria-expanded={open}
+                                  aria-label={open ? '收起账户操作' : '展开账户操作'}
+                                  className="ctl ctl-sm ctl-ghost ctl-icon text-muted hover:text-foreground"
+                                >
+                                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-150', open && 'rotate-180')} />
+                                </button>
                               </div>
                             </td>
                           </tr>

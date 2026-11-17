@@ -4,18 +4,19 @@
 
 ## 必须遵守
 
-1. Polars/历史/分钟策略限用 `polars/datetime`；矩阵策略限用 `numpy/app.backtest.matrix`。
+1. Polars/历史/分钟策略限用 `polars/datetime/math`；矩阵策略限用 `numpy/app.backtest.matrix`。
 2. AI 策略位于 `data/strategies/ai/`，`META.id` 用指定的 `ai_` ID。
 3. 禁止文件读写和 `open/exec/eval/__import__/getattr/…` 等危险调用；含 `__x__` 的名字/字符串(含拼接)与 `pl.os/np.lib` 等模块句柄一律禁用。
 4. `META.params` 只放可调项：必填 `id/label/type/default`；数值项加 `min/max/step`，select 加 `options`。
 5. `META.scoring` 使用真实数值字段或 `ma20_bias`；分钟策略可用函数返回的数值列，非空时权重和为 1.0。
 6. `ENTRY_SIGNALS/EXIT_SIGNALS` 只选相关信号，无匹配项可为空。
 7. `RULES` 用中文列出至少 3 条核心逻辑。
-8. 优先 Polars 向量化，避免逐行循环。
+8. 优先 Polars 向量化，避免逐行循环；只用 polars 真实存在的方法（`rolling_mean/rolling_sum/
+   rolling_std/rolling_min/rolling_max/rolling_median/ewm_mean`，没有 `rolling_count`）。
 9. `META` 须为顶层字面量字典（可用 `META: dict = {...}`），禁止改名或动态构造。
 10. 后端按规则自选：只有当日快照条件 → `polars_expr`；含上穿/下穿/金叉/死叉、
     连续 N 日、N 日新高、前高前低、最近 N 天内出现过等任何多日比较 → `python_history_legacy`。
-    把跨日条件硬写进 `filter()` 一定失败，且之后无法运行。
+    跨日条件写进 `filter()` 必然失败。
 
 ## 文件结构
 
@@ -97,6 +98,7 @@ REQUIRED_FEATURES = {"ma20", "momentum_20d"}
 ```
 
 `filter_history()` 必须返回所有匹配行，不要只过滤最新日期；回测需要全区间命中。
+返回的帧不要 `select` 裁剪列：引擎要在返回帧上做基础过滤。
 
 enriched 只内置 ma5/10/20/30/60，没有 MA100 等其它均线：窗口内自行计算，
 `pl.col("close").rolling_mean(100).over("symbol")`（跨日算子必须带 `.over("symbol")`）。
@@ -223,6 +225,10 @@ def filter_minute_history(df: pl.DataFrame, params: dict) -> pl.DataFrame:
 - `signal_limit_down`: 跌停
 - `signal_limit_down_recovery`: 跌停翘板
 - `signal_broken_limit_up`: 炸板
+
+信号名只能用上面列出的 (以及用户自定义的 `csg_*` / 盘中 `csgi_*`), 不要自己编 `signal_*`
+名字 —— 编出来的列运行时不存在, 策略直接报错。没有现成信号的交叉 (如 MA5 上穿 MA10)
+用 filter_history 自己算。
 
 涨跌停策略优先使用稳定列 `consecutive_limit_ups >= 1`。
 

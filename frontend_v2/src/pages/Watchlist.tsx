@@ -910,6 +910,9 @@ export function Watchlist() {
   const addSymbol = useMutation({
     mutationFn: (sym: string) => api.watchlistAdd(sym, '', activeGroupId),
     onSuccess: () => {
+      // 加完清掉搜索词: 否则列表仍被搜索词过滤, 看不到全部自选;
+      // 搜索词清空后下拉 (trimmedQuery 守卫) 随之收起
+      setSearchQuery('')
       qc.invalidateQueries({ queryKey: QK.watchlist })
       qc.invalidateQueries({ queryKey: ['watchlist-enriched'] })
       qc.invalidateQueries({ queryKey: ['kline-batch'] })
