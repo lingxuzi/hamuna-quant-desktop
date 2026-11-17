@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.custom.assistant import actions as assistant_actions
+from app.custom.assistant import skill_loader
 from app.custom.assistant import tools as assistant_tools
 from app.custom.assistant.codex import stream_codex_round
 from app.custom.assistant.prompt import build_system_prompt
@@ -184,7 +185,7 @@ async def chat_stream(
         yield _line({"type": "notice", "message": f"对话较长, 已仅保留最近 {_MAX_HISTORY_MESSAGES // 2} 轮作为上下文。"})
 
     req_messages: list[dict[str, Any]] = [
-        {"role": "system", "content": build_system_prompt(context)},
+        {"role": "system", "content": build_system_prompt(context, skills=skill_loader.list_skills(data_dir))},
         *truncated,
     ]
     schemas = assistant_tools.build_tool_schemas()

@@ -29,6 +29,7 @@ from typing import Any
 
 import polars as pl
 
+from app.custom.assistant import skill_loader
 from app.market_time import cn_today
 from app.services import tool_catalog
 
@@ -1358,6 +1359,33 @@ async def _sync_data(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     }
 
 
+# ----------------------------------------------------------------
+# Skill 工具 —— 让助手按需读取「操作手册 / 领域知识」目录。
+# 只读文本: 不执行 skill 目录里的任何脚本。
+# ----------------------------------------------------------------
+def _list_skills(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """列出可用技能的名称、用途与参考文件清单。"""
+    skills = skill_loader.list_skills(ctx.data_dir)
+    return {"skills": skills, "count": len(skills)}
+
+
+def _load_skill(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """读取某个 skill 的正文 (SKILL.md)。"""
+    name = str(args.get("name") or "").strip()
+    if not name:
+        raise ValueError("缺少技能名 name。")
+    return skill_loader.load_skill(ctx.data_dir, name)
+
+
+def _load_skill_reference(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """读取 skill 目录下的参考文件。"""
+    name = str(args.get("name") or "").strip()
+    path = str(args.get("path") or "").strip()
+    if not name or not path:
+        raise ValueError("缺少技能名 name 或参考文件路径 path。")
+    return skill_loader.load_reference(ctx.data_dir, name, path)
+
+
 _LOCAL_TOOLS: dict[str, Callable[[dict[str, Any], ToolContext], Any]] = {
     "get_stock_quote": _get_stock_quote,
     "get_stock_daily": _get_stock_daily,
@@ -1381,6 +1409,9 @@ _LOCAL_TOOLS: dict[str, Callable[[dict[str, Any], ToolContext], Any]] = {
     "query_ext_table": _query_ext_table,
     "get_sync_status": _get_sync_status,
     "sync_data": _sync_data,
+    "list_skills": _list_skills,
+    "load_skill": _load_skill,
+    "load_skill_reference": _load_skill_reference,
 }
 
 
@@ -1637,6 +1668,29 @@ def _local_tool_schemas() -> list[dict[str, Any]]:
             },
             ["kind"],
         ),
+        _schema(
+            "list_skills",
+            "列出可用技能(操作手册 / 领域知识)的名称与用途。回答专业问题前先看有没有对口技能, "
+            "有则先用 load_skill 读取正文再作答 —— 不要凭印象编流程。",
+            {},
+            [],
+        ),
+        _schema(
+            "load_skill",
+            "读取某个技能的完整正文。name 取自 list_skills 返回的名称。",
+            {"name": {"type": "string", "description": "技能名, 如 limit-up-analysis"}},
+            ["name"],
+        ),
+        _schema(
+            "load_skill_reference",
+            "读取技能目录下的参考文件(正文太长时的补充材料)。"
+            "path 用 load_skill 返回的 references 里的相对路径。",
+            {
+                "name": {"type": "string", "description": "技能名"},
+                "path": {"type": "string", "description": "参考文件相对路径, 如 references/fields.md"},
+            },
+            ["name", "path"],
+        ),
     ]
 
 
@@ -1784,5 +1838,11 @@ def summarize_tool_result(name: str, payload: dict[str, Any]) -> str:
         if reused:
             return f"复用进行中的{label}任务 {job_id or '-'}"
         return f"已启动{label}任务 {job_id or '-'}"
+    if name == "list_skills":
+        return f"返回 {result.get('count', 0)} 个技能"
+    if name == "load_skill":
+        return f"已读取技能 {result.get('name', '-')}"
+    if name == "load_skill_reference":
+        return f"已读取参考 {result.get('path', '-')}"
 
     return f"返回 {_count()} 行" if _count() else "完成"

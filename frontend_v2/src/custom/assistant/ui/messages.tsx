@@ -112,6 +112,9 @@ const TOOL_LABELS: Record<string, string> = {
   query_ext_table: '读取扩展数据表',
   get_sync_status: '查询同步进度',
   sync_data: '数据补全/同步',
+  list_skills: '检索技能目录',
+  load_skill: '读取技能正文',
+  load_skill_reference: '读取技能参考',
 }
 
 function toolLabel(name: string): string {

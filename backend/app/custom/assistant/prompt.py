@@ -60,6 +60,7 @@ sync_data(pipeline 补行情 / financials 补财务 / minute_extend 补分钟历
 - 默认调用一两个最贴切的工具, 首轮结果不足以回答时再补查; \
 不重复查询同类信息。
 
+{skills}
 数据口径:
 - 涨跌幅 change_pct 与振幅 amplitude 为小数 (0.0366 = 3.66%), 表述时转为百分比。
 - 换手率 turnover_rate 已是百分数 (5.2 = 5.2%), 直接加 % 表述, 不要再乘 100。
@@ -85,8 +86,21 @@ sync_data(pipeline 补行情 / financials 补财务 / minute_extend 补分钟历
 {context}"""
 
 
-def build_system_prompt(context: dict | None) -> str:
-    """组装 system prompt; context 为前端上报的页面上下文(可为空)。"""
+def _skills_block(skills: list[dict] | None) -> str:
+    """技能目录块: 只放 name + description, 正文由模型按需 load_skill 取。"""
+    if not skills:
+        return ""
+    lines = ["可用技能(仅名称与用途; 正文用 load_skill 读取, 补充材料用 load_skill_reference):"]
+    lines += [f"- {item.get('name')}: {item.get('description')}" for item in skills]
+    return "\n".join(lines) + "\n"
+
+
+def build_system_prompt(context: dict | None, skills: list[dict] | None = None) -> str:
+    """组装 system prompt; context 为前端上报的页面上下文(可为空)。
+
+    skills 为可用技能目录(skill_loader.list_skills 结果), 只注入名称与用途 ——
+    正文按需由模型调 load_skill 取, 避免每轮对话都背着全部 skill。
+    """
     lines: list[str] = []
     if context:
         page = str(context.get("page") or "").strip()
@@ -96,4 +110,8 @@ def build_system_prompt(context: dict | None) -> str:
         if symbol:
             lines.append(f"- 用户正在关注的标的: {symbol}。")
     context_block = "\n".join(lines) if lines else "- 用户未提供页面上下文。"
-    return _SYSTEM_TEMPLATE.format(today=cn_today().isoformat(), context=context_block)
+    return _SYSTEM_TEMPLATE.format(
+        today=cn_today().isoformat(),
+        context=context_block,
+        skills=_skills_block(skills),
+    )
