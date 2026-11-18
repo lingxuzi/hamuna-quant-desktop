@@ -1,0 +1,164 @@
+{
+  "categories": [
+    "价值投资",
+    "技术分析",
+    "趋势与波段",
+    "打板与情绪",
+    "基本面研究",
+    "资金与筹码",
+    "消息与政策",
+    "量化与选股",
+    "品种与市场",
+    "投资心态"
+  ],
+  "experts": {
+    "a-share-specific-framework": {
+      "category": "品种与市场",
+      "enabled": true
+    },
+    "etf-fund-framework": {
+      "category": "品种与市场",
+      "enabled": true
+    },
+    "candlestick-pattern-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "professional-financial-analysis-framework": {
+      "category": "基本面研究",
+      "enabled": true
+    },
+    "position-sizing-framework": {
+      "category": "资金与筹码",
+      "enabled": true
+    },
+    "valuation-analysis-framework": {
+      "category": "基本面研究",
+      "enabled": true
+    },
+    "low-buy-dip-framework": {
+      "category": "打板与情绪",
+      "enabled": true
+    },
+    "technical-analysis-allround-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "announcement-analysis-framework": {
+      "category": "消息与政策",
+      "enabled": true
+    },
+    "livermore-trend-perspective": {
+      "category": "趋势与波段",
+      "enabled": true
+    },
+    "convertible-bond-framework": {
+      "category": "品种与市场",
+      "enabled": true
+    },
+    "buffett-value-investing-perspective": {
+      "category": "价值投资",
+      "enabled": true
+    },
+    "peter-lynch-growth-framework": {
+      "category": "价值投资",
+      "enabled": true
+    },
+    "limit-up-reentry-framework": {
+      "category": "打板与情绪",
+      "enabled": true
+    },
+    "bottom-top-timing-framework": {
+      "category": "趋势与波段",
+      "enabled": true
+    },
+    "investment-beginner-companion-framework": {
+      "category": "投资心态",
+      "enabled": true
+    },
+    "investor-psychology-framework": {
+      "category": "投资心态",
+      "enabled": true
+    },
+    "policy-analysis-framework": {
+      "category": "消息与政策",
+      "enabled": true
+    },
+    "news-sentiment-framework": {
+      "category": "消息与政策",
+      "enabled": true
+    },
+    "gann-theory-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "swing-trading-framework": {
+      "category": "趋势与波段",
+      "enabled": true
+    },
+    "elliott-wave-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "limit-up-analysis-framework": {
+      "category": "打板与情绪",
+      "enabled": true
+    },
+    "order-book-language-framework": {
+      "category": "打板与情绪",
+      "enabled": true
+    },
+    "breakout-trading-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "chip-distribution-framework": {
+      "category": "资金与筹码",
+      "enabled": true
+    },
+    "soros-macro-trend-perspective": {
+      "category": "趋势与波段",
+      "enabled": true
+    },
+    "chan-theory-perspective": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "us-hk-market-framework": {
+      "category": "品种与市场",
+      "enabled": true
+    },
+    "shareholder-holding-framework": {
+      "category": "资金与筹码",
+      "enabled": true
+    },
+    "munger-multimodel-perspective": {
+      "category": "投资心态",
+      "enabled": true
+    },
+    "industry-research-framework": {
+      "category": "基本面研究",
+      "enabled": true
+    },
+    "financial-red-flag-framework": {
+      "category": "基本面研究",
+      "enabled": true
+    },
+    "stock-screening-formula-framework": {
+      "category": "量化与选股",
+      "enabled": true
+    },
+    "dow-theory-framework": {
+      "category": "技术分析",
+      "enabled": true
+    },
+    "quantitative-trading-framework": {
+      "category": "量化与选股",
+      "enabled": true
+    },
+    "dragon-leader-strategy-framework": {
+      "category": "打板与情绪",
+      "enabled": true
+    }
+  }
+}

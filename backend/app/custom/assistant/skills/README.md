@@ -20,6 +20,10 @@ skills/
 
 数据目录由 `DATA_DIR` 环境变量或 `settings.data_dir` 决定 (默认 `data/`)。
 
+内置技能的**分类归属与启用状态**默认写在 `backend/app/custom/assistant/experts.json`
+(随仓库分发); 用户在设置页改过之后写 `<数据目录>/assistant/experts.json` 覆盖。
+新增内置技能时要同步补 `experts.json` 里的条目, 否则它会落到「未分类」。
+
 ## SKILL.md 格式
 
 ```markdown

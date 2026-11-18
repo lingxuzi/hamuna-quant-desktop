@@ -2,8 +2,8 @@
 
 两处存储, 职责分开:
 - 专家正文: SKILL.md (由 skill_loader 管) —— 跟着 skill 走, 内置专家随仓库分发。
-- 分类归属与启用状态: <data_dir>/assistant/experts.json —— 用户运行态配置,
-  跟 data/ 一起, 不进 Git。
+- 分类归属与启用状态: 默认随仓库分发 (app/custom/assistant/experts.json),
+  用户改过之后写 <data_dir>/assistant/experts.json 覆盖 —— 跟 data/ 一起, 不进 Git。
 
 内置专家 (仓库 skills/ 根) 正文只读: 设置页能配它的分类与启用状态, 但改不了
 正文 —— 改了会在下次部署时被覆盖, 也不该把运行时产物脏进仓库。
@@ -21,6 +21,9 @@ from typing import Any
 from app.custom.assistant import skill_loader
 
 _CONFIG_REL = ("assistant", "experts.json")
+# 内置专家的默认分类配置 —— 随仓库分发。用户没配过 (data_dir 里没有配置文件) 时
+# 用它, 新装的机器开箱就有完整分类体系, 不必先导一遍专家包。
+_BUILTIN_CONFIG_PATH = Path(__file__).resolve().parent / "experts.json"
 
 # 分类体系上限 (配置是给界面用的, 太多分类等于没有分类)。
 MAX_CATEGORIES = 50
@@ -63,10 +66,16 @@ def _empty_config() -> dict[str, Any]:
 def load_config(data_dir: Path | str | None) -> dict[str, Any]:
     """读专家配置 (分类体系 + 每个专家的归属/启用状态)。
 
+    优先级: 用户配置 (<data_dir>/assistant/experts.json) > 仓库内置默认
+    (app/custom/assistant/experts.json) —— 新装的机器没有用户配置时用内置默认,
+    内置专家直接带着分类出现。
+
     配置损坏时直接报错, 不静默当成空配置 —— 静默会把用户的分类体系清空。
     """
     path = _config_path(data_dir)
     if path is None or not path.is_file():
+        path = _BUILTIN_CONFIG_PATH
+    if not path.is_file():
         return _empty_config()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))

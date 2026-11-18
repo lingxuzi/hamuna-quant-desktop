@@ -1,0 +1,8 @@
+© 2025. All rights reserved.
+
+LICENSE: This Skill is provided for use within the OpenClaw/Claude platform.
+Redistribution, copying, or extraction outside the platform is not permitted
+without explicit written consent.
+
+Users may use this Skill solely through the OpenClaw/Claude interface for
+which it was intended. No other rights are granted.

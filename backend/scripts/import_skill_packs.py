@@ -162,6 +162,11 @@ def main() -> int:
     experts.save_layout(data_dir, merged_categories, merged)
 
     print(f"导入 {len(imported)} 个专家, 分类 {len(merged_categories)} 个, 数据目录 {data_dir}")
+    print(
+        "提示: 导入的是用户态专家 (不进 Git)。要让它们随仓库分发, 把对应目录移到 "
+        "backend/app/custom/assistant/skills/, 并在 backend/app/custom/assistant/experts.json "
+        "里补上分类。"
+    )
     for name in imported:
         print(f"  + {name} [{assignments.get(name, {}).get('category') or '未分类'}]")
     if failed:

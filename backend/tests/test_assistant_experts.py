@@ -44,6 +44,57 @@ def _no_repo_builtin_skills(tmp_path: Path, monkeypatch) -> None:
     empty = tmp_path / "builtin-empty"
     empty.mkdir()
     monkeypatch.setattr(skill_loader, "BUILTIN_SKILLS_DIR", empty)
+    # 内置默认分类配置同理: 仓库里那份是产品内容, 不该影响「从零开始」的行为断言。
+    monkeypatch.setattr(
+        assistant_experts, "_BUILTIN_CONFIG_PATH", tmp_path / "builtin-config-missing.json",
+    )
+
+
+def test_builtin_default_config_is_used_when_user_has_none(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """没配过分类的新机器 → 用仓库内置默认, 内置专家开箱就带着分类。"""
+    monkeypatch.setattr(
+        assistant_experts, "_BUILTIN_CONFIG_PATH", tmp_path / "builtin-experts.json",
+    )
+    (tmp_path / "builtin-experts.json").write_text(
+        json.dumps({
+            "categories": ["价值投资"],
+            "experts": {"limit-up": {"category": "价值投资", "enabled": True}},
+        }),
+        encoding="utf-8",
+    )
+
+    config = assistant_experts.load_config(tmp_path)
+
+    assert config["categories"] == ["价值投资"]
+    assert config["experts"]["limit-up"]["category"] == "价值投资"
+
+
+def test_user_config_wins_over_builtin_default(tmp_path: Path, monkeypatch) -> None:
+    """用户自己配过 → 用户版本优先, 内置默认不掺进来。"""
+    monkeypatch.setattr(
+        assistant_experts, "_BUILTIN_CONFIG_PATH", tmp_path / "builtin-experts.json",
+    )
+    (tmp_path / "builtin-experts.json").write_text(
+        json.dumps({"categories": ["内置"], "experts": {}}), encoding="utf-8",
+    )
+    (tmp_path / "assistant").mkdir()
+    (tmp_path / "assistant" / "experts.json").write_text(
+        json.dumps({"categories": ["我的"], "experts": {}}), encoding="utf-8",
+    )
+
+    assert assistant_experts.load_config(tmp_path)["categories"] == ["我的"]
+
+
+def test_repo_builtin_experts_json_covers_builtin_skills() -> None:
+    """仓库内置分类配置要覆盖仓库内置技能 —— 加了专家忘了配分类, 这里就红。"""
+    repo_root = Path(__file__).resolve().parents[1] / "app" / "custom" / "assistant"
+    config = json.loads((repo_root / "experts.json").read_text(encoding="utf-8"))
+    names = {p.parent.name for p in (repo_root / "skills").glob("*/SKILL.md")}
+
+    assert names, "仓库里应该内置了专家技能"
+    assert names <= set(config["experts"])
 
 
 def _create(data_dir: Path, name: str = "my-expert", category: str = "") -> None:
