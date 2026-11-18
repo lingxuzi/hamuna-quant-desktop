@@ -389,9 +389,9 @@ export function ExpertManager({ scope }: { scope: Scope }) {
                     <h3 className="text-[13px] font-medium text-foreground">{category}</h3>
                     <span className="font-mono text-[11px] text-muted">{rows.length}</span>
                   </div>
-                  <div className="rowset">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {rows.map(item => (
-                      <ExpertRow
+                      <ExpertCard
                         key={item.name}
                         item={item}
                         selected={selected.has(item.name)}
@@ -438,7 +438,7 @@ export function ExpertManager({ scope }: { scope: Scope }) {
   )
 }
 
-function ExpertRow({
+function ExpertCard({
   item,
   selected,
   categories,
@@ -461,88 +461,109 @@ function ExpertRow({
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <div className="r">
-      <div className="lab">
-        <div className="flex items-center gap-2">
-          <label className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center">
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelect}
-              aria-label={`选择专家 ${item.title}`}
-            />
-          </label>
-          <b className="min-w-0 truncate" title={item.title || item.name}>
-            {item.title || item.name}
-          </b>
-          <span
-            className={cn(
-              'tb-chip inline-block shrink-0',
-              !item.builtin && 'border-accent/40 text-accent',
-            )}
+    <div
+      className={cn(
+        'flex flex-col gap-2 rounded-card border p-3',
+        selected ? 'border-accent/60 bg-surface' : 'border-border bg-surface',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <label className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`选择专家 ${item.title}`}
+          />
+        </label>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-1.5">
+            <b
+              className="line-clamp-2 min-w-0 text-[12.5px] font-medium leading-snug text-foreground"
+              title={item.title || item.name}
+            >
+              {item.title || item.name}
+            </b>
+            <span
+              className={cn(
+                'tb-chip inline-block shrink-0',
+                !item.builtin && 'border-accent/40 text-accent',
+              )}
+            >
+              {item.builtin ? '内置' : '自定义'}
+            </span>
+          </div>
+          <p
+            className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted"
+            title={item.description}
           >
-            {item.builtin ? '内置' : '自定义'}
-          </span>
+            {item.description}
+          </p>
         </div>
-        <small>{item.description}</small>
       </div>
-      <div className="ctl">
-        <select
-          aria-label={`${item.title} 的分类`}
-          value={item.category}
-          onChange={e => onCategory(e.target.value)}
-          className={cn(selectCls('sm'), 'max-w-[9rem] truncate')}
-        >
-          <option value="">{UNCATEGORIZED}</option>
-          {categories.map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        <Switch
-          size="md"
-          checked={item.enabled}
-          onChange={onToggle}
-          label={`启用专家 ${item.title}`}
-        />
-        {!item.builtin && (confirming ? (
-          <>
+
+      {/* 控件行贴卡片底部 (mt-auto): 描述长短不一时, 同行卡片的控件仍齐平。 */}
+      <div className="mt-auto flex items-center gap-2 border-t border-border pt-2">
+        {confirming ? (
+          <div className="flex w-full items-center gap-2">
             <button
               type="button"
               onClick={onDelete}
-              className="ctl ctl-sm ctl-btn danger shrink-0"
+              className={cn(BTN_SM, 'danger flex-1 shrink-0')}
             >
               确认删除
             </button>
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className="ctl ctl-sm ctl-btn shrink-0"
+              className={cn(BTN_GHOST_SM, 'flex-1 shrink-0')}
             >
               取消
             </button>
-          </>
+          </div>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={onEdit}
-              className={cn(ICON_BTN_SM, 'shrink-0')}
-              title="编辑专家"
-              aria-label={`编辑专家 ${item.title}`}
+            <select
+              aria-label={`${item.title} 的分类`}
+              value={item.category}
+              onChange={e => onCategory(e.target.value)}
+              className={cn(selectCls('sm'), 'min-w-0 flex-1 truncate')}
             >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className={cn(ICON_BTN_SM, 'shrink-0 hover:bg-danger/10 hover:text-danger')}
-              title="删除专家"
-              aria-label={`删除专家 ${item.title}`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+              <option value="">{UNCATEGORIZED}</option>
+              {categories.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <Switch
+              size="md"
+              checked={item.enabled}
+              onChange={onToggle}
+              label={`启用专家 ${item.title}`}
+            />
+            {!item.builtin && (
+              <>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className={cn(ICON_BTN_SM, 'shrink-0')}
+                  title="编辑专家"
+                  aria-label={`编辑专家 ${item.title}`}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  className={cn(ICON_BTN_SM, 'shrink-0 hover:bg-danger/10 hover:text-danger')}
+                  title="删除专家"
+                  aria-label={`删除专家 ${item.title}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
           </>
-        ))}
+        )}
       </div>
     </div>
   )
