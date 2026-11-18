@@ -41,7 +41,7 @@ export interface ToolCallRecord {
 }
 
 export type ChatMessage =
-  | { id: string; role: 'user'; content: string; ts: number }
+  | { id: string; role: 'user'; content: string; ts: number; mentions?: string[] }
   | { id: string; role: 'assistant'; content: string; ts: number; streaming: boolean; reasoningContent?: string; reasoningContext?: string }
   | { id: string; role: 'footprint'; calls: ToolCallRecord[]; ts: number }
   | { id: string; role: 'error'; kind: string; message: string; hint?: string; ts: number }
@@ -52,6 +52,8 @@ export interface AssistantSession {
   title: string
   createdAt: number
   messages: ChatMessage[]
+  /** 待发送的 @ 引用专家名 —— 只对本条消息生效, 发送后自动清空。 */
+  mentions?: string[]
 }
 
 interface AssistantState {
@@ -69,6 +71,8 @@ const SERVER_SYNC_DEBOUNCE_MS = 1500
 const MAX_SESSIONS = 20
 const MAX_SESSION_MESSAGES = 200
 const MAX_INPUT_CHARS = 4000
+/** 同时引用的专家数上限 —— 与后端 MAX_REFERENCED_EXPERTS 对齐。 */
+export const MAX_MENTIONS = 8
 
 const FAB_STORAGE_KEY = 'assistant.fab.enabled'
 
@@ -185,7 +189,7 @@ export function activeSession(): AssistantSession | null {
 function ensureSession(): AssistantSession {
   let session = activeSession()
   if (!session) {
-    session = { id: uid(), title: '新对话', createdAt: Date.now(), messages: [] }
+    session = { id: uid(), title: '新对话', createdAt: Date.now(), messages: [], mentions: [] }
     setState({ sessions: [session, ...state.sessions], activeId: session.id })
   }
   return session
@@ -253,7 +257,7 @@ interface TurnCursor {
 }
 
 /** 一轮生成的完整编排: 建占位 → 流事件落库 → 终态收敛。 */
-async function runGeneration() {
+async function runGeneration(experts: string[]) {
   const history = buildHistory(activeMessages())
   // 生成的终态 (中断提示/流式收敛) 必须落在发起会话: 中途切换或删除会话时
   // activeId 已变, 若按 activeId 追加会把"已中断"写进无关的新会话。
@@ -266,7 +270,7 @@ async function runGeneration() {
   abortController = new AbortController()
   try {
     for await (const event of assistantChatStream(
-      { messages: history, context: pageContext },
+      { messages: history, context: pageContext, experts },
       abortController.signal,
     )) {
       applyEvent(event, cursor)
@@ -447,11 +451,29 @@ export function sendMessage(textRaw: string) {
   const text = textRaw.trim().slice(0, MAX_INPUT_CHARS)
   if (!text || state.sending) return
   const session = ensureSession()
+  const experts = session.mentions ?? []
   if (!session.messages.length) {
     patchActiveSession(s => ({ ...s, title: text.slice(0, 16) }))
   }
-  appendMessage({ id: uid(), role: 'user', content: text, ts: Date.now() })
-  void runGeneration()
+  // 引用随这条消息一起固化: 重试时能复现同一套专家上下文。
+  appendMessage({ id: uid(), role: 'user', content: text, ts: Date.now(), mentions: experts })
+  // 引用只对本条生效 —— 发出即清空选中状态, 下一条要继续用得重新选。
+  if (experts.length) patchActiveSession(s => ({ ...s, mentions: [] }))
+  void runGeneration(experts)
+}
+
+/** 引用 / 取消引用专家 (输入区 chip 与选择面板共用)。 */
+export function toggleMention(name: string) {
+  const key = (name || '').trim()
+  if (!key) return
+  patchActiveSession(session => {
+    const current = session.mentions ?? []
+    if (current.includes(key)) {
+      return { ...session, mentions: current.filter(item => item !== key) }
+    }
+    if (current.length >= MAX_MENTIONS) return session
+    return { ...session, mentions: [...current, key] }
+  })
 }
 
 /** 重试: 丢弃最后一个 user 消息之后的失败产物, 用同一上下文重新生成。 */
@@ -460,8 +482,11 @@ export function retryLast() {
   const messages = activeMessages()
   const lastUserIdx = findLastIndex(messages, m => m.role === 'user')
   if (lastUserIdx < 0) return
+  const lastUser = messages[lastUserIdx]
+  // 专家是上下文的一部分 —— 重试沿用这条消息当初引用的专家。
+  const experts = lastUser.role === 'user' ? (lastUser.mentions ?? []) : []
   patchActiveSession(session => ({ ...session, messages: session.messages.slice(0, lastUserIdx + 1) }))
-  void runGeneration()
+  void runGeneration(experts)
 }
 
 export function stopSending() {
@@ -490,7 +515,9 @@ export function toggleAssistant() {
 
 export function newSession() {
   if (state.sending) stopSending()
-  const session: AssistantSession = { id: uid(), title: '新对话', createdAt: Date.now(), messages: [] }
+  const session: AssistantSession = {
+    id: uid(), title: '新对话', createdAt: Date.now(), messages: [], mentions: [],
+  }
   setState({ sessions: [session, ...state.sessions].slice(0, MAX_SESSIONS), activeId: session.id })
 }
 

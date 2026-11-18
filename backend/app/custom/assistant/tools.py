@@ -29,6 +29,7 @@ from typing import Any
 
 import polars as pl
 
+from app.custom.assistant import experts as assistant_experts
 from app.custom.assistant import skill_loader
 from app.market_time import cn_today
 from app.services import tool_catalog
@@ -1364,8 +1365,8 @@ async def _sync_data(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 # 只读文本: 不执行 skill 目录里的任何脚本。
 # ----------------------------------------------------------------
 def _list_skills(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """列出可用技能的名称、用途与参考文件清单。"""
-    skills = skill_loader.list_skills(ctx.data_dir)
+    """列出可用技能的名称与用途 (停用的专家不进目录)。"""
+    skills = assistant_experts.usable_skills(ctx.data_dir)
     return {"skills": skills, "count": len(skills)}
 
 
@@ -1374,6 +1375,8 @@ def _load_skill(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     name = str(args.get("name") or "").strip()
     if not name:
         raise ValueError("缺少技能名 name。")
+    if not assistant_experts.is_enabled(ctx.data_dir, name):
+        raise ValueError(f"专家已停用, 不可用: {name}")
     return skill_loader.load_skill(ctx.data_dir, name)
 
 

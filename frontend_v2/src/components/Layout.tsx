@@ -55,8 +55,6 @@ import {
   IconIndices,
   IconData,
   IconSettings,
-  IconBrand,
-  IconDev,
   type BrandIconProps,
 } from './BrandIcons'
 import { Logo } from './Logo'
@@ -93,10 +91,10 @@ type CoreIndex = (typeof CORE_INDEXES)[number]
  */
 const NAV_GROUPS: ReadonlyArray<{ name: string; paths: ReadonlyArray<string> }> = [
   { name: '每日', paths: ['/', '/watchlist'] },
-  { name: '研究', paths: ['/screener', '/factors', '/backtest', '/stock-analysis', '/signals'] },
+  { name: '研究', paths: ['/screener', '/factors', '/backtest', '/stock-analysis', '/signals', '/experts'] },
   { name: '市场', paths: ['/regime', '/indices', '/limit-ladder', '/industry-analysis', '/concept-analysis', '/abnormal'] },
   { name: '交易', paths: ['/paper', '/lots', '/monitor', '/review', '/financials'] },
-  { name: '系统', paths: ['/data', '/settings', '/branding', '/dev'] },
+  { name: '系统', paths: ['/data', '/settings'] },
 ]
 const nav = [
   { to: '/',                 label: '看板',     icon: IconDashboard },
@@ -108,8 +106,6 @@ const nav = [
   { to: '/indices',          label: '指数',     icon: IconIndices },
   { to: '/data',             label: '数据',     icon: IconData },
   { to: '/settings',         label: '设置',     icon: IconSettings },
-  { to: '/branding',         label: '品牌',     icon: IconBrand },
-  { to: '/dev',              label: '开发',     icon: IconDev },
 ] as const
 
 /** 皮肤切换 — 纸 / 暗 / 亮 三段, 状态存 localStorage, 生效见 lib/theme.ts */

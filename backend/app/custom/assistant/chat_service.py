@@ -14,13 +14,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
 from app.custom.assistant import actions as assistant_actions
-from app.custom.assistant import skill_loader
+from app.custom.assistant import experts as assistant_experts
 from app.custom.assistant import tools as assistant_tools
 from app.custom.assistant.codex import stream_codex_round
 from app.custom.assistant.prompt import build_system_prompt
@@ -41,6 +42,19 @@ _MAX_HISTORY_MESSAGES = 16
 # 实际值在设置页 AI 配置里可调(ai_round_checkpoint, 0=不检查), 此处仅兜底默认。
 _TOOL_ROUND_CHECKPOINT = 100
 
+# 有些模型会把"我先查一下再给结论"这种行动计划当成正式回答直接收尾(尤其在
+# 长历史 + 专家正文的长上下文下)。这类半截话不能当答案交付 —— 用户要的是
+# 取数后的结论。命中就追加一句纠偏让模型继续调用工具, 最多纠偏几次。
+_PLAN_PATTERN = re.compile(
+    r"(先|再|接下来|然后|同时|我)[^。！？]{0,40}?(查|拉|取|看|调|跑|算|确认|同步)"
+)
+_PLAN_MAX_CHARS = 100
+_MAX_PLAN_NUDGES = 2
+_PLAN_NUDGE = (
+    "你刚才只输出了行动计划, 没有给出结论。现在就调用工具取数, "
+    "并基于工具返回的内容给出完整结论(先给结论, 再给依据)。"
+)
+
 
 def _round_checkpoint() -> int:
     """本次对话的轮次检查点(0=不检查)。"""
@@ -52,6 +66,19 @@ def _round_checkpoint() -> int:
         return _TOOL_ROUND_CHECKPOINT
 
 _SETTINGS_HINT = "/settings?tab=ai"
+
+
+def _looks_like_plan(text: str) -> bool:
+    """这轮回复是不是「只说打算怎么做」的半截话。
+
+    判据: 短 + 出现「(先|再|同时|我)……(取数类动词)」的句式。真实回答再短
+    也会给结论, 不会停在"我先查一下…"。只靠词表会漏("把财务数据拉起来看"),
+    所以按句式匹配。
+    """
+    stripped = text.strip()
+    if not stripped or len(stripped) > _PLAN_MAX_CHARS:
+        return False
+    return bool(_PLAN_PATTERN.search(stripped))
 
 
 def _error_event(kind: str, message: str, hint: str = "") -> dict[str, str]:
@@ -162,8 +189,12 @@ async def chat_stream(
     depth_service: Any = None,
     capabilities: Any = None,
     financial_scheduler: Any = None,
+    experts: list[str] | None = None,
 ) -> AsyncIterator[str]:
-    """执行一轮对话, 逐行 yield NDJSON 事件(见模块 __init__ 的协议注释)。"""
+    """执行一轮对话, 逐行 yield NDJSON 事件(见模块 __init__ 的协议注释)。
+
+    experts 为本轮 @ 引用的专家名 —— 正文直接进 system prompt。
+    """
     if not ai_configured():
         yield _line(_error_event(
             "no_key",
@@ -185,7 +216,11 @@ async def chat_stream(
         yield _line({"type": "notice", "message": f"对话较长, 已仅保留最近 {_MAX_HISTORY_MESSAGES // 2} 轮作为上下文。"})
 
     req_messages: list[dict[str, Any]] = [
-        {"role": "system", "content": build_system_prompt(context, skills=skill_loader.list_skills(data_dir))},
+        {"role": "system", "content": build_system_prompt(
+            context,
+            skills=assistant_experts.usable_skills(data_dir),
+            experts=assistant_experts.referenced_bodies(data_dir, experts),
+        )},
         *truncated,
     ]
     schemas = assistant_tools.build_tool_schemas()
@@ -272,6 +307,7 @@ async def chat_stream(
         try:
             text_seen = False
             tool_rounds = 0
+            plan_nudges = 0
             round_checkpoint = _round_checkpoint()
             while True:
                 _guard_input_budget(req_messages)
@@ -293,6 +329,12 @@ async def chat_stream(
                     })
 
                 if not tool_calls:
+                    # 模型把行动计划当答案交了 → 纠偏一次, 让它继续取数。
+                    if _looks_like_plan("".join(round_text)) and plan_nudges < _MAX_PLAN_NUDGES:
+                        plan_nudges += 1
+                        req_messages.append({"role": "assistant", "content": "".join(round_text)})
+                        req_messages.append({"role": "user", "content": _PLAN_NUDGE})
+                        continue
                     if not round_text and not text_seen:
                         await queue.put(_error_event("model", "本轮未产出回答, 请重试。"))
                     return

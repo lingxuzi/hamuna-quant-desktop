@@ -18,6 +18,7 @@ import {
   Puzzle,
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { toast } from '@/components/Toast'
 import { useCapabilityMatrix } from '@/lib/useSharedQueries'
 import { QK } from '@/lib/queryKeys'
 import { Inscription, useQuoteDate, useQuoteRunning } from '@/components/Inscription'
@@ -64,8 +65,9 @@ export function Onboarding() {
       navigate('/', { replace: true })
     },
     onError: () => {
-      // 标记失败不应阻塞用户进入面板,仍放行
-      navigate('/', { replace: true })
+      // 不放行: 标记没写进去, 跳过去也会被守卫立刻踢回引导页, 用户看到的是
+      // 「每次刷新都走 onboarding」的死循环。停在完成页让用户重试。
+      toast('未能保存完成状态, 请重试', 'error')
     },
   })
 

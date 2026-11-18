@@ -59,8 +59,11 @@ sync_data(pipeline 补行情 / financials 补财务 / minute_extend 补分钟历
 用户还得自己去策略页拼装。拿不准时按「策略」理解, 并在正文里说明你创建的是策略草稿。
 - 默认调用一两个最贴切的工具, 首轮结果不足以回答时再补查; \
 不重复查询同类信息。
+- 不要只回"我先…/接下来…"这类行动计划就结束回答: 需要事实就直接调用工具, \
+再基于工具返回的内容给出完整结论; 计划不是结论。
 
 {skills}
+{experts}
 数据口径:
 - 涨跌幅 change_pct 与振幅 amplitude 为小数 (0.0366 = 3.66%), 表述时转为百分比。
 - 换手率 turnover_rate 已是百分数 (5.2 = 5.2%), 直接加 % 表述, 不要再乘 100。
@@ -86,20 +89,56 @@ sync_data(pipeline 补行情 / financials 补财务 / minute_extend 补分钟历
 {context}"""
 
 
-def _skills_block(skills: list[dict] | None) -> str:
-    """技能目录块: 只放 name + description, 正文由模型按需 load_skill 取。"""
+def _skills_block(skills: list[dict] | None, experts: list[dict] | None = None) -> str:
+    """技能目录块: 只放 name + description, 正文由模型按需 load_skill 取。
+
+    name 是 ASCII 标识 (load_skill 的入参), title 是中文显示名 —— 对用户说话
+    要用 title, 不要念 slug。已被 @ 引用的专家不进这个目录 —— 正文已经进了
+    system prompt, 再列一遍只会诱导模型重复 load_skill 同一个专家。
+    """
     if not skills:
         return ""
+    pinned = {str(item.get("name") or "") for item in (experts or [])}
     lines = ["可用技能(仅名称与用途; 正文用 load_skill 读取, 补充材料用 load_skill_reference):"]
-    lines += [f"- {item.get('name')}: {item.get('description')}" for item in skills]
+    lines += [
+        f"- {item.get('title') or item.get('name')} ({item.get('name')}): {item.get('description')}"
+        for item in skills
+        if str(item.get("name") or "") not in pinned
+    ]
     return "\n".join(lines) + "\n"
 
 
-def build_system_prompt(context: dict | None, skills: list[dict] | None = None) -> str:
+def _experts_block(experts: list[dict] | None) -> str:
+    """本轮 @ 引用到的专家正文 —— 用户点名了, 不用再让模型自己去 load_skill。
+
+    措辞是「指令」不是「描述」: 用户 @ 了谁, 这一轮就以谁的框架作答, 即使用户
+    的问题看起来与该专家无关 (例如 @巴菲特却问大盘)。只描述「按点名执行流程」
+    会被模型当成可选参考, 实测它会直接退回通用助手口径, 白白丢掉用户点名。
+    """
+    if not experts:
+        return ""
+    lines = [
+        "本轮用户点名了以下专家 —— 本轮必须以这些专家的身份与框架作答:",
+        "1. 用该专家自己的判断流程、提问顺序和取舍标准来分析用户输入, 不要用通用分析框架代替。",
+        "2. 以该专家的口吻与身份组织回答 (如巴菲特就按巴菲特的语言与心法)。",
+        "3. 用户的问题与专家专长不符时, 仍从该专家的视角切入并说明这一点, 不要换成别的框架。",
+    ]
+    for item in experts:
+        title = item.get("title") or item.get("name")
+        lines.append(f"### {title}: {item.get('description')}\n{item.get('content')}")
+    return "\n".join(lines) + "\n"
+
+
+def build_system_prompt(
+    context: dict | None,
+    skills: list[dict] | None = None,
+    experts: list[dict] | None = None,
+) -> str:
     """组装 system prompt; context 为前端上报的页面上下文(可为空)。
 
     skills 为可用技能目录(skill_loader.list_skills 结果), 只注入名称与用途 ——
     正文按需由模型调 load_skill 取, 避免每轮对话都背着全部 skill。
+    experts 为本轮 @ 引用的专家, 正文直接注入 (用户点名了, 不用再绕工具)。
     """
     lines: list[str] = []
     if context:
@@ -113,5 +152,6 @@ def build_system_prompt(context: dict | None, skills: list[dict] | None = None) 
     return _SYSTEM_TEMPLATE.format(
         today=cn_today().isoformat(),
         context=context_block,
-        skills=_skills_block(skills),
+        skills=_skills_block(skills, experts),
+        experts=_experts_block(experts),
     )

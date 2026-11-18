@@ -19,6 +19,11 @@ docs/secondary-development.md 的扩展契约。
     {"type":"error","kind","message","hint?"}               no_key/provider/input_too_long/rounds/model
     {"type":"done"}                                         本轮结束(含失败)
     {"type":"ping"}                                         心跳保活(空闲 >15s)
+
+请求体(POST /chat):
+    {"messages":[{"role","content"}], "context":{...}, "experts":["专家名"]}
+        experts = 本轮 @ 引用到的专家名; 后端把它们的正文直接注入 system prompt
+        (停用/不存在/超上限的会被跳过, 详见 experts.referenced_bodies)
 """
 from __future__ import annotations
 

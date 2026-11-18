@@ -1,0 +1,61 @@
+{
+  "categories": [
+    "价值投资",
+    "技术分析",
+    "趋势与波段",
+    "打板与情绪",
+    "基本面研究",
+    "资金与筹码",
+    "消息与政策",
+    "量化与选股",
+    "品种与市场",
+    "投资心态"
+  ],
+  "experts": {
+    "巴菲特价值投资": { "category": "价值投资" },
+    "彼得林奇成长股": { "category": "价值投资", "name": "peter-lynch-growth-framework" },
+    "芒格多元思维": { "category": "投资心态" },
+    "投资心态修炼": { "category": "投资心态" },
+    "投资入门陪伴": { "category": "投资心态" },
+
+    "K线形态": { "category": "技术分析", "name": "candlestick-pattern-framework" },
+    "全能技术分析": { "category": "技术分析", "name": "technical-analysis-allround-framework" },
+    "江恩理论": { "category": "技术分析", "name": "gann-theory-framework" },
+    "波浪理论": { "category": "技术分析", "name": "elliott-wave-framework" },
+    "道氏理论": { "category": "技术分析", "name": "dow-theory-framework" },
+    "缠论": { "category": "技术分析" },
+    "突破交易": { "category": "技术分析" },
+
+    "利弗莫尔趋势交易": { "category": "趋势与波段" },
+    "抄底逃顶": { "category": "趋势与波段" },
+    "波段交易": { "category": "趋势与波段", "name": "swing-trading-framework" },
+    "索罗斯宏观趋势": { "category": "趋势与波段" },
+
+    "打板回封": { "category": "打板与情绪", "name": "limit-up-reentry-framework" },
+    "低吸战法": { "category": "打板与情绪", "name": "low-buy-dip-framework" },
+    "涨停分析": { "category": "打板与情绪", "name": "limit-up-analysis-framework" },
+    "盘口语言": { "category": "打板与情绪", "name": "order-book-language-framework" },
+    "龙头战法": { "category": "打板与情绪" },
+
+    "专业财务分析": { "category": "基本面研究", "name": "professional-financial-analysis-framework" },
+    "估值分析": { "category": "基本面研究", "name": "valuation-analysis-framework" },
+    "财报排雷": { "category": "基本面研究" },
+    "行业研究": { "category": "基本面研究", "name": "industry-research-framework" },
+
+    "仓位资金管理": { "category": "资金与筹码", "name": "position-sizing-framework" },
+    "筹码分析": { "category": "资金与筹码", "name": "chip-distribution-framework" },
+    "股东资金持仓": { "category": "资金与筹码", "name": "shareholder-holding-framework" },
+
+    "公告解读": { "category": "消息与政策", "name": "announcement-analysis-framework" },
+    "政策解读": { "category": "消息与政策", "name": "policy-analysis-framework" },
+    "新闻舆情": { "category": "消息与政策", "name": "news-sentiment-framework" },
+
+    "选股公式": { "category": "量化与选股", "name": "stock-screening-formula-framework" },
+    "量化交易": { "category": "量化与选股", "name": "quantitative-trading-framework" },
+
+    "A股专项": { "category": "品种与市场" },
+    "ETF基金": { "category": "品种与市场", "name": "etf-fund-framework" },
+    "可转债": { "category": "品种与市场", "name": "convertible-bond-framework" },
+    "美股港股": { "category": "品种与市场", "name": "us-hk-market-framework" }
+  }
+}

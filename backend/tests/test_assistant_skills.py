@@ -52,6 +52,14 @@ def _data_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def _no_repo_builtin_skills(tmp_path: Path, monkeypatch) -> None:
+    """仓库自带的内置技能不进测试 —— 断言只盯测试自己造的 skill。"""
+    empty = tmp_path / "builtin-empty"
+    empty.mkdir()
+    monkeypatch.setattr(skill_loader, "BUILTIN_SKILLS_DIR", empty)
+
+
 def test_list_skills_reads_user_root(tmp_path: Path) -> None:
     """用户目录下的 SKILL.md 要能被列出, 且带出用途。"""
     data_dir = _data_dir(tmp_path)
@@ -167,6 +175,46 @@ def test_prompt_omits_skill_section_when_empty() -> None:
     assert "可用技能" not in prompt
 
 
+def test_referenced_expert_body_goes_into_prompt() -> None:
+    """@ 引用到的专家: 正文直接进 prompt, 且带强制作答的指令。"""
+    prompt = build_system_prompt(
+        None,
+        skills=[{"name": "buffett", "description": "价值投资框架"}],
+        experts=[{
+            "name": "buffett",
+            "title": "巴菲特价值投资视角",
+            "description": "护城河与安全边际",
+            "content": "# 巴菲特价值投资视角\n\n先问护城河, 再问价格。",
+        }],
+    )
+
+    assert "先问护城河, 再问价格。" in prompt
+    assert "巴菲特价值投资视角" in prompt
+    # 指名时必须强制以该专家身份作答 —— 措辞弱了模型会退回通用口径。
+    assert "必须以这些专家的身份与框架作答" in prompt
+
+
+def test_referenced_expert_not_repeated_in_skill_catalog() -> None:
+    """已 @ 引用 (正文已进 prompt) 的专家不再列进技能目录, 免得重复 load_skill。"""
+    prompt = build_system_prompt(
+        None,
+        skills=[
+            {"name": "buffett", "description": "价值投资框架"},
+            {"name": "limit-up", "description": "涨停板分析"},
+        ],
+        experts=[{
+            "name": "buffett",
+            "title": "巴菲特价值投资视角",
+            "description": "护城河与安全边际",
+            "content": "正文",
+        }],
+    )
+
+    catalog = prompt.split("可用技能")[1].split("本轮用户点名了")[0]
+    assert "buffett" not in catalog
+    assert "limit-up" in catalog
+
+
 def test_tool_schemas_expose_skill_tools() -> None:
     names = {item["function"]["name"] for item in assistant_tools.build_tool_schemas()}
 
@@ -182,3 +230,42 @@ async def test_execute_load_skill_tool(tmp_path: Path) -> None:
 
     assert payload["ok"] is True
     assert "涨停板分析" in payload["result"]["content"]
+
+def test_title_defaults_to_first_heading(tmp_path: Path) -> None:
+    """中文显示名取正文一级标题 —— 界面上不能显示 ASCII slug。"""
+    data_dir = _data_dir(tmp_path)
+    _write_skill(data_dir / "assistant" / "skills", "limit-up")
+
+    skill = skill_loader.find(data_dir, "limit-up")
+
+    assert skill is not None
+    assert skill.name == "limit-up"
+    assert skill.title == "涨停板分析"
+
+def test_frontmatter_title_overrides_heading(tmp_path: Path) -> None:
+    """正文标题是英文时, frontmatter 的 title 优先。"""
+    data_dir = _data_dir(tmp_path)
+    _write_skill(
+        data_dir / "assistant" / "skills",
+        "limit-up",
+        SKILL_MD.replace(
+            "allowed-tools: run_strategy, get_market_overview",
+            "allowed-tools: run_strategy, get_market_overview\ntitle: 彼得林奇成长股",
+        ),
+    )
+
+    skill = skill_loader.find(data_dir, "limit-up")
+
+    assert skill is not None
+    assert skill.title == "彼得林奇成长股"
+
+def test_write_skill_keeps_existing_title(tmp_path: Path) -> None:
+    """页面改正文时不能把 frontmatter 里的显示名抹掉。"""
+    data_dir = _data_dir(tmp_path)
+    skill_loader.write_skill(data_dir, "limit-up", "涨停板梯队分析", "# 涨停板分析\n正文\n", title="自定义名")
+
+    skill_loader.write_skill(data_dir, "limit-up", "改过的用途", "# 涨停板分析\n新正文\n")
+
+    skill = skill_loader.find(data_dir, "limit-up")
+    assert skill is not None
+    assert skill.title == "自定义名"

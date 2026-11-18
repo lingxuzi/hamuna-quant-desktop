@@ -65,10 +65,20 @@ export interface AssistantContext {
   symbol?: string
 }
 
-async function requestJson<T>(path: string): Promise<T> {
-  const res = await fetch(path)
-  if (!res.ok) throw new Error(`AI 助手接口请求失败: ${res.status}`)
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init)
+  if (!res.ok) throw new Error(await errorDetail(res))
   return res.json() as Promise<T>
+}
+
+/** 失败响应里的后端文案 —— 没有就退回状态码说明。 */
+async function errorDetail(res: Response): Promise<string> {
+  let detail = ''
+  try {
+    const parsed = JSON.parse(await res.text()) as { detail?: string; message?: string }
+    detail = parsed.detail ?? parsed.message ?? ''
+  } catch { /* 忽略解析失败, 走状态码文案 */ }
+  return detail || `AI 助手接口请求失败: ${res.status}`
 }
 
 export function fetchAssistantStatus(): Promise<AssistantStatus> {
@@ -92,7 +102,7 @@ export async function decideAssistantAction(callId: string, approve: boolean): P
 
 /** 对话主入口: POST NDJSON, 逐行 yield 事件; signal 支持中断。 */
 export async function* assistantChatStream(
-  body: { messages: ChatHistoryMessage[]; context?: AssistantContext },
+  body: { messages: ChatHistoryMessage[]; context?: AssistantContext; experts?: string[] },
   signal?: AbortSignal,
 ): AsyncGenerator<AssistantEvent> {
   const res = await fetch('/api/custom/assistant/chat', {
@@ -137,4 +147,113 @@ function parseEventLine(line: string): AssistantEvent | null {
   } catch {
     return null
   }
+}
+
+// ── 专家 (skill) 管理 ──
+// 一个专家 = 一个 skill: 正文在 <data_dir>/assistant/skills/<name>/SKILL.md,
+// 分类归属与启用状态在 <data_dir>/assistant/experts.json (后端单一真相)。
+
+export interface ExpertItem {
+  /** ASCII 标识 (目录名 / 接口入参) —— 不直接展示给用户。 */
+  name: string
+  /** 界面显示名 (通常取 SKILL.md 的一级标题, 即中文名)。 */
+  title: string
+  description: string
+  source: 'builtin' | 'user'
+  builtin: boolean
+  category: string
+  enabled: boolean
+  references: string[]
+}
+
+export interface ExpertLayout {
+  categories: string[]
+  experts: ExpertItem[]
+}
+
+export interface ExpertDraft {
+  name: string
+  description: string
+  content: string
+  category: string
+}
+
+export interface ExpertDetail extends ExpertDraft {
+  builtin: boolean
+  enabled: boolean
+}
+
+export function fetchExperts(): Promise<ExpertLayout> {
+  return requestJson<ExpertLayout>('/api/custom/assistant/experts')
+}
+
+export function fetchExpert(name: string): Promise<ExpertDetail> {
+  return requestJson<ExpertDetail>(`/api/custom/assistant/experts/${encodeURIComponent(name)}`)
+}
+
+export function createExpert(draft: ExpertDraft): Promise<ExpertLayout> {
+  return requestJson<ExpertLayout>('/api/custom/assistant/experts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(draft),
+  })
+}
+
+export function updateExpert(
+  name: string,
+  patch: { description?: string; content?: string },
+): Promise<ExpertLayout> {
+  return requestJson<ExpertLayout>(`/api/custom/assistant/experts/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+}
+
+export function deleteExpert(name: string): Promise<ExpertLayout> {
+  return requestJson<ExpertLayout>(`/api/custom/assistant/experts/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  })
+}
+
+/** 整份保存分类体系 + 专家的分类归属/启用状态。 */
+export function saveExpertLayout(
+  categories: string[],
+  assignments: Record<string, { category: string; enabled: boolean }>,
+): Promise<ExpertLayout> {
+  return requestJson<ExpertLayout>('/api/custom/assistant/experts/layout', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ categories, assignments }),
+  })
+}
+
+/** 导入处置报告: 导入 / 覆盖 / 跳过各是哪些。 */
+export interface ExpertImportReport {
+  imported: string[]
+  updated: string[]
+  skipped: string[]
+  categories_added: string[]
+}
+
+/** 导出专家包 —— 文件名由后端给 (带日期)。 */
+export async function exportExperts(): Promise<{ filename: string; blob: Blob }> {
+  const res = await fetch('/api/custom/assistant/experts/export')
+  if (!res.ok) throw new Error(await errorDetail(res))
+  const match = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')
+  return { filename: match?.[1] || 'experts.zip', blob: await res.blob() }
+}
+
+/** 导入专家包 (zip) —— 同名专家: overwrite=false 跳过, true 用包内版本替换。 */
+export function importExperts(
+  file: File,
+  overwrite: boolean,
+): Promise<ExpertLayout & { report: ExpertImportReport }> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('overwrite', overwrite ? 'true' : 'false')
+  return requestJson<ExpertLayout & { report: ExpertImportReport }>(
+    '/api/custom/assistant/experts/import',
+    { method: 'POST', body: form },
+  )
 }

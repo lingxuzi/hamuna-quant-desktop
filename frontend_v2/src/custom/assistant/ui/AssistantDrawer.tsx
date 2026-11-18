@@ -30,7 +30,9 @@ import { Switch } from '@/components/Switch'
 import {
   fetchAssistantStatus,
   fetchAssistantSuggests,
+  fetchExperts,
   type AssistantStatus,
+  type ExpertLayout,
   type QuickSuggest,
 } from '../client'
 import {
@@ -41,9 +43,12 @@ import {
   selectSession,
   sendMessage,
   stopSending,
+  toggleMention,
   useAssistantStore,
+  MAX_MENTIONS,
 } from '../store'
 import { AssistantMessageView } from './messages'
+import { ExpertPicker } from './ExpertPicker'
 
 const EASE_SMOOTH: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
@@ -133,6 +138,7 @@ function DrawerPanel({
   mode?: 'drawer' | 'page'
 }) {
   const { sessions, activeId } = useAssistantStore()
+  const active = sessions.find(s => s.id === activeId) ?? null
   const [status, setStatus] = useState<AssistantStatus | null>(null)
   const [suggests, setSuggests] = useState<QuickSuggest[]>([])
   const isPage = mode === 'page'
@@ -190,7 +196,12 @@ function DrawerPanel({
     >
       <DrawerHeader status={status} sessions={sessions} activeId={activeId} sending={sending} hideClose={isPage} />
       <MessageList messages={messages} sending={sending} status={status} suggests={suggests} />
-      <InputArea sending={sending} blocked={status ? !status.supports_tools : false} isPage={isPage} />
+      <InputArea
+        sending={sending}
+        blocked={status ? !status.supports_tools : false}
+        isPage={isPage}
+        mentions={active?.mentions ?? []}
+      />
 
       {/* 左缘拖拽调宽 (抽屉模式) */}
       {!isPage && <div
@@ -235,7 +246,8 @@ function DrawerHeader({
           {status.model}
         </span>
       )}
-      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+      <span className={`ok${status?.configured ? '' : ' off'}`}>{status?.configured ? '● 已连接' : '● 未连接'}</span>
+      <div className="flex shrink-0 items-center gap-0.5">
         <div className="relative">
           <IconButton title="助手设置" onClick={() => { setSettingsOpen(v => !v); setMenuOpen(false) }} disabled={sending}>
             <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -260,7 +272,6 @@ function DrawerHeader({
           </IconButton>
         )}
       </div>
-      <span className={`ok${status?.configured ? '' : ' off'}`}>{status?.configured ? '● 已连接' : '● 未连接'}</span>
     </div>
   )
 }
@@ -575,20 +586,76 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
   )
 }
 
-function InputArea({ sending, blocked, isPage }: { sending: boolean; blocked: boolean; isPage: boolean }) {
+function InputArea({
+  sending,
+  blocked,
+  isPage,
+  mentions,
+}: {
+  sending: boolean
+  blocked: boolean
+  isPage: boolean
+  /** 本条消息引用的专家 (chip) —— 发出即清空, 下一条要继续用得重新选。 */
+  mentions: string[]
+}) {
   const [text, setText] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [catalog, setCatalog] = useState<ExpertLayout | null>(null)
+  const [limitHit, setLimitHit] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  /** 选完专家后光标要落回 @ 所在处 —— 受控输入重写值会把光标弹到末尾。 */
+  const caretRef = useRef<number | null>(null)
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    const at = caretRef.current
+    if (!el || at === null) return
+    caretRef.current = null
+    el.focus()
+    el.setSelectionRange(at, at)
+  }, [text])
 
   const canSend = !sending && !blocked && text.trim().length > 0
+
+  // 专家目录: 第一次打开选择面板 (或已有引用) 时才拉, 不常驻请求。
+  // 已有引用的会话要目录才显示中文名 —— 引用存的是 ASCII 标识。
+  useEffect(() => {
+    if ((!pickerOpen && !mentions.length) || catalog) return
+    let cancelled = false
+    fetchExperts()
+      .then(layout => { if (!cancelled) setCatalog(layout) })
+      .catch(() => { if (!cancelled) setCatalog({ categories: [], experts: [] }) })
+    return () => { cancelled = true }
+  }, [pickerOpen, mentions.length, catalog])
+
+  /** 专家的中文显示名; 目录还没到就退回标识, 不能空着。 */
+  const titleOf = (name: string) => catalog?.experts.find(e => e.name === name)?.title || name
+
+  /** 光标前最近一个 @ (其后不能有空白) —— 命中就开选择面板。 */
+  const detectMention = (value: string, caret: number): string | null => {
+    const before = value.slice(0, caret)
+    const at = before.lastIndexOf('@')
+    if (at < 0) return null
+    const typed = before.slice(at + 1)
+    return /\s/.test(typed) ? null : typed
+  }
 
   const submit = () => {
     if (!canSend) return
     sendMessage(text)
     setText('')
+    setPickerOpen(false)
+    setQuery('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && pickerOpen) {
+      e.preventDefault()
+      setPickerOpen(false)
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       submit()
@@ -602,15 +669,73 @@ function InputArea({ sending, blocked, isPage }: { sending: boolean; blocked: bo
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`
   }
 
+  /** 选中专家: 抹掉输入里的 @xxx, 换成输入区上方的 chip。 */
+  const pick = (name: string) => {
+    const el = textareaRef.current
+    const caret = el?.selectionStart ?? text.length
+    const before = text.slice(0, caret)
+    const at = before.lastIndexOf('@')
+    if (at >= 0) {
+      const next = text.slice(0, at) + text.slice(caret)
+      caretRef.current = at
+      setText(next)
+    }
+    setPickerOpen(false)
+    setQuery('')
+    if (!mentions.includes(name) && mentions.length >= MAX_MENTIONS) {
+      setLimitHit(true)
+      return
+    }
+    setLimitHit(false)
+    toggleMention(name)
+  }
+
   return (
     <div className="drv-ft">
+      {mentions.length > 0 && (
+        <div className="drv-mentions basis-full">
+          {mentions.map(name => (
+            <span key={name} className="drv-mention">
+              <span>{titleOf(name)}</span>
+              <button
+                type="button"
+                onClick={() => toggleMention(name)}
+                title={`取消引用 ${titleOf(name)}`}
+                aria-label={`取消引用 ${titleOf(name)}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {limitHit && <span className="drv-mention-limit">最多同时引用 {MAX_MENTIONS} 个专家</span>}
+        </div>
+      )}
+      {pickerOpen && catalog && (
+        <div onMouseDown={e => e.preventDefault()}>
+          <ExpertPicker
+            categories={catalog.categories}
+            experts={catalog.experts}
+            query={query}
+            mentions={mentions}
+            onPick={pick}
+          />
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         value={text}
         rows={1}
         disabled={blocked}
-        placeholder={blocked ? '请先在设置页配置 AI' : '问点什么，或者选上面一条'}
-        onChange={e => { setText(e.target.value); autoGrow() }}
+        placeholder={blocked ? '请先在设置页配置 AI' : '问点什么，或者选上面一条；输入 @ 可引用专家'}
+        onChange={e => {
+          setText(e.target.value)
+          autoGrow()
+          const typed = detectMention(e.target.value, e.target.selectionStart)
+          setQuery(typed ?? '')
+          setPickerOpen(typed !== null)
+          setLimitHit(false)
+        }}
+        onBlur={() => setPickerOpen(false)}
         onKeyDown={onKeyDown}
         className="inp max-h-36"
       />
