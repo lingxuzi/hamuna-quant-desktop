@@ -140,7 +140,7 @@ export function StrategyOptimizer() {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)] h-full min-h-0 overflow-hidden">
       {/* ── 配置面板 ── */}
-      <div className="space-y-3 bg-surface border border-border overflow-y-auto min-h-0">
+      <div className="space-y-3 px-3 py-2.5 bg-surface border border-border overflow-y-auto min-h-0">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">策略</label>
           <StrategySelect strategies={strategies} value={sweep.strategyId} onChange={sweep.selectStrategy} />

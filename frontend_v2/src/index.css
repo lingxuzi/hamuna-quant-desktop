@@ -1163,7 +1163,7 @@ nav :focus-visible { outline-offset: -2px; }
   }
   .dt th:first-child { text-align: left; padding-left: 0; }
   .dt td {
-    padding: 0 8px 0 0; height: 30px; border-bottom: 1px solid var(--rule); text-align: right;
+    padding: 8px; height: 30px; border-bottom: 1px solid var(--rule); text-align: right;
     font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--ink-2);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }

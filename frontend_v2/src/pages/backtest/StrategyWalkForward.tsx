@@ -163,7 +163,7 @@ export function StrategyWalkForward() {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_1fr]">
       {/* ── 配置面板 ── */}
-      <div className="space-y-3 bg-surface border border-border">
+      <div className="px-3 py-2.5 space-y-3 bg-surface border border-border">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-secondary">策略</label>
           <StrategySelect strategies={strategies} value={sweep.strategyId} onChange={sweep.selectStrategy} />
