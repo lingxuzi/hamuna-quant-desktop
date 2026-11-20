@@ -32,7 +32,7 @@ from app.enriched_generation import (
     enriched_publication_incomplete,
 )
 from app.market_time import cn_today
-from app.parquet import scan_daily_parquet, scan_enriched_parquet, scan_parquet_compat
+from app.parquet import dataset_glob, scan_daily_parquet, scan_enriched_parquet, scan_parquet_compat
 from app.price_limits import (
     LEGACY_MAIN_BOARD_ST_LIMIT,
     no_limit_window_days,
@@ -1488,7 +1488,7 @@ def load_benchmark_momentum(data_dir: Path) -> pl.DataFrame | None:
 
     frame: pl.DataFrame | None = None
     try:
-        index_glob = str(Path(data_dir) / "kline_index_daily" / "**" / "*.parquet")
+        index_glob = dataset_glob(Path(data_dir) / "kline_index_daily")
         wanted: list[str] = []
         bench_of: dict[str, str] = {}
         for bench_key, candidates in _BENCHMARK_PREFERENCE.items():
@@ -1992,7 +1992,7 @@ def _run_pipeline_impl(data_dir: Path | None = None,
         logger.info("无日K数据, 跳过管道")
         return 0
 
-    daily_glob = (daily_dir / "**" / "*.parquet").as_posix()
+    daily_glob = dataset_glob(daily_dir)
     _cast = pl.ScanCastOptions(integer_cast="allow-float")
     written = 0
 
@@ -2343,7 +2343,7 @@ def _load_recent_history(enriched_base: Path, symbols: list[str], days: int) -> 
     try:
         lf = (
             scan_enriched_parquet(
-                str(enriched_base / "**" / "*.parquet"),
+                dataset_glob(enriched_base),
                 cast_options=cast_options,
             )
             .filter(

@@ -1,9 +1,52 @@
 """Polars parquet helpers."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import polars as pl
+
+
+def has_date_partitions(dataset_dir: Path | str) -> bool:
+    """数据集目录里是否有 date=* 分区 (读端只认分区)。"""
+    try:
+        return any(
+            child.is_dir() and child.name.startswith("date=")
+            for child in Path(dataset_dir).iterdir()
+        )
+    except OSError:
+        return False
+
+
+def dataset_glob(dataset_dir: Path | str) -> str:
+    """数据集目录 → 只收 date=* 分区的 glob。
+
+    数据集根目录下散落的文件 (备份 / 中间产物) 不是分区: polars 与 DuckDB 都会
+    把它当成分区数据一起读进来, 同一 (date, symbol) 出现两次 → 结果悄悄多算。
+    目录里没有 date= 分区 (单文件型数据集) 时退回全目录 glob。
+    """
+    path = Path(dataset_dir)
+    if has_date_partitions(path):
+        return (path / "date=*" / "**" / "*.parquet").as_posix()
+    return (path / "**" / "*.parquet").as_posix()
+
+def partition_only_glob(glob: str) -> str:
+    """数据集 glob → 只收 date=* 分区的版本 (DuckDB read_parquet 用)。
+
+    数据集根目录下散落的文件 (备份 / 中间产物) 不是分区: read_parquet 会把它们
+    当成分区数据一起读进来, 同一 (date, symbol) 出现两次, 查询结果悄悄多算。
+    """
+    parts = glob.split("/")
+    if not parts[-1].endswith(".parquet"):
+        return glob
+    cut = next((i for i, part in enumerate(parts) if any(c in part for c in "*?[")), len(parts))
+    if cut == 0 or cut >= len(parts):
+        return glob
+    head = "/".join(parts[:cut])
+    if not has_date_partitions(head):
+        return glob
+    return f"{head}/date=*/**/*.parquet"
+
 
 DAILY_STORAGE_SCHEMA: dict[str, pl.DataType] = {
     "symbol": pl.Utf8,

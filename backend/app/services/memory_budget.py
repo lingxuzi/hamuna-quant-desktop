@@ -67,6 +67,45 @@ def _memory_groups() -> list[tuple[Path, Path, bool]]:
     return groups
 
 
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _parse_counter(text: str | None, key: str) -> int | None:
+    """从 "key value" 文本里取计数 (memory.events / memory.oom_control 都是这格式)。"""
+    if not text:
+        return None
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == key:
+            try:
+                return int(parts[1])
+            except ValueError:
+                return None
+    return None
+
+
+def cgroup_oom_kill_count() -> int | None:
+    """本进程所在 cgroup 的 oom_kill 计数 (读不到时 None)。
+
+    cgroup v2 用 memory.events, v1 用 memory.oom_control。进程被 OOM killer
+    (系统的或 cgroup 自己的) 杀掉时计数 +1 —— 这是「内核杀了我」的确凿证据,
+    比退出码 -9 本身有用得多。计数是 cgroup 本地的 (不含子 cgroup), 所以只读
+    进程自己那一层: 被杀的 worker 与 API 进程同属一层, 计数得到。
+    """
+    for leaf, _mount, unified in _memory_groups():
+        counter = _parse_counter(
+            _read_text(leaf / ("memory.events" if unified else "memory.oom_control")),
+            "oom_kill",
+        )
+        if counter is not None:
+            return counter
+    return None
+
+
 def memory_budget(vm=None) -> MemoryBudget:
     vm = psutil.virtual_memory() if vm is None else vm
     total = int(getattr(vm, "total", vm.available))

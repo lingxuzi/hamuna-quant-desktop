@@ -22,7 +22,9 @@
 不丢), 未封板行判定价保持 null。要真正修因子得等权威公告, 两个源的名义送转
 比例同样偏, 互相佐证不出来。
 
-写入前自动备份存量 (all.parquet.bak-backfill-<时间戳>)。可重复执行: 已补齐的行
+写入前自动备份存量 (integrity_backups/adj_factor/all.bak-backfill-<时间戳>.parquet)。
+备份不落在数据集目录里: 数据集目录下的散落 parquet 会被 read_parquet 当成分区
+数据读进来, 同一 (date, symbol) 出现两次 → 查询多算、矩阵构建失败。可重复执行: 已补齐的行
 再次运行不会重复写入 (按 symbol+trade_date 覆盖)。
 
 用法 (从 backend/ 目录运行):
@@ -496,7 +498,9 @@ def main() -> int:
         print("(dry-run, 未写盘)")
         return 0
 
-    backup = STORE.with_suffix(f".bak-backfill-{datetime.now():%Y%m%d%H%M%S}")
+    backup_dir = DATA_DIR / "integrity_backups" / "adj_factor"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"all.bak-backfill-{datetime.now():%Y%m%d%H%M%S}.parquet"
     shutil.copy2(STORE, backup)
     print(f"\n已备份存量 → {backup}")
     rows, changed = _merge_adj_factor_store(STORE, new_rows)

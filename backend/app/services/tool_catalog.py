@@ -12,11 +12,14 @@ run_backtest 复用现有 StrategyBacktestConfig + worker, 只读、受控窗口
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 from app.market_time import cn_today
+
+logger = logging.getLogger(__name__)
 
 # 工具名常量 (与 build_tool_schemas 里 function.name 一一对应)
 LIST_FACTORS = "list_factors"
@@ -325,5 +328,7 @@ async def execute_tool(
         else:
             return {"ok": False, "error": f"未知工具: {name}"}
         return {"ok": True, "result": result}
-    except Exception as exc:  # noqa: BLE001 — 工具执行错误统一回填给 LLM, 不打断循环
+    except Exception as exc:  # 工具执行错误统一回填给 LLM, 不打断循环
+        # 同时落日志: 只回填给 LLM 的话, 磁盘上没有任何痕迹, 线上问题无从排查
+        logger.exception("tool %s failed", name)
         return {"ok": False, "error": str(exc) or type(exc).__name__}

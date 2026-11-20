@@ -37,7 +37,7 @@ from pathlib import Path
 import polars as pl
 
 from app.market_time import CN_TZ, cn_now, cn_today
-from app.parquet import scan_daily_parquet
+from app.parquet import dataset_glob, scan_daily_parquet
 from app.polars_guard import guarded_collect
 from app.services.index_const import CORE_INDEX_SYMBOLS
 from app.strategy.intraday_signals import IntradaySignalEvaluator
@@ -1955,7 +1955,7 @@ class QuoteService:
         ohlcv_cols = ["symbol", "date", "open", "high", "low", "close", "volume", "amount"]
         # 一次扫描取窗口内全部列 (含今日), 再在内存里切「历史 / 今日」两份
         all_df = guarded_collect(
-            scan_daily_parquet(str(self._repo.store.data_dir / "kline_daily" / "**" / "*.parquet"))
+            scan_daily_parquet(dataset_glob(self._repo.store.data_dir / "kline_daily"))
             .filter(pl.col("date") >= today - timedelta(days=90))
             .select(ohlcv_cols)
             .sort(["symbol", "date"]),
@@ -2089,7 +2089,7 @@ class QuoteService:
 
                 cutoff = today - timedelta(days=90)
                 table = {"etf": "kline_etf_daily", "index": "kline_index_daily"}.get(asset_type, "kline_daily")
-                daily_glob = str(self._repo.store.data_dir / table / "**" / "*.parquet")
+                daily_glob = dataset_glob(self._repo.store.data_dir / table)
                 ohlcv_cols = ["symbol", "date", "open", "high", "low", "close", "volume", "amount", "quote_ts"]
                 hist_df = self._etf_live_history(today, ohlcv_cols) if asset_type == "etf" else None
                 if hist_df is None:

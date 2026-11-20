@@ -70,6 +70,84 @@ def _process_rss_bytes(pid: int | None) -> int:
         return 0
 
 
+# ── 子进程死亡的现场取证 ─────────────────────────────────────────
+# 子进程被内核 OOM killer 杀掉时 exitcode = -9 (SIGKILL), 应用自己看不到原因,
+# 用户只拿到一句 "exited without result" —— 排查全靠猜。这里在失败现场取证
+# (进程最后 RSS / 系统可用内存 / cgroup 的 oom_kill 增量), 拼成一句能照着做的
+# 中文提示; 并在整机内存将尽时主动中止, 免得被内核随机挑一个进程杀掉。
+_SYSTEM_MEMORY_FLOOR_RATIO = 0.05
+_SYSTEM_MEMORY_FLOOR_BYTES = 512 * 1024**2
+# ponytail: 只有 worker 自己就是内存大户 (>1GiB) 时才因整机内存不足而中止 ——
+# 机器紧张但 worker 很小时杀掉它救不了场, 不该把本来能跑完的任务判死。
+_WORKER_MEMORY_FOOTPRINT_BYTES = 1024**3
+
+_SIGNAL_NAMES = {-9: "SIGKILL", -15: "SIGTERM", -11: "SIGSEGV", -6: "SIGABRT"}
+
+
+def _gib(value: int | None) -> str:
+    if value is None:
+        return "未知"
+    return f"{value / 1024**3:.1f}GiB"
+
+
+def _system_memory() -> tuple[int, int]:
+    """(可用内存, 总内存) —— 含 cgroup 祖先上限 (容器里比整机更紧)。"""
+    from app.services.memory_budget import memory_budget
+
+    budget = memory_budget()
+    return budget.available_bytes, budget.total_bytes
+
+
+def _cgroup_oom_kill_count() -> int | None:
+    from app.services.memory_budget import cgroup_oom_kill_count
+
+    return cgroup_oom_kill_count()
+
+
+def _system_memory_floor_bytes(total_bytes: int) -> int:
+    """整机可用内存下限: 低于它就随时可能被内核 OOM killer 杀掉。"""
+    return max(_SYSTEM_MEMORY_FLOOR_BYTES, int(total_bytes * _SYSTEM_MEMORY_FLOOR_RATIO))
+
+
+def _worker_death_message(
+    *,
+    exitcode: int | None,
+    last_rss_bytes: int,
+    oom_killed: bool,
+    available_bytes: int,
+    total_bytes: int,
+) -> str:
+    """子进程没交回结果时的中文说明 (带现场取证)。
+
+    exitcode=-9 (SIGKILL) 在 Linux 上几乎只有两种来源: 内核 OOM killer, 或别的
+    进程 kill -9。两者处理方式完全不同, 所以必须带上 oom_kill 计数增量这个证据,
+    只报一个退出码等于让用户猜。
+    """
+    if exitcode is None:
+        head = "回测子进程启动后没有交回结果就消失了"
+    elif exitcode < 0:
+        name = _SIGNAL_NAMES.get(exitcode, f"信号 {-exitcode}")
+        head = f"回测子进程被 {name} 强制终止, 没有交回结果"
+    else:
+        head = f"回测子进程异常退出 (退出码 {exitcode}), 没有交回结果"
+
+    facts = [
+        f"被杀时进程占用 {_gib(last_rss_bytes)}",
+        f"系统可用内存 {_gib(available_bytes)} / 共 {_gib(total_bytes)}",
+    ]
+    if exitcode == -9:
+        facts.append(
+            "内核 OOM 计数 +1, 确认是内存耗尽被系统杀掉"
+            if oom_killed
+            else "内核 OOM 计数没有变化, 不是内存耗尽, 多半被别的程序或脚本强制杀掉"
+        )
+    advice = (
+        "处理办法: 关闭占内存的程序; 在 设置 → 系统设置 → 性能与内存 调低「回测内存上限」; "
+        "或缩小回测区间与标的数量。"
+    )
+    return "。".join([head, "; ".join(facts)]) + "。" + advice
+
+
 class _PeakRssSampler:
     """Track whole-task and resettable phase RSS peaks with one sampling thread."""
 
@@ -378,6 +456,7 @@ def run_worker_task(
         daemon=False,
     )
     parent_rss_before = _rss_bytes()
+    oom_kill_before = _cgroup_oom_kill_count()
     try:
         process.start()
     except BaseException:
@@ -389,6 +468,7 @@ def run_worker_task(
     ipc_started = time.perf_counter()
     cancel_started: float | None = None
     last_rss_check = 0.0
+    last_rss_bytes = 0
 
     try:
         while result is None and failure is None:
@@ -404,14 +484,12 @@ def run_worker_task(
                     raise BacktestWorkerError(
                         "backtest worker did not stop within 5 seconds after cancellation"
                     )
-            if (
-                rss_limit_bytes > 0
-                and now - last_rss_check >= _RSS_CHECK_INTERVAL_S
-            ):
+            if now - last_rss_check >= _RSS_CHECK_INTERVAL_S:
                 last_rss_check = now
                 # getattr: 测试替身进程可能没有 pid 属性, 缺失时按 0 处理 (不触发)
                 rss = _process_rss_bytes(getattr(process, "pid", None))
-                if rss > rss_limit_bytes:
+                last_rss_bytes = rss
+                if rss_limit_bytes > 0 and rss > rss_limit_bytes:
                     logger.error(
                         "backtest worker rss %.2f GiB exceeds limit %.2f GiB, terminating",
                         rss / 1024**3, rss_limit_bytes / 1024**3,
@@ -424,6 +502,26 @@ def run_worker_task(
                         "可在 设置 → 系统设置 → 性能与内存 调高「回测内存上限」"
                         "(0 = 不限制), 或缩小回测时间范围/标的数量。"
                         "(环境变量 TICK_WORKER_RSS_LIMIT_BYTES 优先于界面设置)"
+                    )
+                # 整机内存兜底: worker 自己没超限, 但整机快没内存了 —— 再跑下去
+                # 会被内核 OOM killer 随机杀掉 (exitcode=-9, 原因不明)。主动中止,
+                # 至少给用户一句能照着做的中文提示, 也不至于把浏览器/后端拖下水。
+                available_bytes, total_bytes = _system_memory()
+                if (
+                    available_bytes < _system_memory_floor_bytes(total_bytes)
+                    and rss >= _WORKER_MEMORY_FOOTPRINT_BYTES
+                ):
+                    logger.error(
+                        "system memory low: available %.2f GiB of %.2f GiB, worker rss %.2f GiB, terminating",
+                        available_bytes / 1024**3, total_bytes / 1024**3, rss / 1024**3,
+                    )
+                    process.terminate()
+                    process.join(timeout=5.0)
+                    raise BacktestWorkerError(
+                        f"系统可用内存不足 (剩余 {_gib(available_bytes)} / 共 {_gib(total_bytes)}), "
+                        f"已主动中止回测, 避免被系统强制杀掉。"
+                        "请关闭占内存的程序, 或在 设置 → 系统设置 → 性能与内存 调低「回测内存上限」, "
+                        "或缩小回测区间与标的数量。"
                     )
             try:
                 message = events.get(timeout=0.1)
@@ -475,9 +573,25 @@ def run_worker_task(
                 f"{failure.get('message', 'worker failed')}\n{failure.get('traceback', '')}".rstrip()
             )
         if result is None:
-            raise BacktestWorkerError(
-                f"backtest worker exited without result (exitcode={process.exitcode})"
+            exitcode = process.exitcode
+            available_bytes, total_bytes = _system_memory()
+            oom_kill_after = _cgroup_oom_kill_count()
+            oom_killed = (
+                oom_kill_before is not None
+                and oom_kill_after is not None
+                and oom_kill_after > oom_kill_before
             )
+            message = _worker_death_message(
+                exitcode=exitcode,
+                last_rss_bytes=last_rss_bytes,
+                oom_killed=oom_killed,
+                available_bytes=available_bytes,
+                total_bytes=total_bytes,
+            )
+            # 这条同时进日志: 挖掘/筛选把异常写进状态文件, 但状态文件不一定被翻,
+            # 日志是唯一一定会被搜到的地方。
+            logger.error("%s worker died without result: %s", task["kind"], message)
+            raise BacktestWorkerError(message)
 
         parent_metrics = {
             "ipc_elapsed_ms": round((time.perf_counter() - ipc_started) * 1000, 1),

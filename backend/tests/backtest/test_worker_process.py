@@ -462,6 +462,133 @@ def test_worker_terminates_child_after_cancel_grace(monkeypatch, tmp_path):
     assert process.exitcode == -15
 
 
+def test_worker_reports_memory_evidence_when_child_killed(monkeypatch, tmp_path):
+    """子进程被 SIGKILL 杀掉 (内核 OOM): 报错要说清是被内存耗尽杀的, 给出数字。
+
+    旧口径只回一句 "backtest worker exited without result (exitcode=-9)", 用户
+    既不知道发生了什么, 也不知道该做什么。
+    """
+
+    class FakeQueue:
+        def get(self, timeout):
+            raise queue.Empty
+
+        def close(self):
+            pass
+
+        def join_thread(self):
+            pass
+
+    class FakeEvent:
+        def set(self):
+            pass
+
+    class FakeProcess:
+        def __init__(self):
+            self.alive = False
+            self.exitcode = -9
+
+        def start(self):
+            pass
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, timeout=None):
+            pass
+
+        def terminate(self):
+            pass
+
+    process = FakeProcess()
+    context = SimpleNamespace(
+        Queue=FakeQueue,
+        Event=FakeEvent,
+        Process=lambda **_kwargs: process,
+    )
+    monkeypatch.setattr(worker_module.mp, "get_context", lambda _method: context)
+    # oom_kill 计数: 启动时 0, 失败时 1 → 内核确实动过手
+    counters = iter([0, 1])
+    monkeypatch.setattr(
+        worker_module, "_cgroup_oom_kill_count", lambda: next(counters, 1)
+    )
+    monkeypatch.setattr(
+        worker_module, "_process_rss_bytes", lambda _pid: 5 * 1024**3
+    )
+    monkeypatch.setattr(
+        worker_module,
+        "_system_memory",
+        lambda: (4 * 1024**3, 16 * 1024**3),
+    )
+
+    with pytest.raises(BacktestWorkerError) as excinfo:
+        run_worker_task({"kind": "mining", "data_dir": str(tmp_path), "config": {}})
+
+    message = str(excinfo.value)
+    assert "SIGKILL" in message
+    assert "内核 OOM 计数 +1" in message
+    assert "5.0GiB" in message
+    assert "回测内存上限" in message
+
+
+def test_worker_aborts_before_kernel_oom_when_system_memory_low(monkeypatch, tmp_path):
+    """整机内存将尽时主动中止: 别等内核随机挑一个进程杀掉 (exitcode=-9 无解释)。"""
+
+    class FakeQueue:
+        def get(self, timeout):
+            raise queue.Empty
+
+        def close(self):
+            pass
+
+        def join_thread(self):
+            pass
+
+    class FakeEvent:
+        def set(self):
+            pass
+
+    class FakeProcess:
+        def __init__(self):
+            self.alive = True
+            self.exitcode = None
+            self.terminated = False
+
+        def start(self):
+            pass
+
+        def is_alive(self):
+            return not self.terminated
+
+        def join(self, timeout=None):
+            pass
+
+        def terminate(self):
+            self.terminated = True
+            self.exitcode = -15
+
+    process = FakeProcess()
+    context = SimpleNamespace(
+        Queue=FakeQueue,
+        Event=FakeEvent,
+        Process=lambda **_kwargs: process,
+    )
+    monkeypatch.setattr(worker_module.mp, "get_context", lambda _method: context)
+    monkeypatch.setattr(
+        worker_module, "_process_rss_bytes", lambda _pid: 2 * 1024**3
+    )
+    monkeypatch.setattr(
+        worker_module,
+        "_system_memory",
+        lambda: (300 * 1024**2, 16 * 1024**3),
+    )
+
+    with pytest.raises(BacktestWorkerError, match="系统可用内存不足"):
+        run_worker_task({"kind": "mining", "data_dir": str(tmp_path), "config": {}})
+
+    assert process.terminated is True
+
+
 def test_worker_accepts_delivered_result_when_child_exit_is_slow(monkeypatch, tmp_path):
     """终态消息已送达但子进程退出收尾超时: 应强杀后采纳结果, 而非丢弃报错。"""
 

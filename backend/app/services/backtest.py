@@ -16,7 +16,7 @@ import pandas as pd
 import polars as pl
 
 from app.config import settings
-from app.parquet import scan_enriched_parquet
+from app.parquet import dataset_glob, scan_enriched_parquet
 from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ class BacktestService:
         """
         try:
             from app.data_providers.repository import enriched_dirname
-            enriched_glob = str(self.repo.store.data_dir / enriched_dirname(asset_type) / "**" / "*.parquet")
+            enriched_glob = dataset_glob(self.repo.store.data_dir / enriched_dirname(asset_type))
             # 指标 warmup (#201): MA/MACD/RSI/BOLL 需要区间前的历史窗口,
             # 直接按 [start,end] 过滤后 compute_all 会让区间头部的指标失真。
             # 与挖掘侧同款公式 (mining_runtime: warmup = max(120, bars*1.6)),

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -39,12 +40,21 @@ from app.enriched_generation import (
     get_enriched_generation_snapshot,
 )
 from app.market_time import CN_TZ, cn_today
-from app.parquet import scan_enriched_parquet
+from app.parquet import dataset_glob, partition_only_glob, scan_enriched_parquet
 from app.polars_guard import guarded_collect
 from app.services.minute_adjust import apply_minute_adjustment, minute_basis_is_raw
 from app.startup_diagnostics import startup_phase
 
 logger = logging.getLogger(__name__)
+
+_VIEW_GLOB_RE = re.compile(r"read_parquet\('([^']+)'")
+
+
+def _rewrite_view_glob(sql: str) -> str:
+    """把建视图 SQL 里的 read_parquet glob 换成只收分区的版本。"""
+    return _VIEW_GLOB_RE.sub(
+        lambda m: f"read_parquet('{partition_only_glob(m.group(1))}'", sql
+    )
 
 # GH #480: 后台 warmup 因世代漂移被丢弃时的有界重建上限。compute 窗口长达
 # 数十秒, 启动期与 quote 实时刷新的 commit 撞车后若不重建, 历史缓存长期
@@ -336,6 +346,7 @@ class DataStore:
                 SELECT * FROM read_parquet('{d}/depth5/**/*.parquet', union_by_name=true)""",
         ]
         for sql in statements:
+            sql = _rewrite_view_glob(sql)
             try:
                 with startup_phase(logger, f"DuckDB view {sql.split()[4]}"):
                     self.db.execute(sql)
@@ -511,11 +522,11 @@ class KlineRepository:
         self._on_refresh_done: Callable[[], None] | None = None
 
         # parquet glob 路径
-        self._enriched_glob = str(store.data_dir / "kline_daily_enriched" / "**" / "*.parquet")
-        self._index_enriched_glob = str(store.data_dir / "kline_index_enriched" / "**" / "*.parquet")
-        self._etf_enriched_glob = str(store.data_dir / "kline_etf_enriched" / "**" / "*.parquet")
-        self._minute_glob = str(store.data_dir / "kline_minute" / "**" / "*.parquet")
-        self._etf_minute_glob = str(store.data_dir / "kline_etf_minute" / "**" / "*.parquet")
+        self._enriched_glob = dataset_glob(store.data_dir / "kline_daily_enriched")
+        self._index_enriched_glob = dataset_glob(store.data_dir / "kline_index_enriched")
+        self._etf_enriched_glob = dataset_glob(store.data_dir / "kline_etf_enriched")
+        self._minute_glob = dataset_glob(store.data_dir / "kline_minute")
+        self._etf_minute_glob = dataset_glob(store.data_dir / "kline_etf_minute")
         self._inst_glob = str(store.data_dir / "instruments" / "**" / "*.parquet")
         self._index_inst_glob = str(store.data_dir / "instruments_index" / "**" / "*.parquet")
         self._etf_inst_glob = str(store.data_dir / "instruments_etf" / "**" / "*.parquet")
@@ -563,7 +574,7 @@ class KlineRepository:
             try:
                 cursor.execute(
                     f"CREATE OR REPLACE VIEW {name} AS "
-                    f"SELECT * FROM read_parquet('{glob}', union_by_name=true)"
+                    f"SELECT * FROM read_parquet('{partition_only_glob(glob)}', union_by_name=true)"
                 )
                 return True
             except Exception as e:  # noqa: BLE001 — 空目录/权限问题降级为警告, 与既有刷新行为一致

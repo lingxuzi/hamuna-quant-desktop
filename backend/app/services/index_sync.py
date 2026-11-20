@@ -263,10 +263,10 @@ def _load_local_etf_daily(repo: KlineRepository, symbols: list[str]) -> pl.DataF
     daily_dir = repo.store.data_dir / "kline_etf_daily"
     if not daily_dir.exists() or not any(daily_dir.glob("date=*")):
         return pl.DataFrame()
-    from app.parquet import scan_daily_parquet
+    from app.parquet import dataset_glob, scan_daily_parquet
     try:
         return (
-            scan_daily_parquet((daily_dir / "**" / "*.parquet").as_posix())
+            scan_daily_parquet(dataset_glob(daily_dir))
             .filter(pl.col("symbol").is_in(symbols))
             .collect()
         )

@@ -733,7 +733,7 @@ def load_market_data_matrix_from_parquet(
         flavor="hive",
     )
     dataset = pads.dataset(
-        str(root),
+        _partition_parquet_files(root),
         format="parquet",
         partitioning=partitioning,
     )
@@ -1593,6 +1593,20 @@ def _matrix_disk_cache_path(
         digest_size=20,
     )
     return cache_root / f"v{_DIRECT_MATRIX_LOADER_VERSION}-{digest.hexdigest()}"
+
+
+def _partition_parquet_files(root: Path) -> list[str]:
+    """只认 date=* 分区里的 parquet: 根目录散落文件 (备份等) 不是分区,
+    被 dataset 读进来会让同一 (date, symbol) 出现两次, 矩阵构建直接失败。
+    """
+    files = [
+        str(path)
+        for partition in sorted(root.glob("date=*"))
+        for path in sorted(partition.rglob("*.parquet"))
+    ]
+    if not files:
+        raise ValueError(f"matrix parquet root has no date partitions: {root}")
+    return files
 
 
 def _partition_fingerprints(

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import polars as pl
 
-from app.parquet import scan_enriched_parquet
+from app.parquet import dataset_glob, scan_enriched_parquet
 from app.data_providers.repository import KlineRepository
 
 logger = logging.getLogger(__name__)
@@ -227,7 +227,7 @@ class ScreenerService:
 
         try:
             lf = (
-                scan_enriched_parquet(str(enriched_dir / "**" / "*.parquet"))
+                scan_enriched_parquet(dataset_glob(enriched_dir))
                 .filter(
                     (pl.col("date") >= start)
                     & (pl.col("date") <= target_date)
@@ -320,7 +320,7 @@ class ScreenerService:
 
         try:
             lf = (
-                scan_enriched_parquet(str(enriched_dir / "**" / "*.parquet"))
+                scan_enriched_parquet(dataset_glob(enriched_dir))
                 .filter((pl.col("date") >= start) & (pl.col("date") <= target_date))
                 .sort(["symbol", "date"])
             )

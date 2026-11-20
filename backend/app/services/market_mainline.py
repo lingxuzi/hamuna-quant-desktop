@@ -22,6 +22,7 @@ from pathlib import Path
 import polars as pl
 
 from app.market_time import cn_today
+from app.parquet import dataset_glob
 from app.services.fs_utils import atomic_write_parquet
 from app.services.rps_rotation import _load_concept_map_df
 
@@ -162,7 +163,7 @@ def compute_mainline_range(repo, data_dir: Path, start: date, end: date,
             return pl.DataFrame()
 
     limit_rows = (
-        pl.scan_parquet(enriched_dir / "**" / "*.parquet")
+        pl.scan_parquet(dataset_glob(enriched_dir))
         .select(["date", "symbol", "consecutive_limit_ups", "amount"])
         .filter(
             (pl.col("date") >= start) & (pl.col("date") <= end)

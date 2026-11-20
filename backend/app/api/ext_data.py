@@ -18,6 +18,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.market_time import CN_TZ, cn_today
+from app.parquet import dataset_glob, partition_only_glob
 from app.services import ext_config_transfer
 from app.services.ext_data import (
     ExtConfig,
@@ -216,7 +217,7 @@ def _parquet_glob(config: ExtConfig, data_dir: Path) -> str:
     cfg_dir = data_dir / "ext_data" / config.id
     if config.mode == "snapshot":
         return str(cfg_dir / "*.parquet")
-    return str(cfg_dir / "timeseries" / "**" / "*.parquet")
+    return dataset_glob(cfg_dir / "timeseries")
 
 
 def _safe_json_value(value):
@@ -1712,7 +1713,7 @@ def _refresh_views(request: Request) -> None:
 
     # 注册旧路径视图（兼容）
     for name, subdir in [("instruments_ext", "instruments_ext"), ("kline_ext", "kline_ext")]:
-        old_glob = f"{d}/{subdir}/**/*.parquet"
+        old_glob = partition_only_glob(f"{d}/{subdir}/**/*.parquet")
         old_dir = Path(d) / subdir
         if old_dir.exists():
             sql = (

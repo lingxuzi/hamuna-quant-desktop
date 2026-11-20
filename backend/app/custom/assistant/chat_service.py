@@ -22,6 +22,7 @@ from typing import Any
 
 from app.custom.assistant import actions as assistant_actions
 from app.custom.assistant import experts as assistant_experts
+from app.custom.assistant import fetch_guard as assistant_fetch_guard
 from app.custom.assistant import tools as assistant_tools
 from app.custom.assistant.codex import stream_codex_round
 from app.custom.assistant.prompt import build_system_prompt
@@ -79,6 +80,16 @@ def _looks_like_plan(text: str) -> bool:
     if not stripped or len(stripped) > _PLAN_MAX_CHARS:
         return False
     return bool(_PLAN_PATTERN.search(stripped))
+
+
+def _last_question(messages: list[dict[str, Any]]) -> str:
+    """最后一条用户提问 —— 取数清单以它为准。"""
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            content = message.get("content")
+            if isinstance(content, str):
+                return content
+    return ""
 
 
 def _error_event(kind: str, message: str, hint: str = "") -> dict[str, str]:
@@ -215,12 +226,22 @@ async def chat_stream(
     if was_truncated:
         yield _line({"type": "notice", "message": f"对话较长, 已仅保留最近 {_MAX_HISTORY_MESSAGES // 2} 轮作为上下文。"})
 
+    # 取数守卫: 用户点名了标的, 模型必须先取到这些标的的数据才能给结论。
+    # 多轮追问时模型会照抄上一轮格式直接续写(一个工具都不调), 数字全是编的,
+    # 提示词压不住 —— 这里用代码兜住, 见 fetch_guard.py。
+    guard = assistant_fetch_guard.FetchGuard.from_question(
+        _last_question(truncated), repo, str((context or {}).get("symbol") or ""),
+    )
+    system_prompt = build_system_prompt(
+        context,
+        skills=assistant_experts.usable_skills(data_dir),
+        experts=assistant_experts.referenced_bodies(data_dir, experts),
+    )
+    if guard.asked:
+        system_prompt += guard.prompt_addendum()
+
     req_messages: list[dict[str, Any]] = [
-        {"role": "system", "content": build_system_prompt(
-            context,
-            skills=assistant_experts.usable_skills(data_dir),
-            experts=assistant_experts.referenced_bodies(data_dir, experts),
-        )},
+        {"role": "system", "content": system_prompt},
         *truncated,
     ]
     schemas = assistant_tools.build_tool_schemas()
@@ -237,8 +258,8 @@ async def chat_stream(
     queue: asyncio.Queue = asyncio.Queue()
     sentinel: object = object()
 
-    async def execute(name: str, args: dict[str, Any]) -> dict[str, Any]:
-        call_id = assistant_actions.new_call_id()
+    async def execute(name: str, args: dict[str, Any], call_id: str | None = None) -> dict[str, Any]:
+        call_id = call_id or assistant_actions.new_call_id()
         await queue.put({
             "type": "tool_call",
             "call_id": call_id,
@@ -286,6 +307,9 @@ async def chat_stream(
                 })
                 return result
         result = await assistant_tools.execute_assistant_tool(name, args, tool_ctx)
+        if result.get("ok"):
+            # 取数记账: 只认成功返回 —— 工具报错不算取到了数。
+            guard.record_call(args)
         elapsed_ms = int((time.monotonic() - started) * 1000)
         event = {
             "type": "tool_result",
@@ -309,6 +333,20 @@ async def chat_stream(
             tool_rounds = 0
             plan_nudges = 0
             round_checkpoint = _round_checkpoint()
+            # 取数清单没覆盖时, 本轮正文先攒着 —— 这段文字里的数字可能是编的,
+            # 数据到手之前不能先给用户看。
+            pending_text: list[str] = []
+
+            async def flush_pending() -> None:
+                """把攒着的正文放给用户(数据已到手, 或确认要收尾时才放)。"""
+                nonlocal text_seen
+                if not pending_text:
+                    return
+                for piece in pending_text:
+                    await queue.put({"type": "delta", "content": piece})
+                pending_text.clear()
+                text_seen = True
+
             while True:
                 _guard_input_budget(req_messages)
                 round_text: list[str] = []
@@ -317,7 +355,11 @@ async def chat_stream(
                 async for event in stream_round(req_messages, schemas, temperature=0.3, timeout=240.0):
                     if event["type"] == "text":
                         round_text.append(event["delta"])
-                        await queue.put({"type": "delta", "content": event["delta"]})
+                        if guard.missing():
+                            pending_text.append(event["delta"])
+                        else:
+                            await queue.put({"type": "delta", "content": event["delta"]})
+                            text_seen = True
                     elif event["type"] == "round_end":
                         tool_calls = event.get("tool_calls") or []
                         reasoning_content = event.get("reasoning_content")
@@ -329,6 +371,42 @@ async def chat_stream(
                     })
 
                 if not tool_calls:
+                    # 模型没调工具就收尾 —— 清单没覆盖说明它没取数, 这段正文不可信:
+                    # 丢掉正文, 先催它回去取数。
+                    if guard.should_nudge():
+                        guard.nudges += 1
+                        pending_text.clear()  # 这段正文没经过取数校验, 丢掉
+                        if round_text:
+                            req_messages.append({"role": "assistant", "content": "".join(round_text)})
+                        req_messages.append({"role": "user", "content": guard.nudge_text()})
+                        continue
+                    # 催了还是不动 → 代它取一次: 合成一次工具调用, 把真实数据塞回上下文。
+                    # 模型嘴硬不调工具, 但数据必须到位 —— 这是最后一道兜底。
+                    if guard.should_force():
+                        guard.mark_forced()
+                        pending_text.clear()
+                        symbols = sorted(guard.missing())
+                        call_id = assistant_actions.new_call_id()
+                        args = {"symbols": symbols}
+                        result = await execute("get_stock_quote", args, call_id=call_id)
+                        req_messages.append({
+                            "role": "assistant",
+                            "tool_calls": [_assistant_tool_call({
+                                "id": call_id,
+                                "name": "get_stock_quote",
+                                "arguments": json.dumps(args, ensure_ascii=False),
+                            })],
+                        })
+                        req_messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps(result, ensure_ascii=False),
+                        })
+                        continue
+                    # 到上限仍没取到: 放行, 但明确告诉用户相关数字没经过校验。
+                    await flush_pending()
+                    if guard.missing():
+                        await queue.put({"type": "notice", "message": guard.notice_text()})
                     # 模型把行动计划当答案交了 → 纠偏一次, 让它继续取数。
                     if _looks_like_plan("".join(round_text)) and plan_nudges < _MAX_PLAN_NUDGES:
                         plan_nudges += 1
@@ -377,7 +455,6 @@ async def chat_stream(
                 }
                 if round_text:
                     assistant_message["content"] = "".join(round_text)
-                    text_seen = True
                 # DeepSeek 思考模式要求工具轮的 reasoning_content 原样回传, 否则下一轮 400。
                 if reasoning_content is not None:
                     assistant_message["reasoning_content"] = reasoning_content
@@ -393,6 +470,9 @@ async def chat_stream(
                         "tool_call_id": call["id"],
                         "content": json.dumps(result, ensure_ascii=False),
                     })
+                # 数据到手 → 清单覆盖完整, 攒着的正文可以放行了。
+                if not guard.missing():
+                    await flush_pending()
         except Exception as exc:  # 单轮失败收敛为 error 事件, 不打断流
             await queue.put(_classify_exception(exc))
         finally:
