@@ -1018,7 +1018,8 @@ function LeadingConceptTable({ items }: { items: OverviewDimensionRankItem[] }) 
           {items.slice(0, 5).map(c => (
             <tr key={c.name}>
               <td>{c.name}</td>
-              <td className={priceColorClass(c.avg_pct)}>{fmtPctAlready(c.avg_pct, 2, true)}</td>
+              {/* avg_pct 是成分股 change_pct(小数制) 的均值, 必须 ×100; 用 fmtPct 而非 fmtPctAlready */}
+              <td className={priceColorClass(c.avg_pct)}>{fmtPct(c.avg_pct)}</td>
               <td>{c.count}</td>
             </tr>
           ))}

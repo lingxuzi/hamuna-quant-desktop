@@ -37,6 +37,16 @@ _BASIC_BOUNDS = {
 _DEFAULT_RISK = {"stop_loss": -0.08, "max_hold_days": 30}
 
 
+def _stat(block: dict, key: str) -> tuple:
+    """取 {mean, last} 统计块 → (mean, last); 缺键返回 (None, None)。
+
+    事实结构与消费端解耦: build_market_facts 新增/改名一个统计块时, 这里少一个
+    键就会让整条 AI 策略生成路径抛 KeyError 变成 error 事件 (用户只看到失败)。
+    缺项显示「无」, 其余统计照常喂给模型。
+    """
+    entry = block.get(key) or {}
+    return entry.get("mean"), entry.get("last")
+
 def _fmt(value) -> str:
     if value is None:
         return "无"
@@ -44,6 +54,10 @@ def _fmt(value) -> str:
         return f"{value:.4g}"
     return str(value)
 
+
+def _stat_line(block: dict, key: str, label: str) -> list[str]:
+    mean, last = _stat(block, key)
+    return [f"{label}均值 {_fmt(mean)} / 最新 {_fmt(last)}"]
 
 def _market_block(facts: dict) -> str:
     m = facts["market"]
@@ -54,11 +68,12 @@ def _market_block(facts: dict) -> str:
         f"交易日数: {m['bars']}",
         f"状态分布: {states}",
         f"情绪阶段: {phases}; 最新阶段: {_fmt(m['phase_last'])}",
-        f"评分均值 {_fmt(m['score']['mean'])} / 最新 {_fmt(m['score']['last'])}",
-        f"上涨家数占比均值 {_fmt(m['up_ratio']['mean'])} / 最新 {_fmt(m['up_ratio']['last'])}",
-        f"全市场平均涨幅均值 {_fmt(m['avg_pct']['mean'])} / 最新 {_fmt(m['avg_pct']['last'])}",
-        f"站上 20 日均线占比均值 {_fmt(m['above_ma20_pct']['mean'])}"
-        f" / 最新 {_fmt(m['above_ma20_pct']['last'])}",
+        *_stat_line(m, "score", "评分"),
+        # up_ratio 是 up/down 的比值 (无上界), 不是占比。喂给模型必须用 up_share
+        # (up/(up+down), 0-1); 写 "比值 0.27" 会被理解成「27% 上涨」, 方向反了。
+        *_stat_line(m, "up_share", "上涨家数占比"),
+        *_stat_line(m, "avg_pct", "全市场平均涨幅"),
+        *_stat_line(m, "above_ma20_pct", "站上 20 日均线占比"),
     ])
 
 

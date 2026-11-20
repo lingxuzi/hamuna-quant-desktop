@@ -1,6 +1,6 @@
 ---
 name: "news-sentiment-framework"
-description: "新闻舆情分析框架"
+description: "新闻舆情分析：把新闻做信息分类、信号识别、影响评估与情绪判断，判断一条新闻对市场预期的影响路径，而不是按新闻内容直接交易。"
 ---
 
 # 新闻舆情分析框架 Skill

@@ -80,7 +80,7 @@ export function Headline({ data }: { data: OverviewMarket }) {
     <div className="headline four">
       <div className="hl">
         <span className="hl-k">上涨 / 下跌</span>
-        <div className="hl-v">{int(b?.up)}<span className="text-muted"> / </span><span className="text-bear">{int(b?.down)}</span></div>
+        <div className="hl-v"><span className='text-bull'>{int(b?.up)}</span><span className="text-muted"> / </span><span className="text-bear">{int(b?.down)}</span></div>
         <div className="hl-n"><span>平盘 <em className="num">{int(b?.flat)}</em></span></div>
       </div>
       <div className="hl">
@@ -90,7 +90,7 @@ export function Headline({ data }: { data: OverviewMarket }) {
       </div>
       <div className="hl">
         <span className="hl-k">涨停 / 跌停</span>
-        <div className="hl-v">{int(lim?.limit_up)}<span className="text-muted"> / </span><span className="text-bear">{int(lim?.limit_down)}</span></div>
+        <div className="hl-v"><span className='text-bull'>{int(lim?.limit_up)}</span><span className="text-muted"> / </span><span className="text-bear">{int(lim?.limit_down)}</span></div>
         <div className="hl-n">
           <span>炸板 <em className="num">{int(lim?.broken)}</em></span>
           {lim?.seal_rate != null && <span>封板率 <em className="num">{lim.seal_rate.toFixed(0)}%</em></span>}
@@ -175,7 +175,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
             <>
               全市场 <b>{br.total}</b> 只里 <b>下跌 {br.down}</b> 只，
               下跌家数占比 <b>{(br.down / br.total * 100).toFixed(1)}%</b>，
-              仅 <b>{br.up}</b> 只上涨；跌幅超 5% 的有 <b>{br.strong_down ?? 0}</b> 只。
+              仅 <b>{br.up}</b> 只上涨；跌幅 ≥3% 的有 <b>{br.strong_down ?? 0}</b> 只。
             </>
           ) : null}
         </>
@@ -356,8 +356,8 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
           <div><span className="k">平均涨幅</span><span className={cn('v', pctClass(b?.avg_pct))}>{fmtStockPct(b?.avg_pct)}</span></div>
           <div><span className="k">上涨</span><span className="v text-bull">{b?.up ?? '—'}</span></div>
           <div><span className="k">下跌</span><span className="v text-bear">{b?.down ?? '—'}</span></div>
-          <div><span className="k">涨超 5%</span><span className="v text-bull">{b?.strong_up ?? '—'}</span></div>
-          <div><span className="k">跌超 5%</span><span className="v text-bear">{b?.strong_down ?? '—'}</span></div>
+          <div><span className="k">涨 ≥3%</span><span className="v text-bull">{b?.strong_up ?? '—'}</span></div>
+          <div><span className="k">跌 ≥3%</span><span className="v text-bear">{b?.strong_down ?? '—'}</span></div>
         </div>
       </div>
       <div className="rail-b">

@@ -20,7 +20,7 @@ from app.backtest.mining import (
     validation_config_for_profile,
 )
 from app.services import preferences
-from app.services.mining_preflight import enriched_partition_dates
+from app.services.mining_preflight import enriched_partition_dates, mining_data_end
 from app.services.regime_builder import load_regime_history, regime_path
 
 logger = logging.getLogger(__name__)
@@ -54,18 +54,42 @@ def build_default_request(repo: Any, profile: str) -> dict[str, Any]:
     """Build the bounded V1 stock/full-market request used by the scheduler."""
     if profile not in _PROFILES:
         raise ValueError(f"unsupported mining profile: {profile}")
-    latest = repo.latest_enriched_date("stock")
-    end = latest.isoformat() if latest is not None else None
+    end = mining_data_end(Path(repo.store.data_dir), "stock")
     return {
         "factor_names": [item["id"] for item in FACTOR_COLUMNS[:48]],
         "strategy_ids": [],
         "symbols": None,
         "asset_type": "stock",
         "start": None,
-        "end": end,
+        "end": end.isoformat() if end is not None else None,
         "budget_profile": profile,
         "require_regime": True,
     }
+
+
+def request_data_end(repo: Any, request: dict[str, Any]) -> date | None:
+    """请求实际可用的最后一天 (不超过前一交易日)。"""
+    asset_type = str(request.get("asset_type") or "stock")
+    raw_end = request.get("end")
+    if not raw_end:
+        requested = None
+    elif isinstance(raw_end, date):
+        requested = raw_end
+    else:
+        requested = date.fromisoformat(str(raw_end))
+    return mining_data_end(Path(repo.store.data_dir), asset_type, requested)
+
+
+def data_generation_for(repo: Any, asset_type: str, end: date | None) -> str:
+    """≤end 的前缀世代; 无 end (无可用分区) 时退回全局世代。
+
+    盘中实时行情每轮覆写当天分区, 全局世代 ~5s 一变; 挖掘固定到前一交易日,
+    只用前缀世代做指纹与读后校验, 排队/读盘期间才不会因当天刷新判换代。
+    """
+    loader = getattr(repo, "get_enriched_generation_snapshot", None)
+    if end is not None and callable(loader):
+        return loader(asset_type).through(end)
+    return repo.get_matrix_data_generation(asset_type)
 
 
 def build_data_fingerprint(
@@ -74,9 +98,10 @@ def build_data_fingerprint(
     request: dict[str, Any],
 ) -> dict[str, Any]:
     """Hash one stable managed generation plus source metadata."""
+    end = request_data_end(repo, request)
     for _attempt in range(2):
-        fingerprint = _build_data_fingerprint_once(repo, app_state, request)
-        if repo.get_matrix_data_generation(fingerprint["asset_type"]) == fingerprint["generation"]:
+        fingerprint = _build_data_fingerprint_once(repo, app_state, request, end)
+        if data_generation_for(repo, fingerprint["asset_type"], end) == fingerprint["generation"]:
             return fingerprint
     raise ValueError("enriched data changed while building the mining fingerprint")
 
@@ -85,6 +110,7 @@ def _build_data_fingerprint_once(
     repo: Any,
     app_state: Any,
     request: dict[str, Any],
+    end: date | None,
 ) -> dict[str, Any]:
     data_dir = Path(repo.store.data_dir)
     asset_type = str(request.get("asset_type") or "stock")
@@ -97,7 +123,8 @@ def _build_data_fingerprint_once(
     components = {
         "version": FINGERPRINT_VERSION,
         "asset_type": asset_type,
-        "generation": repo.get_matrix_data_generation(asset_type),
+        "generation_end": _iso_or_none(end),
+        "generation": data_generation_for(repo, asset_type, end),
         "latest_enriched_date": _iso_or_none(repo.latest_enriched_date(asset_type)),
         "enriched": _enriched_metadata(enriched_root),
         "instruments": _instrument_metadata(repo, asset_type),

@@ -1018,7 +1018,7 @@ export function FactorDiscovery({ focusFactor, initialView = 'batch' }: { focusF
             ← 返回批量
           </button>
         )}
-        <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+        <div className="inline-flex rounded-btn border border-border bg-surface/80">
           {([
             ['batch', '批量筛选', ListFilter],
             ['mining', '挖掘工作台', Pickaxe],

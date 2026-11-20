@@ -124,7 +124,7 @@ export function AutoMiningDialog({
         <div className="space-y-3">
           <div>
             <div className="mb-1 text-[10px] text-muted">资产</div>
-            <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+            <div className="inline-flex rounded-btn border border-border bg-surface/80">
               {(['stock', 'etf'] as const).map(value => (
                 <button
                   key={value}

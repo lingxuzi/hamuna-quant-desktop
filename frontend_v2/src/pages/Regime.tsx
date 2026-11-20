@@ -84,6 +84,14 @@ function isPresetKey(p: RangePreset, k: '1y' | '2y' | 'all'): boolean {
   return p === k
 }
 
+/** 上涨家数占比 (= up/(up+down))。后端 up_ratio 是 up/down 比值, 不能直接 ×100。 */
+function upShare(up: number | null | undefined, down: number | null | undefined): string {
+  const u = up ?? 0
+  const d = down ?? 0
+  if (u + d <= 0) return '—'
+  return `${((u / (u + d)) * 100).toFixed(1)}%`
+}
+
 // ── EChart hook ───────────────────────────────────────────
 function useEChart(
   option: echarts.EChartsOption | null,
@@ -1093,7 +1101,8 @@ export function Regime() {
             <div>
               <span className="regime-band-k">涨 跌 家 数</span>
               <span className="regime-band-v">{latest.up_count}<small>: {latest.down_count.toLocaleString()}</small></span>
-              <small>上涨占比 {(latest.up_ratio * 100).toFixed(1)}% · 站上 MA20 {(latest.above_ma20_pct * 100).toFixed(1)}%</small>
+              {/* up_ratio 是 up/down 的比值 (regime_builder.py), 不是 0-1 占比; 直接用家数算 */}
+              <small>上涨占比 {upShare(latest.up_count, latest.down_count)} · 站上 MA20 {(latest.above_ma20_pct * 100).toFixed(1)}%</small>
             </div>
           </div>
           </>

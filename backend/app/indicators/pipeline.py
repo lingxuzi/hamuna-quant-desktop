@@ -40,6 +40,8 @@ from app.price_limits import (
     parse_listing_date,
     polars_board_limit_pct,
     polars_is_risk_warning_name,
+    polars_legacy_st_band,
+    polars_limit_move_within_band,
     polars_limit_price,
     polars_price_limit_pct,
 )
@@ -304,9 +306,15 @@ def _apply_adj_factor(raw: pl.DataFrame, factors: pl.DataFrame) -> pl.DataFrame:
         )
     )
 
-    # 每个 symbol 的总累积因子
+    # 每个 symbol 的总累积因子。锚点是「当前」, 不是因子表的最后一条:
+    # 因子源会给已公告的未来除权日 (实测库内含 3 天后的 42 条), 直接取全表乘积会
+    # 把尚未发生的除权提前折进 today 及全部历史 —— 复权价被压低, 且到除权日真实
+    # 发生时会再跳一次。取 max(数据末端, 今天): 数据末端更早 (补算历史区间) 时
+    # 之后发生的除权仍须折入, 否则同一根 K 线在不同窗口下算出不同复权价。
+    # 也用「今天」而不是「数据末端」: 补算历史区间时, 该区间之后发生的除权
+    # 仍须折入, 否则同一根 K 线在不同窗口下算出不同复权价。
     total_factors = (
-        factors_sorted
+        factors_sorted.filter(pl.col("trade_date") <= cn_today())
         .group_by("symbol")
         .agg(pl.col("cum_factor").last().alias("total_factor"))
     )
@@ -326,7 +334,10 @@ def _apply_adj_factor(raw: pl.DataFrame, factors: pl.DataFrame) -> pl.DataFrame:
     # 补充 total_factor + 前复权 + 除权标记,一次 with_columns 完成
     df = df.join(total_factors, on="symbol", how="left")
 
-    is_ex = pl.col("trade_date") == pl.col("date")
+    # fill_null(False): 无除权事件的标的 (或首个事件之前) join_asof 不匹配,
+    # trade_date 为 null → 比较结果也是 null, ex_rights 会变成可空 Boolean 列。
+    # 下游按布尔判断时 null 会在 filter 里整行消失, 契约要求 bool。
+    is_ex = (pl.col("trade_date") == pl.col("date")).fill_null(False)
     ratio = pl.col("cum_factor").fill_null(1.0) / pl.col("total_factor").fill_null(1.0)
     price_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
 
@@ -753,6 +764,8 @@ def _apply_name_history(df: pl.DataFrame, name_history: pl.DataFrame | None) -> 
     的最近一次改名取当日简称 —— 风险警示状态因此逐日准确。
 
     只处理风险警示候选标的 (当前或历史曾为风险警示), 避免对全表做 asof join。
+    维表缺名的标的 (退市/停牌后从维表消失) 也一并查历史: 历史有名字 → 风险警示
+    状态可判, 不必靠价格自证; 历史也没有 → 真的无名, 走价格自证。
     历史未覆盖到的日期 (早于首次快照) 保留当前快照判定, 由带宽自证兜底。
     """
     if name_history is None or name_history.is_empty() or "_is_st" not in df.columns:
@@ -772,10 +785,18 @@ def _apply_name_history(df: pl.DataFrame, name_history: pl.DataFrame | None) -> 
     risk_symbols = hist.filter(
         polars_is_risk_warning_name(pl.col("name"))
     ).select("symbol").unique()
-    if risk_symbols.is_empty():
+    sym_list = set(risk_symbols["symbol"].to_list())
+    if "_name_known" in df.columns:
+        sym_list |= set(
+            df.filter(~pl.col("_name_known").fill_null(False))
+            .select("symbol")
+            .unique()["symbol"]
+            .to_list()
+        )
+    if not sym_list:
         return df
-    hist = hist.join(risk_symbols, on="symbol", how="semi").sort(["symbol", "_as_of"])
-    sym_list = risk_symbols["symbol"].to_list()
+    sym_list = sorted(sym_list)
+    hist = hist.filter(pl.col("symbol").is_in(sym_list)).sort(["symbol", "_as_of"])
 
     sub = (
         df.filter(pl.col("symbol").is_in(sym_list))
@@ -835,6 +856,14 @@ def compute_limit_signals(
     if df.is_empty():
         return df
 
+    # 维表可以是「无列的空表」 (pl.DataFrame()) —— 统一成有 symbol 列的空表,
+    # 后续一律按「维表缺该标的」处理 (左连接补 null), 不再按列缺失崩掉。
+    if "symbol" not in instruments.columns:
+        instruments = pl.DataFrame({"symbol": pl.Series([], dtype=pl.Utf8)})
+    elif instruments["symbol"].dtype != pl.Utf8:
+        # 空表的 symbol 列可能是 Null 类型 → 连接键类型不一致直接崩。
+        instruments = instruments.with_columns(pl.col("symbol").cast(pl.Utf8))
+
     want = set(LIMIT_SIGNAL_OUTPUTS) if needed is None else set(needed) & set(LIMIT_SIGNAL_OUTPUTS)
     # 请求里可能含自定义信号列 (signal_limit_* 等), 其根依赖引用判定价列 →
     # 也需要计算价格。仅显式输出为空且无信号引用时短路返回。
@@ -871,12 +900,20 @@ def compute_limit_signals(
         )
     inst_subset = instruments.select(inst_cols).unique(subset=["symbol"])
 
-    if need_price_limits and "name" in instruments.columns:
+    if need_price_limits:
+        # 维表里有没有名称: 退市/停牌标的从维表消失后名称一起丢失,
+        # 风险警示标记无从判断 → 走价格自证 (见下方 5% 带宽自证)。
+        # 维表无 name 列 / 该标的不在维表 → 一律视为无名。
+        _name_expr = (
+            pl.col("name") if "name" in instruments.columns
+            else pl.lit(None, dtype=pl.Utf8)
+        )
         st_flag = (
             instruments
             .select(
                 "symbol",
-                polars_is_risk_warning_name(pl.col("name")).alias("_is_st"),
+                polars_is_risk_warning_name(_name_expr).alias("_is_st"),
+                _name_expr.is_not_null().alias("_name_known"),
             )
             .unique(subset=["symbol"])
         )
@@ -904,6 +941,10 @@ def compute_limit_signals(
               .otherwise(None)
         )
         if "turnover_rate" in df.columns:
+            # 空值逐行回填, 不能整列透传: 源不提供换手率的板块 (深市历史分区) 整列为
+            # null, 透传后按 NaN 参与条件 → 该板块被 turnover 条件整段剔除。
+            # 根因在存储层: 写盘时历史分区没有股本, 已按同一公式补过的沪市数据与
+            # 存储列逐行一致, 回填不改口径。
             df = df.with_columns(pl.coalesce(pl.col("turnover_rate"), computed).alias("turnover_rate"))
         else:
             df = df.with_columns(computed.alias("turnover_rate"))
@@ -932,6 +973,8 @@ def compute_limit_signals(
         .then(pl.col("close").shift(1).over("symbol") / _adj_today)  # 除权: 除权参考价
         .otherwise(pl.col("raw_close").shift(1).over("symbol"))      # 正常: 原始昨收
         .alias("_prev_raw_close")
+    ).with_columns(
+        _adj_changed.alias("_adj_changed")
     )
 
     is_risk_warning = pl.col("_is_st") if "_is_st" in df.columns else pl.lit(False)
@@ -967,6 +1010,70 @@ def compute_limit_signals(
             .otherwise(pl.col("_limit_pct"))
             .alias("_limit_pct")
         )
+
+        # ── 无名称标的的风险警示带宽自证 (反向) ──────────────────────
+        # 维表是同步当日的快照: 退市/停牌标的从维表消失 → 名称与 ST 标记一起丢失,
+        # 涨跌停带退化成板块带, 真 ST 的 5% 封板认不出来 (实测 26 只退市股、187 行
+        # 真封板被当成普通波动)。名称不可得时用价格自证: 封在风险警示带的限价上
+        # (收盘 == 最高 == 风险警示涨停价, 或 收盘 == 最低 == 跌停价) 说明当日带宽
+        # 就是这个带 —— 该股当天最多只能走到这个价, 而它走到了。
+        # 三条约束防误判:
+        #   1. 只对「维表无名称且名称历史也没有」的标的生效 —— 全市场套用会误判
+        #      (实测 5321 行非 ST 标的收盘恰好 +5% 且收在最高)。
+        #   2. 同一标的至少 2 次封板才认定 —— 单次巧合不算。
+        #   3. 封板形态 (收在极值) 本身就是越界排除: 带宽真更宽时 high/low 早已
+        #      越过风险警示带的限价, 该行不会命中。
+        # 掩码 polars_legacy_st_band: 风险警示带与板块带不同的行才有判别力
+        # (主板 2026-07-06 之后风险警示股也是 10% 带, 与板块带同值, 无从区分 —— 不猜)。
+        if "_name_known" in df.columns and "raw_close" in df.columns:
+            _no_name = ~pl.col("_name_known").fill_null(False)
+            if "_hist_name" in df.columns:
+                _no_name = _no_name & pl.col("_hist_name").is_null()
+            # 取证只在「无名」行上做: 正常市场一个都没有 → 下面整块跳过,
+            # 全市场重算不因为这条规则变慢 (实测整块 ~130ms/20 万行 → 降到 ~15ms)。
+            _nl = df.filter(_no_name)
+            if not _nl.is_empty():
+                _legacy = polars_legacy_st_band(pl.col("symbol"), pl.col("date"))
+                # 封板价一律用 5% 带算: 有判别力的行 (主板 + 2026-07-06 之前) 上
+                # 风险警示带就是 5%, 与逐行算出来的带同值。
+                # 封板判定用 1e-6 容差: 限价是「分」的整数倍, 浮点尾数会让精确相等
+                # 漏判 (实测 000638.SZ 81 次封板里漏了 15 次)。1e-6 远小于半分钱,
+                # 只吸收浮点噪声, 不会把「差一分钱」的普通交易日算成封板。
+                _seal_tol = 1e-6
+                _seal = (
+                    (
+                        (pl.col("raw_close") >= _st_up - _seal_tol)
+                        & (pl.col("raw_high") <= _st_up + _seal_tol)
+                    )
+                    | (
+                        (pl.col("raw_close") <= _st_dn + _seal_tol)
+                        & (pl.col("raw_low") >= _st_dn - _seal_tol)
+                    )
+                ) & (pl.col("_prev_raw_close") > 0) & _legacy
+                _inferred = (
+                    _nl.with_columns(_seal.alias("_seal"))
+                    .group_by("symbol")
+                    .agg(pl.col("_seal").sum().alias("_seal_n"))
+                    .filter(pl.col("_seal_n") >= 2)
+                    .select("symbol")["symbol"]
+                    .to_list()
+                )
+                if _inferred:
+                    # 认定后按 5% 带算该标的的每一行 —— 带宽是标的的属性, 不是某一天的;
+                    # 只在封板日切带会让同一标的在涨停日是 5% 带、隔天又变 10% 带。
+                    # 越界行 (high/low 越过 5% 限价) 说明那天带宽确实更宽 → 保持板块带,
+                    # 这样「不是 ST 的那段时间」不会被动带上 5% 带。
+                    df = df.with_columns(
+                        pl.when(
+                            _no_name
+                            & pl.col("symbol").is_in(_inferred)
+                            & polars_legacy_st_band(pl.col("symbol"), pl.col("date"))
+                            & ~_band_wider.fill_null(False)
+                        )
+                        .then(pl.lit(LEGACY_MAIN_BOARD_ST_LIMIT))
+                        .otherwise(pl.col("_limit_pct"))
+                        .alias("_limit_pct")
+                    )
 
     # 理论涨停价 = prev_close × (1 + limit_pct)  整数算术，避免浮点误差
     df = df.with_columns(
@@ -1042,14 +1149,56 @@ def compute_limit_signals(
         _prev_ok = (
             pl.col("_prev_raw_close").is_not_null() & (pl.col("_prev_raw_close") > 0)
         )
+        # 参考价算错时 (除权因子缺失 / 行情脏数据), 收盘价离限价十万八千里 ——
+        # 那不是涨跌停, 只是机械除权。此时理论限价无意义 → 置 null:
+        # 判定价是下游一切涨跌停信号 (内置 + 自定义) 的唯一来源, 置 null 才能
+        # 让它们连同连板数一起不成立, 而不是留一个看着像涨停的假价。
+        _ref_broken = (~polars_limit_move_within_band(
+            pl.col("_prev_raw_close"), pl.col("raw_close"), pl.col("_limit_pct")
+        )).fill_null(False)
+        # ── 市场自证限价 (只对除权日) ─────────────────────────────────
+        # 交易所不允许成交价越过限价。除权日的参考价是由因子反推的, 因子偏 0.1%
+        # (供应商的名义送转比例 vs 交易所实际比例差几个基点) 就让限价差几分钱:
+        # 收盘价 (= 当天最高价, 即封在上限) 反而高于算出的限价 → 交易所规则被违反,
+        # 说明算出的限价偏低。此时市场自己给出了真限价 = 收盘价, 用它替代,
+        # 而不是把判定价置 null (置 null 会让真涨停日从涨停名单里消失)。
+        # 只在偏离 ≤1% (参考价舍入级别) 时采信: 更大的偏差是脏数据, 不猜。
+        # 限定除权日 (_adj_changed): 上市初期无涨跌幅窗口的交易日价格本就可以越限,
+        # 那种日子不算「市场证伪」。
+        # raw_high / raw_low 不是入参契约里的必列 (部分调用方只给收盘与最高),
+        # 缺列的一侧不做市场自证, 也不报错。
+        _mkt_up = pl.lit(False)
+        if "raw_high" in df.columns:
+            _mkt_up = (
+                pl.col("_adj_changed")
+                & (pl.col("raw_close") == pl.col("raw_high"))
+                & (pl.col("raw_high") > effective_limit_up + 0.005)
+                & ((pl.col("raw_high") - effective_limit_up) / effective_limit_up <= 0.01)
+            )
+        _mkt_down = pl.lit(False)
+        if "raw_low" in df.columns:
+            _mkt_down = (
+                pl.col("_adj_changed")
+                & (pl.col("raw_close") == pl.col("raw_low"))
+                & (pl.col("raw_low") < effective_limit_down - 0.005)
+                & ((effective_limit_down - pl.col("raw_low")) / effective_limit_down <= 0.01)
+            )
         df = df.with_columns(
             pl.when(pl.col("_no_price_limit") | ~_prev_ok)
               .then(None)
-              .otherwise(effective_limit_up - 0.005)
+              .otherwise(
+                  pl.when(_mkt_up).then(pl.col("raw_close") - 0.005)
+                  .when(_ref_broken).then(None)
+                  .otherwise(effective_limit_up - 0.005)
+              )
               .alias("limit_up_price"),
             pl.when(pl.col("_no_price_limit") | ~_prev_ok)
               .then(None)
-              .otherwise(effective_limit_down + 0.005)
+              .otherwise(
+                  pl.when(_mkt_down).then(pl.col("raw_close") + 0.005)
+                  .when(_ref_broken).then(None)
+                  .otherwise(effective_limit_down + 0.005)
+              )
               .alias("limit_down_price"),
         )
 
@@ -1115,7 +1264,7 @@ def compute_limit_signals(
     # 清理临时列 + JOIN 引入的 instruments 列 (不存入 enriched)
     cleanup = ["_prev_raw_close", "_limit_pct",
                "_theoretical_limit_up", "_theoretical_limit_down",
-               "_no_price_limit",
+               "_no_price_limit", "_adj_changed",
                "_grp_up", "_grp_down", "_instrument_as_of",
                "_no_limit_days", "_no_limit_until",
                "_hist_name",
@@ -1155,7 +1304,10 @@ def compute_all(
     """
     df = compute_indicators(df)
     df = compute_signals(df)
-    if instruments is not None and not instruments.is_empty():
+    # instruments 为空不代表「不算涨跌停」: 批次里全是维表缺名的标的 (退市/停牌)
+    # 时维表过滤后为空, 整段跳过 → 这些标的的涨跌停列全 null, 连板数永远 0。
+    # 空维表下按板块带计算 (无名标的另走价格自证), 与有维表时口径一致。
+    if instruments is not None:
         df = compute_limit_signals(
             df,
             instruments,
@@ -2295,18 +2447,22 @@ def compute_enriched_today(
         # API 返回的 prev_close 是原始价, 乘复权因子对齐复权价 (用于 change_pct)
         df = df.with_columns((pl.col("prev_close") * pl.col("_adj_factor").fill_null(1.0)).alias("prev_close"))
 
-    # change_pct / change_amount / amplitude: 有则直接用, 无则计算
-    if "change_pct" not in df.columns:
-        df = df.with_columns((pl.col("close") / pl.col("prev_close") - 1).alias("change_pct"))
-    if "change_amount" not in df.columns:
-        df = df.with_columns((pl.col("close") - pl.col("prev_close")).alias("change_amount"))
-    if "amplitude" not in df.columns:
-        df = df.with_columns(
-            pl.when(pl.col("prev_close") > 0)
-              .then((pl.col("high") - pl.col("low")) / pl.col("prev_close"))
-              .otherwise(None)
-              .alias("amplitude"),
-        )
+    # change_pct / change_amount / amplitude: 源给了就优先用, 逐行回填空值。
+    # 不能只判「列不存在」: 源对部分标的缺该字段时列是部分 null (_build_quote_extra
+    # 只丢整列全 null 的字段), 「列存在」会让这些标的当日永远为空且每轮覆写自锁。
+    _prev_ok = pl.col("prev_close") > 0
+    _derived = {
+        "change_pct": pl.when(_prev_ok).then(pl.col("close") / pl.col("prev_close") - 1).otherwise(None),
+        "change_amount": pl.when(_prev_ok).then(pl.col("close") - pl.col("prev_close")).otherwise(None),
+        "amplitude": pl.when(_prev_ok)
+        .then((pl.col("high") - pl.col("low")) / pl.col("prev_close"))
+        .otherwise(None),
+    }
+    for _col, _expr in _derived.items():
+        if _col in df.columns:
+            df = df.with_columns(pl.col(_col).cast(pl.Float64, strict=False).fill_null(_expr).alias(_col))
+        else:
+            df = df.with_columns(_expr.alias(_col))
 
     # ---- EMA (递推) ----
     df = df.with_columns([
@@ -2650,12 +2806,28 @@ def _compute_limit_signals_today(df: pl.DataFrame, instruments: pl.DataFrame) ->
     # 涨跌停判定价 (含 0.005 交易所容差): raw_close >= limit_up_price 即涨停。
     # 无涨跌幅限制日 / 昨收与权威价均缺失 → null; 引用它的自定义信号
     # (signal_limit_* 等) 由 compute_enriched_today 末尾按定义注入。
+    # 参考价算错 (除权因子缺失 / 行情脏数据) 时收盘价离限价十万八千里 ——
+    # 那不是涨跌停, 只是机械除权 → 判定价置 null, 同盘后路径口径。
+    # 只在「原始前收」口径上判: close_right 等回退字段来源语义不一 (可能是复权价),
+    # 拿它算涨跌幅会把整批判定价误置 null。
+    # 参考价缺失 (复牌无历史) → 判不了, 不拦截: fill_null(False) 让判定价保留。
+    _ref_broken = pl.lit(False)
+    if "_prev_close_raw" in df.columns:
+        _ref_broken = (~polars_limit_move_within_band(
+            pl.col("_prev_close_raw"), pl.col("raw_close"), limit_pct
+        )).fill_null(False)
     df = df.with_columns([
         pl.when(no_price_limit | ~up_ok).then(None)
-          .otherwise(effective_limit_up - 0.005)
+          .otherwise(
+              pl.when(_ref_broken).then(None)
+              .otherwise(effective_limit_up - 0.005)
+          )
           .alias("limit_up_price"),
         pl.when(no_price_limit | ~down_ok).then(None)
-          .otherwise(effective_limit_down + 0.005)
+          .otherwise(
+              pl.when(_ref_broken).then(None)
+              .otherwise(effective_limit_down + 0.005)
+          )
           .alias("limit_down_price"),
     ])
 

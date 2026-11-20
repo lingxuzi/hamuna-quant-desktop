@@ -139,8 +139,13 @@ def is_no_limit_day(
     return day_rank is None or day_rank <= days
 
 
-def polars_board_limit_pct(symbol: pl.Expr, trade_date: pl.Expr) -> pl.Expr:
-    """板块涨跌幅带 (不含风险警示降级), 考虑创业板注册制切换日。"""
+def _board_flags(
+    symbol: pl.Expr, trade_date: pl.Expr
+) -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+    """板块判定: (is_growth, is_star, is_beijing, gem_pre_registration)。
+
+    gem_pre_registration: 创业板注册制切换前 (2020-08-24 之前) 仍按主板 ±10%。
+    """
     is_growth = (
         symbol.str.starts_with("300")
         | symbol.str.starts_with("301")
@@ -151,6 +156,12 @@ def polars_board_limit_pct(symbol: pl.Expr, trade_date: pl.Expr) -> pl.Expr:
     gem_pre_registration = (
         is_growth & ~is_beijing & (trade_date < pl.lit(GEM_20PCT_LIMIT_START_DATE))
     )
+    return is_growth, is_star, is_beijing, gem_pre_registration
+
+
+def polars_board_limit_pct(symbol: pl.Expr, trade_date: pl.Expr) -> pl.Expr:
+    """板块涨跌幅带 (不含风险警示降级), 考虑创业板注册制切换日。"""
+    is_growth, is_star, is_beijing, gem_pre_registration = _board_flags(symbol, trade_date)
     return (
         pl.when(gem_pre_registration).then(MAIN_BOARD_LIMIT)
         .when(is_growth | is_star).then(GROWTH_BOARD_LIMIT)
@@ -166,16 +177,7 @@ def polars_price_limit_pct(
     is_risk_warning: pl.Expr,
 ) -> pl.Expr:
     """Return a vectorized Polars expression for the effective daily limit."""
-    is_growth = (
-        symbol.str.starts_with("300")
-        | symbol.str.starts_with("301")
-        | symbol.str.starts_with("302")
-    )
-    is_star = symbol.str.starts_with("688") | symbol.str.starts_with("689")
-    is_beijing = symbol.str.ends_with(".BJ")
-    gem_pre_registration = (
-        is_growth & ~is_beijing & (trade_date < pl.lit(GEM_20PCT_LIMIT_START_DATE))
-    )
+    is_growth, is_star, is_beijing, gem_pre_registration = _board_flags(symbol, trade_date)
     is_non_main = (is_growth | is_star | is_beijing) & ~gem_pre_registration
     base = polars_board_limit_pct(symbol, trade_date)
     legacy_main_st = (
@@ -190,6 +192,18 @@ def polars_price_limit_pct(
     )
 
 
+def polars_legacy_st_band(symbol: pl.Expr, trade_date: pl.Expr) -> pl.Expr:
+    """风险警示带为 5% (与板块带不同) 的行: 主板 + 2026-07-06 之前。
+
+    等价于 polars_price_limit_pct(..., is_risk_warning=True) != polars_board_limit_pct(...),
+    但只判一次板块, 且直接给布尔列 —— 调用方拿它当「这一行有判别力」的掩码。
+    主板 2026-07-06 之后风险警示股也是 10% 带, 与板块带同值, 无从区分 —— 不猜。
+    """
+    is_growth, is_star, is_beijing, gem_pre_registration = _board_flags(symbol, trade_date)
+    is_non_main = (is_growth | is_star | is_beijing) & ~gem_pre_registration
+    return (~is_non_main) & (trade_date < pl.lit(MAIN_BOARD_ST_LIMIT_CHANGE_DATE))
+
+
 def polars_is_risk_warning_name(name: pl.Expr) -> pl.Expr:
     """风险警示标记: 简称含 ST/*ST, 或以 S 开头 (S佳通 这类未冠 ST 的风险警示股)。"""
     upper = name.fill_null("").str.to_uppercase()
@@ -202,6 +216,31 @@ def polars_limit_price(previous: pl.Expr, limit_pct: pl.Expr, *, up: bool) -> pl
     numerator = ((1 + sign * limit_pct) * 100).round(0).cast(pl.Int64)
     cents = (previous * 100 + 0.5).floor().cast(pl.Int64)
     return ((cents * numerator + 50) // 100) / 100
+
+
+# 涨跌停判定的必要条件: 收盘价相对参考价的涨跌幅必须落在板限内。
+# 参考价算错时 (除权因子缺失 / 行情脏数据), 收盘价会离限价十万八千里 ——
+# 那不是涨跌停, 只是机械除权。没有这道闸, 一行 -88% 的除权行会被判成跌停。
+# 容差 1.5 分: 交易所限价与本地四舍五入可能差 1 分, 判定价本身再留 0.005。
+LIMIT_MOVE_TOLERANCE = 0.015
+
+
+def polars_limit_move_within_band(
+    previous: pl.Expr,
+    close: pl.Expr,
+    limit_pct: pl.Expr,
+    *,
+    tolerance: float = LIMIT_MOVE_TOLERANCE,
+) -> pl.Expr:
+    """收盘价相对参考价的涨跌幅是否落在板限内 (涨跌停的必要条件)。
+
+    previous 为交易所参考价口径的前收 (除权日用除权参考价); limit_pct 为该行
+    生效的涨跌幅带。参考价或收盘价缺失 → null (不可判定) —— 调用方按「不拦截」
+    处理: 缺参考价 (复牌无历史) 只说明判不了, 不能据此否定涨跌停。
+    """
+    tol = pl.lit(tolerance) / previous
+    move = (close - previous) / previous
+    return move.abs() <= limit_pct + tol
 
 
 def numpy_limit_pct_vectors(

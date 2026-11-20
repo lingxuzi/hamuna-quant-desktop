@@ -77,7 +77,7 @@ export function extendMinuteTail(
     } else if (barTs > last.datetime) {
       patched[sym] = [...arr, {
         datetime: barTs, open: price, high: price, low: price, close: price,
-        volume: 0, amount: 0,   // 量/额由下一轮轮询定版覆盖
+        volume: 0, amount: 0,   // 量/额未知; 渲染侧按 0 显示成「量 0/额 0」, 下轮定版覆盖
       }]
     } else {
       patched[sym] = arr   // 轮询数据已新于本地时钟 (钟差兜底), 不动

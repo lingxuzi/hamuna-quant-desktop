@@ -13,7 +13,6 @@ import type { FrontendExtension } from '@/extensions/types'
 import type { BrandIconProps } from '@/components/BrandIcons'
 import { AssistantLauncher } from './AssistantLauncher'
 import { AssistantHeaderEntry } from './ui/AssistantHeaderEntry'
-import { ExpertSettingsSection } from './ui/ExpertSettingsSection'
 import { FabVisibilitySetting } from './ui/FabVisibilitySetting'
 
 export const Experts = lazy(() => import('./ExpertsPage').then(m => ({ default: m.Experts })))
@@ -66,12 +65,6 @@ const extension: FrontendExtension = {
       id: 'assistant-fab-visibility',
       order: 10,
       component: FabVisibilitySetting,
-    },
-    {
-      name: 'settings.system.section',
-      id: 'assistant-experts',
-      order: 20,
-      component: ExpertSettingsSection,
     },
   ],
 }

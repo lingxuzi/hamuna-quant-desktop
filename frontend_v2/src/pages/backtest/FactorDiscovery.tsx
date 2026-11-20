@@ -7,7 +7,7 @@ import { toast } from '@/components/Toast'
 import { cn } from '@/lib/cn'
 import { WatchlistGroupMenu } from '@/components/WatchlistAddMenu'
 import { api, type FactorBatchItem, type FactorBatchResult, type FactorColumn } from '@/lib/api'
-import { fmtPct, priceColorClass } from '@/lib/format'
+import { fmtCoeff, fmtPct, priceColorClass } from '@/lib/format'
 import { QK } from '@/lib/queryKeys'
 import { FactorBacktest } from './FactorBacktest'
 import { MiningWorkbench } from './MiningWorkbench'
@@ -698,7 +698,7 @@ function BatchDiscovery({
                         : '（经验规则：|IC|≥0.02 且 |IR|≥0.3）'}
                     </span>
                     {bestFactor && bestFactor.ic_mean != null && (
-                      <> · 最强 <span className="font-medium text-foreground">{bestFactor.label}</span>（IC {fmtPct(bestFactor.ic_mean)}）</>
+                      <> · 最强 <span className="font-medium text-foreground">{bestFactor.label}</span>（IC {fmtCoeff(bestFactor.ic_mean)}）</>
                     )}
                   </div>
                 )}
@@ -769,7 +769,7 @@ function BatchDiscovery({
                       </td>
                       <td className="px-3 py-3 text-right font-mono">
                         <div className="flex items-center justify-end gap-1.5">
-                          <span className={priceColorClass(item.ic_mean)}>{item.ic_mean == null ? '—' : fmtPct(item.ic_mean)}</span>
+                          <span className={priceColorClass(item.ic_mean)}>{item.ic_mean == null ? '—' : fmtCoeff(item.ic_mean)}</span>
                           {item.ic_mean != null && (
                             <span className="inline-flex h-1 w-10 shrink-0 overflow-hidden rounded-full bg-base" title={`|IC|=${Math.abs(item.ic_mean).toFixed(4)} 的可视化`}>
                               <span
@@ -1024,7 +1024,7 @@ export function FactorDiscovery({ focusFactor, initialView = 'batch', views }: {
             ← 返回批量
           </button>
         )}
-        <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+        <div className="inline-flex rounded-btn border border-border bg-surface/80">
           {VIEW_TABS
             .filter(({ value }) => !viewsList || viewsList.includes(value))
             .map(({ value, label, icon: Icon }) => (

@@ -11,9 +11,7 @@ export function Experts() {
   return (
     <div className="flex min-h-0 flex-col">
       <PageHeader seal="专" title="专家" subtitle="EXPERTS" />
-      <div className="mt-4">
-        <ExpertManager scope="all" />
-      </div>
+      <ExpertManager />
     </div>
   )
 }

@@ -27,6 +27,8 @@ from pathlib import Path
 
 import polars as pl
 
+from app.market_time import cn_today
+
 logger = logging.getLogger(__name__)
 
 PRICE_COLS = ("open", "high", "low", "close")
@@ -122,6 +124,14 @@ def compute_ratio_pairs(
     pairs = df.select(pl.col("symbol"), pl.col("datetime").dt.date().alias("_d")).unique()
     if fs.is_empty():
         return pairs.with_columns(pl.lit(1.0).alias("_ratio"))
+    # 锚点止于今天, 不是请求窗口末端: 因子源会给已公告、尚未发生的除权日
+    # (实测库内超前 3 天), 用全表累积会把还没发生的除权提前折进所有历史分钟价;
+    # 而窗口末端也不对 —— 请求 2020 年窗口时, 之后发生的除权才是需要折入的。
+    # 前复权的锚是「当前」。与 _apply_adj_factor 同口径。
+    total = (
+        fs.filter(pl.col("trade_date") <= cn_today())
+        .group_by("symbol").agg(pl.col("cum").last().alias("total"))
+    )
     pairs = (
         pairs.sort(["symbol", "_d"])
         .join_asof(fs, left_on="_d", right_on="trade_date", by="symbol", strategy="backward", check_sortedness=False)

@@ -55,8 +55,10 @@ def test_sortino_too_few_points():
 
 # 固定种子 (42) + 固定输入下的快照值; 一旦有人改种子或算法, 立即红。
 _MC_INPUT = np.array([0.05, -0.03, 0.08, -0.06, 0.02, -0.04, 0.10, -0.05])
-_MC_P50 = -0.0976
-_MC_P95 = -0.2108
+# 首列补初始净值 1.0 后重算: 旧值 (−0.0976/−0.2108) 峰值从第一笔后开始,
+# 首笔亏损的回撤被吞掉, 与 drawdown_curve 口径不一致。
+_MC_P50 = -0.107
+_MC_P95 = -0.2196
 
 
 def test_mc_drawdown_is_deterministic_snapshot():

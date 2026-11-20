@@ -21,6 +21,7 @@ from app.backtest.mining import (
 )
 from app.enriched_generation import EnrichedGenerationUnavailableError
 from app.factors.registry import factor_columns_view
+from app.market_time import cn_today
 from app.services import preferences
 from app.services.mining_jobs import (
     RUN_STATUSES,
@@ -31,14 +32,15 @@ from app.services.mining_jobs import (
     MiningRunValidationError,
 )
 from app.services.mining_preflight import (
-    enriched_partition_dates,
     mining_availability,
+    mining_data_end,
     require_mining_availability,
 )
 from app.services.mining_schedule import (
     MINING_ALGORITHM_VERSION,
     build_data_fingerprint,
 )
+from app.services.mining_screening import MiningScreeningStore, start_screening_job
 
 router = APIRouter(prefix="/api/backtest/mining", tags=["backtest"])
 # 校验时动态读取 (含运行期注册的自定义/复合因子)
@@ -166,6 +168,11 @@ class MiningAutoStartRequest(BaseModel):
         return self
 
 
+def _screening_store(request: Request) -> MiningScreeningStore:
+    """筛选作业状态落盘 (无进程内状态, 多 worker 部署时 POST/GET 可落在不同进程)。"""
+    return MiningScreeningStore(request.app.state.repo.store.data_dir)
+
+
 def _require_mining_lock(request: Request) -> None:
     """降级模式 (撞锁启动) 下拒绝一切挖掘启动入口, 指引到挖掘页锁状态卡。"""
     from app.services.mining_lock_admin import MiningLockAdminError, ensure_mining_lock
@@ -273,6 +280,7 @@ def list_runs(
 def start_run(payload: MiningStartRequest, request: Request) -> dict[str, Any]:
     _require_mining_lock(request)
     manager = _manager(request)
+    data_dir = request.app.state.repo.store.data_dir
     worker_request = payload.model_dump(mode="json", exclude={"force"})
     try:
         _validate_selected_strategies(
@@ -280,12 +288,16 @@ def start_run(payload: MiningStartRequest, request: Request) -> dict[str, Any]:
             payload.strategy_ids,
             payload.asset_type,
         )
+        # 不用今日数据: 盘中当天分区每轮重写换世代, 回测/挖掘读到它会反复撞
+        # 世代漂移。截至前一交易日, 任务与指纹才稳定。
+        end = mining_data_end(data_dir, payload.asset_type, payload.end)
+        worker_request["end"] = end.isoformat() if end is not None else None
         require_mining_availability(
-            request.app.state.repo.store.data_dir,
+            data_dir,
             asset_type=payload.asset_type,
             budget_profile=payload.budget_profile,
             start=payload.start,
-            end=payload.end,
+            end=end,
         )
         fingerprint = build_data_fingerprint(
             request.app.state.repo,
@@ -349,36 +361,24 @@ def cancel_run(run_id: str, request: Request) -> dict[str, Any]:
 def start_auto_run(payload: MiningAutoStartRequest, request: Request) -> dict[str, Any]:
     """自动挖掘: L1 统计筛选全量因子 → 达标池 → 复用挖掘任务管理启动嵌套样本外验证。
 
-    筛选结果随请求持久化 (request.auto_screening), 供结果页展示达标因子清单与
-    失败原因分布; 无达标因子时返回 started=false 而不是报错。
+    L1 筛选是全市场批量回测 (实测 1-3 分钟), 放在 spawn 子进程跑: 本接口立即
+    返回 screening_id, 进度用 GET /screening/{screening_id} 查。筛选结果随挖掘
+    请求持久化 (request.auto_screening), 供结果页展示达标因子清单与失败原因分布。
     """
     _require_mining_lock(request)
-    from app.services.auto_mining import screen_all_factors
-
     manager = _manager(request)
     data_dir = request.app.state.repo.store.data_dir
     try:
+        # 筛选与挖掘都截至前一交易日: 盘中当天分区每轮重写, 读它会撞世代漂移。
+        screen_end = mining_data_end(data_dir, payload.asset_type, payload.end)
+        if screen_end is None:
+            screen_end = cn_today()
         require_mining_availability(
             data_dir,
             asset_type=payload.asset_type,
             budget_profile=payload.budget_profile,
             start=payload.start,
-            end=payload.end,
-        )
-        engine = getattr(request.app.state, "backtest_engine", None)
-        if engine is None:
-            from app.backtest.engine import BacktestEngine
-
-            engine = BacktestEngine(request.app.state.repo)
-            request.app.state.backtest_engine = engine
-        all_dates = enriched_partition_dates(data_dir, payload.asset_type)
-        screen_end = payload.end or (all_dates[-1] if all_dates else date.today())
-        screening = screen_all_factors(
-            engine,
-            asset_type=payload.asset_type,
-            start=payload.start,
             end=screen_end,
-            profile=payload.budget_profile,
         )
     except (MiningRunValidationError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -388,49 +388,45 @@ def start_auto_run(payload: MiningAutoStartRequest, request: Request) -> dict[st
             detail="行情数据正在更新(enriched 发布中), 请等数据更新完成后再开始挖掘",
         ) from exc
 
-    if not screening["pool"]:
-        return {"started": False, "reason": "no_qualified_factors", "screening": screening}
+    screening_store = _screening_store(request)
+    job = screening_store.create()
+    start_screening_job(
+        store=screening_store,
+        screening_id=str(job["id"]),
+        payload=payload,
+        data_dir=data_dir,
+        repo=request.app.state.repo,
+        app_state=request.app.state,
+        manager=manager,
+        screen_end=screen_end,
+    )
+    return {"started": True, "screening_id": job["id"], "status": job["status"]}
 
-    worker_request = {
-        "factor_names": screening["pool"],
-        "strategy_ids": [],
-        "symbols": payload.symbols,
-        "asset_type": payload.asset_type,
-        "start": payload.start.isoformat() if payload.start else None,
-        "end": payload.end.isoformat() if payload.end else None,
-        "budget_profile": payload.budget_profile,
-        "commission_pct": payload.commission_pct,
-        "stamp_tax_pct": payload.stamp_tax_pct,
-        "slippage_bps": payload.slippage_bps,
-        "correlation_threshold": payload.correlation_threshold,
-        "max_combination_factors": 4,
-        "beam_width": 12,
-        "max_finalists": MAX_FINALISTS,
-        "auto": True,
-        "auto_screening": screening,
+
+@router.get("/screening/{screening_id}")
+def get_screening(screening_id: str, request: Request) -> dict[str, Any]:
+    """L1 筛选作业状态: 进度 + 筛选摘要; 达标后带上已创建的挖掘 run。"""
+    job = _screening_store(request).get(screening_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="screening job not found")
+    projected: dict[str, Any] = {
+        "screening_id": job["id"],
+        "status": job["status"],
+        "label": job["label"],
+        "done": job["done"],
+        "total": job["total"],
+        "started": bool(job.get("started")),
+        "reason": job.get("reason"),
+        "error": job.get("error"),
+        "screening": job.get("screening"),
     }
-    try:
-        fingerprint = build_data_fingerprint(
-            request.app.state.repo,
-            request.app.state,
-            worker_request,
-        )
-        manifest = manager.start(
-            worker_request,
-            fingerprint,
-            force=payload.force,
-            source="auto",
-        )
-    except (MiningRunValidationError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except EnrichedGenerationUnavailableError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="行情数据正在更新(enriched 发布中), 请等数据更新完成后再开始挖掘",
-        ) from exc
-    except MiningRunStoreError as exc:
-        raise HTTPException(status_code=500, detail="failed to persist mining run") from exc
-    return {"started": True, "run": _project_run(manager.store, manifest), "screening": screening}
+    run_id = job.get("run_id")
+    if run_id:
+        store = _manager(request).store
+        manifest = store.get(str(run_id))
+        if manifest is not None:
+            projected["run"] = _project_run(store, manifest)
+    return projected
 
 
 @router.get("/runs/{run_id}/result")

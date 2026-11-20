@@ -28,6 +28,15 @@ export function cnHm(d: Date): string {
   return CN_HM.format(d)
 }
 
+const CN_HMS = new Intl.DateTimeFormat('en-GB', {
+  timeZone: CN_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+})
+
+/** 任意时刻 → 北京时间 时:分:秒 (24 小时制, "HH:MM:SS") — 日志时间戳用 */
+export function cnHms(d: Date): string {
+  return CN_HMS.format(d)
+}
+
 /** 北京时间今天 YYYY-MM-DD */
 export function cnToday(): string {
   return cnDateStr(new Date())

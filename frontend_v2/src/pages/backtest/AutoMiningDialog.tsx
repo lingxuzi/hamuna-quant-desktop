@@ -125,13 +125,13 @@ export function AutoMiningDialog({
         <div className="space-y-3">
           <div>
             <div className="mb-1 text-[10px] text-muted">资产</div>
-            <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+            <div className="inline-flex rounded-btn border border-border bg-surface/80">
               {(['stock', 'etf'] as const).map(value => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setAssetType(value)}
-                  className={`ctl ctl-md ctl-ghost rounded-[5px] px-2.5 ${assetType === value ? 'bg-accent text-white' : 'text-secondary hover:text-foreground'}`}
+                  className={`ctl ctl-md ctl-ghost px-2.5 ${assetType === value ? 'bg-accent text-white' : 'text-secondary hover:text-foreground'}`}
                 >
                   {value === 'stock' ? '股票' : 'ETF'}
                 </button>

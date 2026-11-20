@@ -12,6 +12,7 @@ import { DailyDataHealthNotice } from '@/components/data/DailyDataHealthNotice'
 import { StockAnalysisHost } from '@/components/stock-analysis/StockAnalysisHost'
 import { StockPreviewHost } from '@/components/StockPreviewHost'
 import { StockAnalysisBubble } from '@/components/stock-analysis/StockAnalysisBubble'
+import { MarketAwareHost } from '@/components/screener/MarketAwareHost'
 import {
   useCapabilityMatrix,
   useSettings,
@@ -1139,6 +1140,7 @@ export function Layout() {
       <AiReportBubble />
       <StockAnalysisHost />
       <StockAnalysisBubble />
+      <MarketAwareHost />
       <StockPreviewHost />
       {/* 入口闸门: 本地日K有未完成的修补/重算时, 阻塞到修完为止 */}
       <BootGate />

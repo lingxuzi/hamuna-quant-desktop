@@ -150,7 +150,7 @@ datasets:
 | --- | --- |
 | `pct_unit: percent` | `change_pct` / `amplitude` / `turnover_rate` 无条件 `/100` |
 | `pct_unit: decimal` | 三列原样透传 |
-| 未声明 | `change_pct` 按截面中位数归一(A 股涨跌停 30% 上限使两种单位物理可分);`amplitude` / `turnover_rate` **置 `None`** 交由 pipeline 按价格与股本口径重算,并记录 WARNING |
+| 未声明 | `change_pct` 先用 `last_price`/`prev_close` 反推单位(逐行恒等式,价差 ≥ 2 个跳价的行参与),无价格时退截面中位数判定;`amplitude` / `turnover_rate` **置 `None`** 交由 pipeline 按价格与股本口径重算,并记录 WARNING |
 | 列已配置 `transforms` | 视为用户已接管该列单位,原样透传 |
 
 ### depth5 必填
@@ -222,7 +222,7 @@ balance_sheet 是资产、在 shares 是股本),无法分别映射,需要上游�
 
 被切为财务生效源后,财务同步走独立调度(每周 metrics + 手动全表),
 报告期合并按 `(symbol, period_end)` 逐列取最新非空值:多源字段可并集
-共存互不覆盖(如内置源 easytdx 补齐 metrics 历史各期,自定义源提供当期报表),
+共存互不覆盖(如内置源 fuyao 补齐 metrics 历史各期,自定义源提供当期报表),
 但切换生效源后**不再拉取的表不会自动清空**,旧数据会保留到被新数据覆盖。
 声明了 financial 但上游某表无数据时返回空即可,已有存量靠合并写入保留。
 

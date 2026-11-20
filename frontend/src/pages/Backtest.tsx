@@ -84,7 +84,7 @@ export function Backtest() {
             </button>
             <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
             <nav className="min-w-0 flex-1 overflow-x-auto lg:flex-none" aria-label="回测视图">
-              <div className="inline-flex min-w-max items-center gap-0.5 rounded-btn border border-border bg-surface/80 p-0.5">
+              <div className="inline-flex min-w-max items-center gap-0.5 rounded-btn border border-border bg-surface/80">
                 {(Object.keys(MODES) as Tab[]).map(tab => {
                   const mode = MODES[tab]
                   const Icon = mode.icon

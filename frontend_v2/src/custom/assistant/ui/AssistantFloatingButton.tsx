@@ -5,7 +5,7 @@
  * (60fps 手法, 与仓库 AiReportBubble 一致), 松手才提交 state + 持久化;
  * 未超过阈值视为点击, 切换助手面板。生成中显示脉冲状态点。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
@@ -37,20 +37,26 @@ function clampPos(pos: BallPos): BallPos {
   return { x: Math.min(Math.max(pos.x, 0), maxX), y: Math.min(Math.max(pos.y, 0), maxY) }
 }
 
-function loadPos(): BallPos {
+/** 默认位置: 贴当前视口右下角 (离边 24px)。原来的 -152px 是为了避开吐司,
+ *  结果正好落在右栏数据上 (复盘页压住「站上 20 日线 / 60 日线」两行数值)。
+ *  吐司改到球上方堆叠。 */
+function defaultPos(vw: number, vh: number): BallPos {
+  const z = pageZoom()
+  return { x: vw / z - SIZE - 24, y: vh / z - SIZE - 24 }
+}
+
+/** 读回用户拖过的位置; 没拖过返回 null (球还贴角)。 */
+function loadSaved(): BallPos | null {
   try {
     const raw = localStorage.getItem(POS_STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown }
       if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-        return clampPos({ x: parsed.x, y: parsed.y })
+        return { x: parsed.x, y: parsed.y }
       }
     }
   } catch { /* 存储不可用时用默认位置 */ }
-  const z = pageZoom()
-  // 贴右下角 (离边 24px): 原来的 -152px 是为了避开吐司, 结果正好落在右栏
-  // 数据上 (复盘页压住「站上 20 日线 / 60 日线」两行数值)。吐司改到球上方堆叠。
-  return { x: window.innerWidth / z - SIZE - 24, y: window.innerHeight / z - SIZE - 24 }
+  return null
 }
 
 function savePos(pos: BallPos) {
@@ -61,17 +67,27 @@ function savePos(pos: BallPos) {
 
 export function AssistantFloatingButton() {
   const { open, sending, fabVisible } = useAssistantStore()
-  const [pos, setPos] = useState<BallPos>(() => loadPos())
+  // 用户拖过的位置; null = 没拖过 (球贴当前视口右下角)。
+  const [saved, setSaved] = useState<BallPos | null>(() => loadSaved())
+  // 视口尺寸: 变视口时贴角的球要跟着挪, 拖过的球要重新夹回可视区。
+  const [viewport, setViewport] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
   const ballRef = useRef<HTMLButtonElement>(null)
   const dragRef = useRef({ active: false, moved: false, offsetX: 0, offsetY: 0 })
   const suppressClickRef = useRef(false)
 
   // 视口变化后把悬浮球夹回可见区域。
   useEffect(() => {
-    const onResize = () => setPos(prev => clampPos(prev))
+    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight })
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  /** 画在哪: 拖过就按拖的位置 (夹进可视区, 视口放大后自动回到原位),
+   *  没拖过就贴当前视口右下角 —— 视口一变就跟着挪, 不会缩到一半卡在页中间。 */
+  const pos = useMemo(
+    () => clampPos(saved ?? defaultPos(viewport.w, viewport.h)),
+    [saved, viewport],
+  )
 
   // 关闭显示时不渲染 (须在全部 hooks 之后 return, 避免 hooks 数量变化)。
   if (!fabVisible) return null
@@ -113,7 +129,7 @@ export function AssistantFloatingButton() {
     if (rect) {
       const z = pageZoom()
       const final = clampPos({ x: rect.left / z, y: rect.top / z })
-      setPos(final)
+      setSaved(final)
       savePos(final)
     }
   }

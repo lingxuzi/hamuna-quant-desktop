@@ -6,18 +6,20 @@
 - 重跑一次同步即完成存量数据明细回填 (unique keep="last")。
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import polars as pl
 import pytest
 
 from app.indicators.pipeline import _apply_adj_factor
+from app.market_time import cn_today
 from app.services.kline_sync import (
     ADJ_DETAIL_COLS,
     _align_adj_factor_frame,
     _atomic_write_parquet,
     _merge_adj_factor_store,
     _normalize_adj_factor,
+    recompute_adj_factor_store,
 )
 
 
@@ -154,6 +156,66 @@ def test_merge_first_write_all_symbols_changed(tmp_path):
     assert added == 2
     assert changed == ["000001.SZ", "600519.SH"]
 
+# ── 存量因子归一化 (公式口径修正后) ────────────────────────────────
+
+# 000009.SZ 2023-08-03: 前收 11.41 存成 11.40999984741211, 派息 0.035 存成
+# 0.034999999403953555, 相减压在 11.375 半分界上 → 交易所参考价 11.38,
+# 旧 float 口径算出 11.37 → 因子差 0.09% → 除权日限价差 1 分。
+_NOISY_PREV_CLOSE = 11.40999984741211
+_NOISY_DIVIDEND = 0.034999999403953555
+
+
+def _noisy_legacy_frame() -> pl.DataFrame:
+    return pl.DataFrame([_detail_row(
+        symbol="000009.SZ", td=date(2023, 8, 3),
+        f=_NOISY_PREV_CLOSE / 11.37,           # 旧 float 口径的因子
+        dividend=_NOISY_DIVIDEND, bonus=0.0, allot=0.0, allot_price=0.0,
+        prev_close=_NOISY_PREV_CLOSE,
+    )])
+
+
+def test_recompute_store_normalizes_stored_factor(tmp_path):
+    """离线归一化: 存量因子按明细列重算 → 变化行计入受影响标的。"""
+    out = tmp_path / "all.parquet"
+    _atomic_write_parquet(_noisy_legacy_frame(), out)
+
+    rows, changed = recompute_adj_factor_store(out)
+
+    assert rows == 1
+    assert changed == ["000009.SZ"]
+    stored = pl.read_parquet(out)
+    assert stored["ex_factor"][0] == pytest.approx(_NOISY_PREV_CLOSE / 11.38)
+
+
+def test_recompute_store_is_idempotent(tmp_path):
+    """再跑一遍无变化 (幂等): 不重复触发 enriched 重算。"""
+    out = tmp_path / "all.parquet"
+    _atomic_write_parquet(_noisy_legacy_frame(), out)
+    recompute_adj_factor_store(out)
+
+    rows, changed = recompute_adj_factor_store(out)
+
+    assert rows == 0
+    assert changed == []
+
+
+def test_merge_normalizes_existing_rows(tmp_path):
+    """除权因子同步 (任意窗口) 也会把存量行归一化到当前公式口径。"""
+    out = tmp_path / "all.parquet"
+    _atomic_write_parquet(_noisy_legacy_frame(), out)
+    empty = pl.DataFrame(schema={
+        "symbol": pl.String, "trade_date": pl.Date, "ex_factor": pl.Float64,
+        "dividend": pl.Float64, "bonus": pl.Float64, "allot": pl.Float64,
+        "allot_price": pl.Float64, "prev_close": pl.Float64,
+    })
+
+    added, changed = _merge_adj_factor_store(out, empty)
+
+    assert added == 0
+    assert changed == ["000009.SZ"]
+    stored = pl.read_parquet(out)
+    assert stored["ex_factor"][0] == pytest.approx(_NOISY_PREV_CLOSE / 11.38)
+
 
 # ── 消费方回归: 带明细列的 factors 不影响复权计算 ───────────────────
 
@@ -173,3 +235,63 @@ def test_apply_adj_factor_tolerates_detail_columns():
     assert out["close"][0] == pytest.approx(10.0 / 1.25)  # 事件前按因子折算
     assert out["close"][1] == pytest.approx(9.0)          # 事件起锚定原始价
     assert out["close"][2] == pytest.approx(9.9)
+
+
+# ── 未来除权事件不得提前折入 ─────────────────────────────────────────
+
+
+def test_apply_adj_factor_ignores_events_after_today():
+    """因子源会给已公告、尚未发生的除权日 (实测库内超前 3 天)。
+
+    锚点取「今天」而非「因子表最后一条」: 否则 today 与全部历史都被未来除权
+    提前压低, 到除权日真实发生还会再跳一次。
+    """
+    today = cn_today()
+    d0, d1, d_future = today - timedelta(days=5), today - timedelta(days=4), today + timedelta(days=3)
+    raw = pl.DataFrame({
+        "symbol": ["A", "A", "A"],
+        "date": [d0, d1, today],
+        "open": [10.0] * 3, "high": [10.5] * 3, "low": [9.5] * 3,
+        "close": [10.0, 9.0, 9.1],
+    })
+    factors = pl.DataFrame([
+        _detail_row(symbol="A", td=d1, f=1.01),        # 已发生
+        _detail_row(symbol="A", td=d_future, f=1.02),  # 未来
+    ])
+    out = _apply_adj_factor(raw, factors)
+    # 只累计已发生的那次: 事件前 10/1.01, 事件后锚原始价。
+    # 若把未来事件也算进锚点 → 10/1.0302 与 9.0/1.01*1.01/1.0302=8.74 (系统性偏低 2%)
+    assert out["close"][0] == pytest.approx(10.0 / 1.01)
+    assert out["close"][1] == pytest.approx(9.0)
+    assert out["close"][2] == pytest.approx(9.1)
+    # 首个事件之前 join_asof 不匹配 → 必须是 False 而非 null
+    assert out["ex_rights"].to_list() == [False, True, False]
+
+
+def test_apply_adj_factor_symbol_with_only_future_events_unadjusted():
+    today = cn_today()
+    raw = pl.DataFrame({
+        "symbol": ["B", "B"],
+        "date": [today - timedelta(days=3), today - timedelta(days=2)],
+        "open": [8.0, 8.0], "high": [8.2, 8.2], "low": [7.8, 7.8],
+        "close": [8.0, 8.1],
+    })
+    factors = pl.DataFrame([_detail_row(symbol="B", td=today + timedelta(days=3), f=1.02)])
+    out = _apply_adj_factor(raw, factors)
+    # 无已发生事件 → 原始价即复权价 (不能凭空乘 1/1.02)
+    assert out["close"].to_list() == pytest.approx([8.0, 8.1])
+
+
+def test_apply_adj_factor_historical_window_still_uses_later_events():
+    """补算历史区间 (数据末端早于今天): 之后发生的除权仍须折入。
+
+    否则同一根 K 线在全量同步与历史补算两条路径下算出不同复权价。
+    """
+    today = cn_today()
+    raw = pl.DataFrame({
+        "symbol": ["C"], "date": [today - timedelta(days=30)],
+        "open": [5.0], "high": [5.1], "low": [4.9], "close": [5.0],
+    })
+    factors = pl.DataFrame([_detail_row(symbol="C", td=today - timedelta(days=10), f=1.25)])
+    out = _apply_adj_factor(raw, factors)
+    assert out["close"][0] == pytest.approx(5.0 / 1.25)

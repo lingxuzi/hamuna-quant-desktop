@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -110,10 +111,12 @@ def screen_all_factors(
     end: date,
     profile: str,
     max_factors: int = MAX_AUTO_POOL,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """L1 全量筛选: 注册表全部适用因子批量检验 → 达标池 + 失败原因分布。
 
     start=None 时取近 SCREEN_WINDOW_DAYS 天; 显式 start 只会收紧 (不放宽) 筛选窗口。
+    progress(done, total, factor_name): 每评估完一个因子回调一次。
     """
     gate = SCREEN_GATES.get(profile)
     if gate is None:
@@ -125,14 +128,17 @@ def screen_all_factors(
     screen_start = max(start or date.min, end - timedelta(days=SCREEN_WINDOW_DAYS))
     began = time.perf_counter()
     service = FactorBacktestService(engine)
-    batch = service.run_batch(FactorBatchConfig(
-        factor_names=candidates,
-        symbols=None,
-        start=screen_start,
-        end=end,
-        rebalance="daily",
-        asset_type=asset_type,
-    ))
+    batch = service.run_batch(
+        FactorBatchConfig(
+            factor_names=candidates,
+            symbols=None,
+            start=screen_start,
+            end=end,
+            rebalance="daily",
+            asset_type=asset_type,
+        ),
+        progress=progress,
+    )
     elapsed_ms = round((time.perf_counter() - began) * 1000, 1)
 
     qualified: list[dict[str, Any]] = []

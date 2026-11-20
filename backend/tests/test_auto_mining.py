@@ -1,6 +1,7 @@
 """自动挖掘 L1 筛选 (auto_mining) 与 /api/backtest/mining/auto 契约测试。"""
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 from types import SimpleNamespace
 from typing import Any, ClassVar
@@ -54,9 +55,12 @@ def test_classify_profile_gates_tighten() -> None:
 class _StubService:
     calls: ClassVar[list[Any]] = []
     results: ClassVar[list[Any]] = []
+    progress_calls: ClassVar[list[Any]] = []
 
-    def run_batch(self, config: Any) -> Any:
+    def run_batch(self, config: Any, **kwargs: Any) -> Any:
         _StubService.calls.append(config)
+        if kwargs.get("progress") is not None:
+            _StubService.progress_calls.append(kwargs["progress"])
         return SimpleNamespace(results=_StubService.results)
 
 
@@ -73,6 +77,7 @@ def _batch_item(name: str, **overrides: Any) -> SimpleNamespace:
 @pytest.fixture()
 def _stub_batch(monkeypatch: pytest.MonkeyPatch) -> type[_StubService]:
     _StubService.calls = []
+    _StubService.progress_calls = []
     monkeypatch.setattr(auto_mining, "FactorBacktestService", lambda engine: _StubService())
     return _StubService
 
@@ -148,7 +153,7 @@ def test_registry_asset_type_pools_are_not_empty() -> None:
     assert all_factors(asset_type="etf")
 
 
-# ── API 契约: /api/backtest/mining/auto ──
+# ── API 契约: /api/backtest/mining/auto (L1 筛选跑在后台作业里) ──
 
 
 class _FakeManager:
@@ -168,6 +173,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     from fastapi.testclient import TestClient
 
     from app.api import mining as mining_api
+    from app.services import mining_schedule
     from app.services.mining_jobs import MiningRunStore
 
     store = MiningRunStore(tmp_path / "runs")
@@ -179,8 +185,8 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     app.state.mining_manager = manager
 
     monkeypatch.setattr(mining_api, "require_mining_availability", lambda *a, **k: None)
-    monkeypatch.setattr(mining_api, "enriched_partition_dates", lambda *a, **k: ["2026-08-31"])
-    monkeypatch.setattr(mining_api, "build_data_fingerprint", lambda *a, **k: {"fp": 1})
+    monkeypatch.setattr(mining_api, "mining_data_end", lambda *a, **k: date(2026, 8, 31))
+    monkeypatch.setattr(mining_schedule, "build_data_fingerprint", lambda *a, **k: {"fp": 1})
     return SimpleNamespace(client=TestClient(app), manager=manager, store=store)
 
 
@@ -194,16 +200,49 @@ def _screening(pool: list[str]) -> dict[str, Any]:
     }
 
 
+def _fake_worker(result: dict[str, Any], events: list[dict[str, Any]] | None = None):
+    """替身 worker: 不起子进程, 直接回结果 (可先播报进度)。"""
+
+    def _run(task: Any, progress_cb: Any = None, cancel_event: Any = None) -> dict[str, Any]:
+        for event in events or []:
+            if progress_cb is not None:
+                progress_cb(event)
+        return result
+
+    return _run
+
+
+def _wait_screening(client: Any, screening_id: str, timeout: float = 10.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while True:
+        response = client.client.get(f"/api/backtest/mining/screening/{screening_id}")
+        assert response.status_code == 200
+        body = response.json()
+        if body["status"] in ("succeeded", "failed"):
+            return body
+        if time.monotonic() > deadline:
+            raise AssertionError("screening job did not finish in time")
+        time.sleep(0.02)
+
+
 def test_auto_start_contract_with_pool(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import mining_screening
+
     monkeypatch.setattr(
-        auto_mining, "screen_all_factors",
-        lambda *a, **k: _screening(["f1", "f2"]),
+        mining_screening, "run_worker_task",
+        _fake_worker({"screening": _screening(["f1", "f2"])}),
     )
     response = client.client.post("/api/backtest/mining/auto", json={"asset_type": "stock"})
     assert response.status_code == 200
     body = response.json()
+    # 接口立即返回, 筛选在后台作业里跑
     assert body["started"] is True
-    assert body["run"]["status"] == "queued"
+    assert body["screening_id"]
+    assert "run" not in body
+    job = _wait_screening(client, body["screening_id"])
+    assert job["status"] == "succeeded"
+    assert job["started"] is True
+    assert job["run"]["status"] == "queued"
     call = client.manager.start_calls[0]
     assert call["source"] == "auto"
     request = call["request"]
@@ -212,21 +251,56 @@ def test_auto_start_contract_with_pool(client: Any, monkeypatch: pytest.MonkeyPa
     assert request["auto"] is True
     assert request["auto_screening"]["pool"] == ["f1", "f2"]
     # 持久化 roundtrip: 任务存储里的 request 保留筛选摘要, 供结果页展示
-    manifest = client.store.get(body["run"]["run_id"])
+    manifest = client.store.get(job["run"]["run_id"])
     assert manifest is not None
     assert manifest["request"]["auto_screening"]["n_total"] == 61
 
 
 def test_auto_start_no_qualified_factors(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import mining_screening
+
     monkeypatch.setattr(
-        auto_mining, "screen_all_factors",
-        lambda *a, **k: _screening([]),
+        mining_screening, "run_worker_task",
+        _fake_worker({"screening": _screening([])}),
     )
     response = client.client.post("/api/backtest/mining/auto", json={})
     assert response.status_code == 200
-    body = response.json()
-    assert body["started"] is False
-    assert body["reason"] == "no_qualified_factors"
+    job = _wait_screening(client, response.json()["screening_id"])
+    assert job["status"] == "succeeded"
+    assert job["started"] is False
+    assert job["reason"] == "no_qualified_factors"
+    assert client.manager.start_calls == []
+
+
+def test_auto_start_reports_screening_progress(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """子进程播报的因子进度落到作业状态里 (前端据此显示 N/M)。"""
+    from app.services import mining_screening
+
+    monkeypatch.setattr(
+        mining_screening, "run_worker_task",
+        _fake_worker(
+            {"screening": _screening(["f1"])},
+            events=[{"phase": "screening", "label": "正在筛选因子（7/61）",
+                     "done": 7, "total": 61}],
+        ),
+    )
+    response = client.client.post("/api/backtest/mining/auto", json={})
+    job = _wait_screening(client, response.json()["screening_id"])
+    assert job["done"] == 7
+    assert job["total"] == 61
+
+
+def test_auto_start_marks_job_failed_on_worker_error(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import mining_screening
+
+    def _boom(task: Any, progress_cb: Any = None, cancel_event: Any = None) -> dict[str, Any]:
+        raise RuntimeError("worker 崩了")
+
+    monkeypatch.setattr(mining_screening, "run_worker_task", _boom)
+    response = client.client.post("/api/backtest/mining/auto", json={})
+    job = _wait_screening(client, response.json()["screening_id"])
+    assert job["status"] == "failed"
+    assert "worker 崩了" in job["error"]
     assert client.manager.start_calls == []
 
 

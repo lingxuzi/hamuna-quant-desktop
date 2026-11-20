@@ -33,6 +33,7 @@ from app.custom.assistant import experts as assistant_experts
 from app.custom.assistant import skill_loader
 from app.market_time import cn_today
 from app.services import tool_catalog
+from app.symbols import symbol_of_code as _symbol_of_code
 
 # ----------------------------------------------------------------
 # 快捷指令: label 展示、prompt 为点击后直接发送的完整问题;
@@ -302,6 +303,10 @@ def _require_repo(ctx: ToolContext) -> Any:
 
 def _validate_symbol(value: Any) -> str:
     symbol = str(value or "").strip()
+    # 用户习惯给裸 6 位代码 (600337); 本地分区键一律带交易所后缀。
+    # 不补后缀会静默查空 -> 模型拿不到名称, 转而凭记忆编公司名。规则与 ext_data 共用。
+    if len(symbol) == 6 and symbol.isdigit():
+        symbol = _symbol_of_code(symbol) or symbol
     if not _SYMBOL_RE.fullmatch(symbol):
         raise ValueError(f"无效的证券代码: {symbol!r} (示例: 600519.SH / 300750.SZ)")
     return symbol
@@ -422,8 +427,10 @@ def _get_stock_daily(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     end = cn_today()
     start = end - timedelta(days=int(days * 1.9) + 20)
     df = repo.get_daily_asset(repo.resolve_asset_type(symbol), symbol, start, end)
+    names = repo.get_name_map([symbol])
+    name = names.get(symbol, "")
     if df is None or df.is_empty():
-        return {"symbol": symbol, "rows": [], "note": "本地没有该标的的日线数据。"}
+        return {"symbol": symbol, "name": name, "rows": [], "note": "本地没有该标的的日线数据。"}
     keep = [
         c for c in (
             "date", "open", "high", "low", "close", "volume", "amount",
@@ -431,8 +438,6 @@ def _get_stock_daily(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         ) if c in df.columns
     ]
     rows = _rows(df.select(keep).tail(days), days)
-    names = repo.get_name_map([symbol])
-    name = names.get(symbol, "")
     result: dict[str, Any] = {
         "symbol": symbol,
         "name": name,
@@ -452,8 +457,10 @@ def _get_stock_analysis(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     symbol = _validate_symbol(args.get("symbol"))
     end = cn_today()
     df = repo.get_daily_asset(repo.resolve_asset_type(symbol), symbol, end - timedelta(days=500), end)
+    names = repo.get_name_map([symbol])
+    name = names.get(symbol, "")
     if df is None or df.is_empty():
-        return {"symbol": symbol, "note": "本地没有该标的的日线数据, 无法分析。"}
+        return {"symbol": symbol, "name": name, "note": "本地没有该标的的日线数据, 无法分析。"}
     recent = df.tail(120)
     close = float(recent["close"][-1]) if recent.height else None
     levels = compute_levels(recent)
@@ -464,15 +471,41 @@ def _get_stock_analysis(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         ) if c in recent.columns
     ]
     latest_rows = _rows(recent.select(keep).tail(1), 1)
-    names = repo.get_name_map([symbol])
     return {
         "symbol": symbol,
-        "name": names.get(symbol, ""),
+        "name": name,
         "close": _clean_value(close),
         "summary": summarize_levels(levels, close),
         "latest": latest_rows[0] if latest_rows else {},
         "levels": _clean_obj(levels),
     }
+
+
+# 净资产口径的比率: 分母(净资产)接近零或为负时, 净利润/净资产 会放大到几百上千倍,
+# 数值与经营能力脱钩 (ST 股常见 roe=-586.17)。模型照抄会得出「净资产收益率 -586%」
+# 这种看着精确实则失真的结论, 必须先识别成因再解读。
+_EXTREME_RATIO_LIMITS = {
+    "roe": 100.0,
+    "index_deduct_weighted_avg_roe": 100.0,
+}
+
+
+def _extreme_ratio_warnings(rows: list[dict[str, Any]]) -> list[str]:
+    """挑出分母塌陷导致的失真比率, 让模型先说成因再解读。"""
+    warnings: list[str] = []
+    for row in rows:
+        for col, limit in _EXTREME_RATIO_LIMITS.items():
+            value = row.get(col)
+            if not isinstance(value, (int, float)) or abs(value) <= limit:
+                continue
+            period = row.get("period_end") or row.get("announce_date") or ""
+            msg = (
+                f"{col}={value}% ({period}) 属极端值: 分母(净资产)接近零或为负, 该比率已失真, "
+                "解读时须说明成因, 不可当作盈利能力指标直接引用。"
+            )
+            if msg not in warnings:
+                warnings.append(msg)
+    return warnings
 
 
 def _get_financials(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -486,15 +519,21 @@ def _get_financials(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if ctx.data_dir is None:
         raise ValueError("数据目录未就绪。")
     df = get_financial_df(ctx.data_dir, table)
+    # 名称随结果一并给出: 模型只有代码时会凭记忆翻译公司名 (600337 -> 东软集团),
+    # 那个名字会渗进整篇分析。名称为空时明确留空, 不要编。
+    name = ctx.repo.get_name_map([symbol]).get(symbol, "") if ctx.repo is not None else ""
     if df is None or df.is_empty():
-        return {"symbol": symbol, "table": table, "rows": [], "note": "本地暂无财务数据, 可在数据页同步。"}
+        return {"symbol": symbol, "name": name, "table": table, "rows": [], "note": "本地暂无财务数据, 可在数据页同步。"}
     sub = df.filter(pl.col("symbol") == symbol)
     if sub.is_empty():
-        return {"symbol": symbol, "table": table, "rows": [], "note": "本地财务数据中没有该标的。"}
+        return {"symbol": symbol, "name": name, "table": table, "rows": [], "note": "本地财务数据中没有该标的。"}
     # 本地财务表的报告期列是 period_end; 物理行序取决于同步路径, 须显式排序后再取最近 N 期
     sort_col = next((c for c in ("period_end", "report_date", "end_date", "ann_date", "date") if c in sub.columns), None)
     if sort_col:
         sub = sub.sort(sort_col)
+    # 该标的本地实际有的报告期数 —— 常是「一个截面只有 1 期」(每个 symbol 仅一个 period_end)。
+    # 不显式给出去, 模型会拿 1 期去讲同比/趋势, 把「只有 1 期」当成「多年」。
+    available = sub.get_column(sort_col).n_unique() if sort_col else sub.height
     sub = sub.tail(periods)
     if sub.height:
         nulls = dict(zip(sub.columns, sub.null_count().row(0), strict=True))
@@ -502,7 +541,21 @@ def _get_financials(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         if keep:
             sub = sub.select(keep)
     rows = _rows(sub, periods)
-    return {"symbol": symbol, "table": table, "count": len(rows), "rows": rows}
+    result: dict[str, Any] = {
+        "symbol": symbol, "name": name, "table": table,
+        "count": len(rows), "available_periods": available, "rows": rows,
+    }
+    warnings = _extreme_ratio_warnings(rows)
+    if warnings:
+        result["warnings"] = warnings
+    if available < 2:
+        result["note"] = (
+            f"本地该标的只有 {available} 期报告期, 无法做同比/趋势对比; "
+            "需要跨期结论请先同步更多报告期。"
+        )
+    elif available < periods:
+        result["note"] = f"本地该标的共 {available} 期报告期, 已返回最近 {len(rows)} 期。"
+    return result
 
 
 def _get_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -536,13 +589,57 @@ def _get_market_overview(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
 
 
 def _get_indices(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    if ctx.quote_service is None:
-        raise ValueError("实时行情服务未启用, 无法查询指数。")
-    df = ctx.quote_service.get_index_quotes()
-    rows = _rows(df, 60)
-    if not rows:
-        return {"count": 0, "rows": [], "note": "指数实时缓存为空。"}
-    return {"count": len(rows), "rows": rows}
+    if ctx.quote_service is not None:
+        df = ctx.quote_service.get_index_quotes()
+        rows = _rows(df, 60)
+        if rows:
+            return {"count": len(rows), "rows": rows, "source": "realtime"}
+
+    # 盘前 / 节假日 / 未开实时开关时缓存为空。此时必须回落到本地指数日线,
+    # 否则模型拿到「缓存为空」只能凭记忆编指数点位 —— 那才是真正的数据错误。
+    repo = _require_repo(ctx)
+    rows = repo.execute_all(
+        """
+        WITH ranked AS (
+            SELECT symbol, date, close,
+                   row_number() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
+            FROM kline_index_daily
+        ), latest AS (
+            SELECT symbol,
+                   max(CASE WHEN rn = 1 THEN date END) AS date,
+                   max(CASE WHEN rn = 1 THEN close END) AS last_price,
+                   max(CASE WHEN rn = 2 THEN close END) AS prev_close
+            FROM ranked WHERE rn <= 2 GROUP BY symbol
+        )
+        SELECT l.symbol,
+               coalesce(i.name, l.symbol) AS name,
+               l.date, l.last_price, l.prev_close,
+               CASE WHEN l.prev_close IS NULL OR l.prev_close = 0 THEN NULL
+                    ELSE (l.last_price - l.prev_close) / l.prev_close * 100
+               END AS change_pct
+        FROM latest l
+        LEFT JOIN instruments_index i ON i.symbol = l.symbol
+        ORDER BY l.symbol
+        """
+    )
+    out = [
+        {
+            "symbol": sym, "name": name, "date": str(d) if d else None,
+            "last_price": float(last_price) if last_price is not None else None,
+            "prev_close": float(prev_close) if prev_close is not None else None,
+            # 与实时缓存同口径: change_pct 是百分数 (0.89 = 0.89%)
+            "change_pct": round(float(pct), 4) if pct is not None else None,
+        }
+        for sym, name, d, last_price, prev_close, pct in rows
+    ]
+    if not out:
+        return {"count": 0, "rows": [], "note": "指数实时缓存与本地日线均为空。"}
+    return {
+        "count": len(out),
+        "rows": out,
+        "source": "index_daily",
+        "note": "实时缓存为空, 以下为最近一个交易日收盘 (change_pct 为百分数)。",
+    }
 
 
 def _get_sector_rotation(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -1467,7 +1564,7 @@ def _local_tool_schemas() -> list[dict[str, Any]]:
         ),
         _schema(
             "get_financials",
-            "查询个股财务报表数据(本地已同步的最近几个报告期)。table: metrics(核心指标)/income(利润)/balance_sheet(资产负债)/cash_flow(现金流)/shares(股本)。",
+            "查询个股财务报表数据(本地已同步的最近几个报告期)。table: metrics(核心指标)/income(利润)/balance_sheet(资产负债)/cash_flow(现金流)/shares(股本)。返回带 available_periods(本地实际报告期数)与 warnings(失真比率)。",
             {
                 "symbol": {"type": "string", "description": "证券代码"},
                 "table": {"type": "string", "enum": ["metrics", "income", "balance_sheet", "cash_flow", "shares"], "description": "报表类型, 默认 metrics"},
@@ -1775,12 +1872,19 @@ def summarize_tool_result(name: str, payload: dict[str, Any]) -> str:
         stats = result.get("stats")
         if not isinstance(stats, dict) or not stats:
             return "回测完成(无指标)"
-        return " · ".join(str(p) for p in (
-            f"总收益 {stats.get('total_return', '-')}",
-            f"年化 {stats.get('annual_return', '-')}",
-            f"回撤 {stats.get('max_drawdown', '-')}",
-            f"夏普 {stats.get('sharpe', '-')}",
-        ))
+
+        def _pct(key: str) -> str:
+            # 回测统计是小数 (0.153 = 15.3%); 足迹卡直接给人看, 必须换算成百分数,
+            # 否则用户读到「总收益 0.153」会当成 0.153%。
+            value = stats.get(key)
+            if not isinstance(value, (int, float)):
+                return "-"
+            return f"{value * 100:.2f}%"
+
+        return (
+            f"总收益 {_pct('total_return')} · 年化 {_pct('annual_return')} · "
+            f"回撤 {_pct('max_drawdown')} · 夏普 {stats.get('sharpe', '-')}"
+        )
     if name == "get_stock_quote":
         return f"查询 {_count()} 只个股实时行情"
     if name == "get_stock_daily":
@@ -1788,7 +1892,9 @@ def summarize_tool_result(name: str, payload: dict[str, Any]) -> str:
     if name == "get_stock_analysis":
         return "完成个股关键价位分析"
     if name == "get_financials":
-        return f"返回 {result.get('table', '财务')} 近 {_count()} 期"
+        total = result.get("available_periods")
+        base = f"返回 {result.get('table', '财务')} 近 {_count()} 期"
+        return f"{base} (本地仅 {total} 期)" if isinstance(total, int) and total < 2 else base
     if name == "get_watchlist":
         return f"返回自选 {_count()} 只"
     if name == "get_market_overview":

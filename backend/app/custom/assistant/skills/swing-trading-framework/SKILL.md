@@ -1,6 +1,6 @@
 ---
 name: "swing-trading-framework"
-description: "波段交易智能体（swing-trading-framework）"
+description: "波段交易框架：趋势判断→波段定位→入场时机→持仓管理→止盈止损的完整步骤，面向波段交易者与从短线过渡到中线的投资者。"
 ---
 
 # 波段交易智能体（swing-trading-framework）

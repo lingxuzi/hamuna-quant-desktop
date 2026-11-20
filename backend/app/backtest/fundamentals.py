@@ -40,6 +40,19 @@ FUNDAMENTAL_FACTORS: dict[str, dict[str, Any]] = {
 
 FUNDAMENTAL_FACTOR_NAMES = frozenset(FUNDAMENTAL_FACTORS)
 
+_PRICE_RATIO_FACTORS = frozenset(
+    name for name, spec in FUNDAMENTAL_FACTORS.items() if spec["price_ratio"]
+)
+
+
+def requires_raw_close(names: Any) -> bool:
+    """所请求财务因子中是否有「价格 ÷ 财务量」类 (pb_latest), 需要未复权价。
+
+    调用方据此把 raw_close 加进面板/矩阵的加载列; 不加载就回退到复权 close,
+    PB 会被系统性低估 (见下方 attach / build 两处注释)。
+    """
+    return any(str(name) in _PRICE_RATIO_FACTORS for name in names)
+
 
 def load_fundamental_snapshot(data_dir: Path | None) -> pl.DataFrame | None:
     """读取财务指标快照; 文件缺失或无有效行时返回 None。
@@ -125,9 +138,13 @@ def attach_fundamental_factors(
         spec = FUNDAMENTAL_FACTORS[name]
         source = pl.col(spec["column"])
         if spec["price_ratio"]:
+            # PB / PCF 这类「真实价格 ÷ 财务量」必须用 raw_close (未复权)。
+            # close 是前复权价, 复权因子在比值里不会与财务量抵消 → 历史 PB 系统性
+            # 偏低 (全市场 2023-06-30 均值 -8.6%, 单票最大 -33%)。
+            price = pl.col("raw_close") if "raw_close" in panel.columns else pl.col("close")
             value = (
                 pl.when(source > 0)
-                .then(pl.col("close") / source)
+                .then(price / source)
                 .otherwise(None)
             )
         else:
@@ -191,8 +208,12 @@ def build_fundamental_matrices(
         spec = FUNDAMENTAL_FACTORS[name]
         source = raw_columns[spec["column"]]
         if spec["price_ratio"]:
+            # 同 polars 侧: 用 raw_close, 复权价会系统性低估 PB
+            price = market.fields.get("raw_close")
+            if price is None:
+                price = market.close
             with np.errstate(divide="ignore", invalid="ignore"):
-                matrix = (market.close / source).astype(np.float32)
+                matrix = (price / source).astype(np.float32)
             matrix[~(source > 0)] = np.nan
             matrix[np.isinf(matrix)] = np.nan
         else:

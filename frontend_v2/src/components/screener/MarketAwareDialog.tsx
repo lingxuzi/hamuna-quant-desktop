@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Loader2, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, Minimize2, Sparkles, X } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { toast } from '@/components/Toast'
 import { CHIP } from '@/components/controls'
-import {
-  api,
-  type MarketAwareBuildResult,
-  type MarketDimension,
-  type MarketFacts,
-} from '@/lib/api'
+import { api, type MarketDimension, type MarketFacts } from '@/lib/api'
 import { cn } from '@/lib/cn'
-import { startAutoMining, useMiningTask } from '@/lib/miningTask'
+import {
+  MARKET_AWARE_WINDOW_DAYS,
+  closeMarketAware,
+  minimizeMarketAware,
+  setMarketAwareAssetType,
+  startMarketAwareGeneration,
+  toggleMarketAwareDimension,
+  useMarketAware,
+} from '@/lib/marketAwareStore'
 import { QK } from '@/lib/queryKeys'
 
 const DIMENSIONS: { id: MarketDimension; label: string; hint: string }[] = [
@@ -19,11 +22,6 @@ const DIMENSIONS: { id: MarketDimension; label: string; hint: string }[] = [
   { id: 'sector', label: '板块', hint: '强势板块与成分股池' },
   { id: 'money_flow', label: '资金流', hint: '扩展表已配的数值列' },
 ]
-
-const WINDOW_DAYS = 120
-const PROFILE = 'exploratory' as const
-
-type Phase = 'idle' | 'mining' | 'building' | 'done'
 
 function pct(value: number | null | undefined, digits = 2): string {
   if (value == null || Number.isNaN(value)) return '—'
@@ -35,24 +33,22 @@ function num(value: number | null | undefined): string {
   return String(value)
 }
 
+function elapsedText(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  if (seconds < 60) return `${seconds} 秒`
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
+}
+
 /** 市场感知生成: 近 120 天事实 → 挖掘冠军因子池 → AI 决策 → 合并成因子排名策略。 */
-export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
-  const [assetType, setAssetType] = useState<'stock' | 'etf'>('stock')
-  const [dimensions, setDimensions] = useState<MarketDimension[]>(['market'])
-  const [phase, setPhase] = useState<Phase>('idle')
-  const [buildError, setBuildError] = useState<string | null>(null)
-  const [result, setResult] = useState<MarketAwareBuildResult | null>(null)
-  const pendingRunRef = useRef<string | null>(null)
-  const buildStartedRef = useRef(false)
-
-  const task = useMiningTask()
+export function MarketAwareDialog() {
+  const {
+    phase, logs, aiText, result, error, assetType, dimensions, startedAt,
+  } = useMarketAware()
   const qc = useQueryClient()
-
-  const toggle = (id: MarketDimension) => {
-    setDimensions(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    )
-  }
+  const logRef = useRef<HTMLDivElement>(null)
+  const toastedRef = useRef<string | null>(null)
+  const [showAiRaw, setShowAiRaw] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
   // 事实预览: 维度/标的变化即刷新; 缺数据的维度由后端给指路文案
   const factsQuery = useQuery({
@@ -60,7 +56,7 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
     queryFn: () => api.marketFacts({
       dimensions,
       asset_type: assetType,
-      window_days: WINDOW_DAYS,
+      window_days: MARKET_AWARE_WINDOW_DAYS,
     }),
     enabled: dimensions.length > 0,
     retry: false,
@@ -72,88 +68,53 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
 
   // 挖掘可用性预检: 观察窗口 ≠ 挖掘窗口, 挖掘用全部历史
   const availabilityQuery = useQuery({
-    queryKey: QK.miningAvailability(assetType, PROFILE, '', ''),
+    queryKey: QK.miningAvailability(assetType, 'exploratory', '', ''),
     queryFn: () => api.miningAvailability({
       assetType,
-      budgetProfile: PROFILE,
+      budgetProfile: 'exploratory',
     }),
     staleTime: 30_000,
   })
   const availability = availabilityQuery.data
   const canMine = availability?.eligible ?? false
 
-  // 挖掘成功 → 自动合并生成策略
-  const runId = task.runId
-  const runStatus = task.run?.status
-  const miningFailed =
-    phase === 'mining' &&
-    (runStatus === 'failed' ||
-      runStatus === 'cancelled' ||
-      runStatus === 'interrupted' ||
-      runStatus === 'skipped_prerequisite')
-  const miningError = task.error || task.run?.error || '挖掘未成功结束'
-  useEffect(() => {
-    if (phase !== 'mining' || !runId || buildStartedRef.current) return
-    // 只认本弹窗发起的 run (打开弹窗前就已在跑的任务不算)
-    if (!pendingRunRef.current) pendingRunRef.current = runId
-    if (pendingRunRef.current !== runId) return
-    if (runStatus !== 'succeeded' && runStatus !== 'succeeded_with_budget_exhausted') return
-    buildStartedRef.current = true
-    // 从 promise 链里起步: 阶段切换不在 effect 体内同步 setState
-    void Promise.resolve()
-      .then(() => {
-        setPhase('building')
-        return api.marketAwareBuild({
-          run_id: runId,
-          dimensions,
-          asset_type: assetType,
-          window_days: WINDOW_DAYS,
-        })
-      })
-      .then(data => {
-        setResult(data)
-        setPhase('done')
-        // 新策略要出现在策略列表里
-        void qc.invalidateQueries({ queryKey: ['screener-strategies'] })
-        toast(`已生成策略「${data.decisions.name || data.strategy_id}」`, 'success')
-      })
-      .catch(error => {
-        setBuildError(String((error as Error).message || error))
-        setPhase('idle')
-      })
-  }, [phase, runId, runStatus, dimensions, assetType, qc])
+  const running = phase === 'mining' || phase === 'building'
 
-  const startMining = () => {
-    if (!canMine) return
-    setBuildError(null)
-    setResult(null)
-    buildStartedRef.current = false
-    pendingRunRef.current = null
-    setPhase('mining')
-    // 板块维度: 用强势板块成分股做股票池 (概念成分按当前快照映射)
-    const symbols =
-      dimensions.includes('sector') ? facts?.sector?.pool?.symbols ?? null : null
-    void startAutoMining({
-      asset_type: assetType,
-      budget_profile: PROFILE,
-      symbols,
-    })
-  }
+  // 计时: 运行中每秒刷新已用时
+  useEffect(() => {
+    if (!running) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [running])
+
+  // 日志自动滚到底
+  useEffect(() => {
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [logs.length])
+
+  // 生成成功后刷新策略列表并提示 (同一策略只提示一次)
+  useEffect(() => {
+    if (!result || toastedRef.current === result.strategy_id) return
+    toastedRef.current = result.strategy_id
+    void qc.invalidateQueries({ queryKey: ['screener-strategies'] })
+    toast(`已生成策略「${result.decisions.name || result.strategy_id}」`, 'success')
+  }, [result, qc])
+
+  const stateText = useMemo(() => {
+    if (phase === 'mining') return '正在挖掘因子组合'
+    if (phase === 'building') return '正在合并市场事实与 AI 决策'
+    if (phase === 'done') return '生成完成'
+    if (phase === 'error') return '生成失败'
+    return ''
+  }, [phase])
 
   const sectorPoolSize = facts?.sector?.pool?.size ?? 0
-  // 挖掘失败的终态由渲染期派生, 不在 effect 里同步 setState
-  const shownPhase: Phase = miningFailed ? 'idle' : phase
-  const errorText = buildError || (miningFailed ? miningError : null)
-  const stateText = useMemo(() => {
-    if (shownPhase === 'mining') return task.progress?.label || '正在挖掘因子组合'
-    if (shownPhase === 'building') return '正在合并市场事实与 AI 决策'
-    if (shownPhase === 'done') return '生成完成'
-    return ''
-  }, [shownPhase, task.progress?.label])
+  const errorText = error
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={closeMarketAware}
       labelledBy="market-aware-title"
       panelClassName="flex max-h-[86vh] w-[92vw] max-w-2xl flex-col overflow-hidden border border-border bg-surface shadow-xl rounded-card"
     >
@@ -166,32 +127,43 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-muted">
-            按近 {WINDOW_DAYS} 天的市场走势生成策略：先挖掘出当下最合适的因子组合，
+            按近 {MARKET_AWARE_WINDOW_DAYS} 天的市场走势生成策略：先挖掘出当下最合适的因子组合，
             再让 AI 结合所选维度的市场事实决定入场、离场与风控参数。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="关闭"
-          className="ctl ctl-md ctl-ghost inline-flex w-[28px] shrink-0 items-center justify-center px-0 hover:text-foreground"
-        >
-          <X className="h-[16px] w-[16px]" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={minimizeMarketAware}
+            aria-label="缩小到后台"
+            title="缩小到后台"
+            className="ctl ctl-md ctl-ghost inline-flex w-[28px] items-center justify-center px-0 hover:text-foreground"
+          >
+            <Minimize2 className="h-[16px] w-[16px]" />
+          </button>
+          <button
+            type="button"
+            onClick={closeMarketAware}
+            aria-label="关闭"
+            className="ctl ctl-md ctl-ghost inline-flex w-[28px] items-center justify-center px-0 hover:text-foreground"
+          >
+            <X className="h-[16px] w-[16px]" />
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <div className="mb-1 text-[10px] text-muted">标的</div>
-            <div className="inline-flex h-[30px] rounded-btn border border-border bg-surface/80 p-0.5">
+            <div className="inline-flex h-[30px] rounded-btn border border-border bg-surface/80">
               {(['stock', 'etf'] as const).map(value => (
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setAssetType(value)}
+                  onClick={() => setMarketAwareAssetType(value)}
                   className={cn(
-                    'ctl ctl-md ctl-ghost rounded-[5px] px-2.5',
+                    'ctl ctl-md ctl-ghost px-2.5',
                     assetType === value
                       ? 'bg-accent text-white'
                       : 'text-secondary hover:text-foreground',
@@ -205,7 +177,7 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
           <div>
             <div className="mb-1 text-[10px] text-muted">观察窗口</div>
             <div className="ctl ctl-md ctl-field flex h-[30px] items-center text-secondary">
-              近 {WINDOW_DAYS} 天
+              近 {MARKET_AWARE_WINDOW_DAYS} 天
             </div>
           </div>
         </div>
@@ -220,7 +192,7 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
                   key={item.id}
                   type="button"
                   title={item.hint}
-                  onClick={() => toggle(item.id)}
+                  onClick={() => toggleMarketAwareDimension(item.id)}
                   className={cn(
                     CHIP,
                     active
@@ -250,7 +222,7 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
               <span>情绪阶段：{facts.market.phases.map(p => `${p.phase} ${p.days}天`).join('、') || '—'}</span>
               <span>最新阶段：{facts.market.phase_last ?? '—'}</span>
               <span>评分均值：{num(facts.market.score.mean)}</span>
-              <span>上涨占比：{pct(facts.market.up_ratio.mean)}</span>
+              <span>上涨占比：{pct(facts.market.up_share?.mean)}</span>
               <span>站上均线占比：{pct(facts.market.above_ma20_pct.mean)}</span>
             </div>
           </section>
@@ -344,39 +316,85 @@ export function MarketAwareDialog({ onClose }: { onClose: () => void }) {
           </section>
         )}
 
-        {(shownPhase === 'mining' || shownPhase === 'building') && (
+        {running && (
           <div className="flex items-center gap-2 rounded-btn border border-border bg-base/60 px-3 py-2 text-[11px] text-secondary">
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent" />
             <span>{stateText}</span>
+            {startedAt && (
+              <span className="ml-auto shrink-0 text-[10px] text-muted">
+                已用时 {elapsedText(now - startedAt)}
+              </span>
+            )}
           </div>
+        )}
+
+        {logs.length > 0 && (
+          <section className="rounded-btn border border-border bg-base/60">
+            <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+              <span className="text-[10px] text-muted">执行日志</span>
+              {aiText && (
+                <button
+                  type="button"
+                  onClick={() => setShowAiRaw(prev => !prev)}
+                  className="ctl ctl-sm ctl-ghost inline-flex items-center gap-1 px-1.5 text-[10px] text-muted hover:text-foreground"
+                >
+                  AI 原始输出
+                  <ChevronDown className={cn('h-3 w-3 transition-transform', showAiRaw && 'rotate-180')} />
+                </button>
+              )}
+            </div>
+            <div
+              ref={logRef}
+              className="max-h-[160px] overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
+            >
+              {logs.map((entry, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    'flex gap-2',
+                    entry.level === 'error' ? 'text-danger'
+                      : entry.level === 'ok' ? 'text-success'
+                        : 'text-secondary',
+                  )}
+                >
+                  <span className="shrink-0 text-muted">{entry.at}</span>
+                  <span className="min-w-0 break-words">{entry.text}</span>
+                </div>
+              ))}
+              {showAiRaw && aiText && (
+                <pre className="mt-2 whitespace-pre-wrap break-words border-t border-border pt-2 text-[10px] text-muted">
+                  {aiText}
+                </pre>
+              )}
+            </div>
+          </section>
         )}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
         <span className="text-[10px] text-muted">
-          挖掘在全历史区间上做样本外验证，{WINDOW_DAYS} 天只用于生成参数
+          挖掘在全历史区间上做样本外验证，{MARKET_AWARE_WINDOW_DAYS} 天只用于生成参数
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeMarketAware}
             className="ctl ctl-md ctl-ghost px-2.5 hover:text-foreground"
           >
             关闭
           </button>
           <button
             type="button"
-            onClick={startMining}
+            onClick={() => startMarketAwareGeneration(facts?.sector?.pool?.symbols ?? null)}
             disabled={
-              shownPhase === 'mining' ||
-              shownPhase === 'building' ||
+              running ||
               !canMine ||
               dimensions.length === 0 ||
               !!factsError
             }
             className="ctl ctl-md ctl-btn pri inline-flex items-center gap-1.5 px-2.5 hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {shownPhase === 'mining' || shownPhase === 'building' ? (
+            {running ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Sparkles className="h-3.5 w-3.5" />

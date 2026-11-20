@@ -1,6 +1,7 @@
 """Lightweight mining date availability checks shared by API and workers."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.backtest.mining import (
     validation_config_for_profile,
 )
 from app.data_providers.repository import enriched_dirname
+from app.market_time import cn_today
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,31 @@ def enriched_partition_dates(
     return sorted(values)
 
 
+def mining_data_end(
+    data_dir: Path,
+    asset_type: str,
+    end: date | None = None,
+    *,
+    dates: Sequence[date] | None = None,
+    today: date | None = None,
+) -> date | None:
+    """挖掘可用的最后一天: 严格早于今天的最后一个分区, 显式 end 取更早者。
+
+    实时行情每轮覆写当天分区并换世代, 回测/挖掘读到当天数据必然撞世代漂移;
+    固定到前一交易日 (及更早) 才能拿到稳定快照。
+    """
+    all_dates = list(dates) if dates is not None else enriched_partition_dates(
+        data_dir, asset_type,
+    )
+    if not all_dates:
+        return end
+    cutoff = today or cn_today()
+    earlier = [value for value in all_dates if value < cutoff]
+    # 只有今天一个分区 (新装/首日同步) 时无从退让, 仍按今天算。
+    cap = earlier[-1] if earlier else all_dates[-1]
+    return cap if end is None else min(end, cap)
+
+
 def mining_availability(
     data_dir: Path,
     *,
@@ -76,6 +103,7 @@ def mining_availability(
     required_folds = required_outer_folds(budget_profile)
     required_bars = required_trading_bars(config, required_folds)
     all_dates = enriched_partition_dates(data_dir, asset_type)
+    end = mining_data_end(data_dir, asset_type, end, dates=all_dates)
     scoped = [
         value
         for value in all_dates

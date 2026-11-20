@@ -604,10 +604,11 @@ export function EChartsIntraday({
                 <span style={{ display: 'inline-block', width: 14, height: 2, background: THEME.avgLine }} />
                 <span style={{ color: THEME.avgLine }}>{avg != null ? avg.toFixed(digits) : '—'}</span>
               </span>}
+              {/* 尾部续画出的新 bar 量/额未知 (记 0), 显示 0 会被读成「本分钟零成交」 */}
               <span className="text-muted">{hovered ? '量' : '累计量'}</span>
-              <span className="text-secondary">{d.volume.toFixed(0)}</span>
+              <span className="text-secondary">{d.volume > 0 ? d.volume.toFixed(0) : '—'}</span>
               <span className="text-muted">{hovered ? '额' : '累计额'}</span>
-              <span className="text-secondary">{fmtAmt(d.amount)}</span>
+              <span className="text-secondary">{d.amount != null && d.amount > 0 ? fmtAmt(d.amount) : '—'}</span>
             </>
           )}
         </div>

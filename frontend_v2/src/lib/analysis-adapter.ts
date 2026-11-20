@@ -59,7 +59,9 @@ const DIMENSION_NAME_KEYS = [
 const INVALID_DIMENSION_VALUES = new Set(['nan', 'none', 'null'])
 
 function dimensionValue(raw: unknown): string {
-  const text = String(raw ?? '').trim()
+  // 数组/对象不能直接 String(): 数组会拼成「600519,000858」被当成分组名
+  if (raw == null || typeof raw === 'object') return ''
+  const text = String(raw).trim()
   return INVALID_DIMENSION_VALUES.has(text.toLowerCase()) ? '' : text
 }
 
@@ -151,7 +153,9 @@ function parsePerDimension(
   const allStocks: StockRow[] = []
 
   const groups = rows.map(row => {
-    const key = dimensionValue(row[nameField] ?? row[constituentField])
+    // 只认名称列; 没有名称列时不能 fallback 到成分股字段 —— 那是数组,
+    // String(数组) 会拼出「600519,000858,…」这种假分组名。
+    const key = dimensionValue(row[nameField])
     if (!key) return null
 
     // 成分股可能是字符串数组、对象数组、逗号分隔字符串
@@ -192,11 +196,13 @@ function parseConstituents(raw: unknown): StockRow[] {
       }
       if (typeof item === 'object' && item !== null) {
         const obj = item as Record<string, any>
+        // 归一化字段必须放在 ...obj 之后: 原名在展开前面会被 obj 里的 null 覆盖,
+        // symbol 变 null 后调用方按 symbol 过滤会把这行静默丢掉 (成分股数量对不上)。
         return {
+          ...obj,
           symbol: obj.symbol ?? obj.code ?? obj.股票代码 ?? '',
           code: obj.code ?? obj.symbol ?? '',
           name: obj.name ?? obj.股票简称 ?? obj.名称 ?? '',
-          ...obj,
         }
       }
       return { symbol: String(item) }

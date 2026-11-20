@@ -55,9 +55,15 @@ function lastMarkPoint(): string {
   return JSON.stringify(k?.markPoint ?? null)
 }
 
-/** 模拟竖虚线命中某根 K 线 (鼠标在数据区内移动时 echarts 派发的事件) */
+/** 模拟竖虚线命中某根 K 线 (鼠标在数据区内移动时 echarts 派发的事件)。
+ *
+ * axesInfo 必须带 axisDim: 真实的 echarts 事件里 y 轴条目同样存在, 组件只认 'x'
+ * (否则价格会被当索引)。mock 事件不能省掉这个字段, 否则测的不是真实路径。
+ */
 async function hoverCandle(index: number) {
-  await act(async () => { chart.handlers.updateAxisPointer?.({ axesInfo: [{ value: index }] }) })
+  await act(async () => {
+    chart.handlers.updateAxisPointer?.({ axesInfo: [{ axisDim: 'x', axisIndex: 0, value: index }] })
+  })
 }
 
 it('ETF 日K信息栏和价格轴保留三位, 切换股票后恢复两位', async () => {
@@ -98,7 +104,7 @@ it('切标的后响应 dataZoom 仍用当前标的的买卖标记, 不回退到�
   expect(lastMarkPoint()).not.toContain('A-BUY')
 })
 
-it('切股后鼠标未离开图表, 竖虚线重新命中即恢复「至今/周期」', async () => {
+it('切股后鼠标未离开图表, 竖虚线重新命中即恢复「持仓/周期」', async () => {
   const render = async (symbol: string) => {
     await act(async () => root.render(
       <EChartsCandlestick data={rows(10)} symbol={symbol} height={400} visibleBars="all" />,
@@ -109,18 +115,18 @@ it('切股后鼠标未离开图表, 竖虚线重新命中即恢复「至今/周�
   const surface = host.firstElementChild as HTMLElement
   await act(async () => { surface.dispatchEvent(new MouseEvent('mouseenter')) })
   await hoverCandle(30)
-  expect(host.textContent).toContain('至今')
+  expect(host.textContent).toContain('持仓')
 
   // 切股: 上一只的悬停上下文作废, 清掉「至今/周期」
   await render('000001')
-  expect(host.textContent).not.toContain('至今')
+  expect(host.textContent).not.toContain('持仓')
 
   // 鼠标没离开图表区 (只是切股), 竖虚线重新命中即恢复, 不靠 mouseenter
   await hoverCandle(20)
-  expect(host.textContent).toContain('至今')
+  expect(host.textContent).toContain('持仓')
   expect(host.textContent).toContain('周期')
 
   // 移出图表区 → 重新收起
   await act(async () => { surface.dispatchEvent(new MouseEvent('mouseleave')) })
-  expect(host.textContent).not.toContain('至今')
+  expect(host.textContent).not.toContain('持仓')
 })

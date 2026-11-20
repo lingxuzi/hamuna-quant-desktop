@@ -259,6 +259,45 @@ def _persist_last_fetch(fetched_at_ms: float) -> None:
         logger.debug("last_fetch_ms 持久化失败 (不影响行情): %s", e)
 
 
+def _split_by_asset_type(
+    records: list[dict],
+    *,
+    index_symbols: set[str],
+    etf_symbols: set[str],
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """按 指数 / ETF / 股票 三分。指数优先 (同一代码不会同时是 ETF)。
+
+    单拎出来是为了可测: 曾经这一分流只用指数维表 (101 行) 判定, 而实时拉取的
+    基准指数 (000002.SH 上证A指 等) 不在维表里 → 被当作股票写进 kline_daily,
+    指数点位 (3777) 混入个股分区, 全市场扫描/回测/助手全部吃到这批伪个股。
+    """
+    index_records = [r for r in records if r.get("symbol") in index_symbols]
+    etf_records = [
+        r for r in records
+        if r.get("symbol") not in index_symbols and r.get("symbol") in etf_symbols
+    ]
+    stock_records = [
+        r for r in records
+        if r.get("symbol") not in index_symbols and r.get("symbol") not in etf_symbols
+    ]
+    return index_records, etf_records, stock_records
+
+
+def _latest_bar_before(history: pl.DataFrame, day: date) -> pl.DataFrame:
+    """取 `day` 之前最近一个交易日的行 —— 盘中增量计算的「昨日递推状态」。
+
+    不能取历史的最后一根: get_enriched_history(today, N) 的窗口是 `date <= today`,
+    而盘中 today 分区已被前几轮实时落盘 → 最后一根就是今天。把它当昨日值,
+    交叉类信号 (金叉/突破) 的 _prev_* 等于今日自身, 当天恒 false 并写盘。
+    """
+    if history is None or history.is_empty() or "date" not in history.columns:
+        return pl.DataFrame()
+    earlier = history.filter(pl.col("date") < day)
+    if earlier.is_empty():
+        return pl.DataFrame()
+    return earlier.filter(pl.col("date") == earlier["date"].max())
+
+
 def _monitor_name_map(repo) -> dict[str, str]:
     """监控回填用的 symbol → name 映射 (股票 + ETF + 指数, 股票优先)。
 
@@ -812,6 +851,7 @@ class QuoteService:
             # get_realtime_indices(symbols) 用独立端点补拉 (如 fuyao 指数快照);
             # 未实现的源指数缓存为空, 由日K兜底接管。
             replace_index_cache = True
+            requested_index_symbols: set[str] = set()
             fetch_indices = getattr(provider, "get_realtime_indices", None)
             if callable(fetch_indices):
                 # 偏离值基准指数 (科创50/创业板综指等) 一并拉取, 供盘中
@@ -829,6 +869,10 @@ class QuoteService:
                         replace_index_cache = False
                     else:
                         records = records + fetched_indices
+                        # 这轮显式请求过的指数代码必须原样带下去: 指数维表只有
+                        # 101 行, 而实际拉取的 000002.SH/399107.SZ 等基准指数不在其中,
+                        # 只靠 get_index_symbol_set() 判定会把它们当股票写进 kline_daily。
+                        requested_index_symbols = set(wanted)
                 except Exception as e:  # noqa: BLE001
                     logger.warning("指数行情拉取失败 (%s): %s", provider_name, e)
                     replace_index_cache = False
@@ -841,6 +885,7 @@ class QuoteService:
             now_ts=now_ts,
             replace_index_cache=replace_index_cache,
             final_boundary_ms=final_boundary_ms,
+            extra_index_symbols=requested_index_symbols,
         )
 
     def _process_full_market_records(
@@ -851,6 +896,7 @@ class QuoteService:
         now_ts: float,
         replace_index_cache: bool = True,
         final_boundary_ms: int | None = None,
+        extra_index_symbols: set[str] | None = None,
     ) -> tuple[pl.DataFrame, pl.DataFrame | None] | None:
         """把全市场 records 写盘并增量计算 enriched。
 
@@ -861,6 +907,11 @@ class QuoteService:
         all_index_symbols = set(self._repo.get_index_symbol_set()) if self._repo else set()
         core_index_symbols = set(CORE_INDEX_SYMBOLS)
         all_index_symbols.update(core_index_symbols)
+        # 本轮显式拉取的指数 (含基准指数, 许多不在 101 行的指数维表里) 必须计入,
+        # 否则会被 stock_records 当成股票写进 kline_daily —— 指数点位 (如 3777) 混入
+        # 个股分区, 任何全市场扫描/回测都会吃到这批伪个股。
+        if extra_index_symbols:
+            all_index_symbols.update(extra_index_symbols)
         all_etf_symbols = set()
         if self._repo:
             etf_inst = self._repo.get_etf_instruments()
@@ -881,12 +932,9 @@ class QuoteService:
             )
             self._last_final_confirmed = confirmed_final
 
-        index_records = [r for r in records if r.get("symbol") in all_index_symbols]
-        etf_records = [r for r in records if r.get("symbol") in all_etf_symbols]
-        stock_records = [
-            r for r in records
-            if r.get("symbol") not in all_index_symbols and r.get("symbol") not in all_etf_symbols
-        ]
+        index_records, etf_records, stock_records = _split_by_asset_type(
+            records, index_symbols=all_index_symbols, etf_symbols=all_etf_symbols,
+        )
 
         fetch_ms = (time.perf_counter() - t0) * 1000
         fetched_at = time.time() * 1000
@@ -1972,13 +2020,14 @@ class QuoteService:
             # 缓存已被本轮盘中刷新推进到今天时, 它就不是「昨天」: 昨日值必须回取历史。
             # 否则 _prev_* 等于今日值, 交叉类信号 (金叉/突破) 当日恒 false 且落盘。
             if asset_type == "stock" and prev_date is not None and prev_date >= today:
-                prev_enriched, prev_date = self._repo.get_enriched_history(today, 60), None
-                history = prev_enriched
-                if history is not None and not history.is_empty():
-                    prev_date = history["date"].max()
-                    prev_enriched = history.filter(pl.col("date") == prev_date)
-                else:
-                    prev_enriched = pl.DataFrame()
+                # 历史窗口含今天 (date <= today), 必须显式取今天之前那根, 见 _latest_bar_before
+                history = self._repo.get_enriched_history(today, 60)
+                prev_enriched = (
+                    _latest_bar_before(history, today)
+                    if history is not None and not history.is_empty()
+                    else pl.DataFrame()
+                )
+                prev_date = prev_enriched["date"].max() if not prev_enriched.is_empty() else None
 
             use_incremental = (
                 asset_type == "stock"

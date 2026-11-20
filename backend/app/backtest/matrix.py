@@ -29,6 +29,9 @@ import pyarrow.dataset as pads
 from app.backtest.minute_trigger import build_minute_exit_reference
 from app.backtest.numba_runtime import run_numba_parallel
 from app.price_limits import (
+    GEM_20PCT_LIMIT_START_DATE,
+    LEGACY_MAIN_BOARD_ST_LIMIT,
+    MAIN_BOARD_ST_LIMIT_CHANGE_DATE,
     numpy_gem_pre_registration_vector,
     numpy_limit_pct_for_date,
     numpy_limit_pct_vectors,
@@ -53,7 +56,7 @@ except ImportError:
 
 _MATRIX_CACHE_VERSION = 1
 # Price-limit rules are baked into the mmap fields and lock arrays.
-_DIRECT_MATRIX_LOADER_VERSION = 5
+_DIRECT_MATRIX_LOADER_VERSION = 6   # 6: 涨跌停锁改用带宽自证 + 注册制无涨跌幅窗口
 _MATRIX_AXIS_INDEX_VERSION = 1
 _ARROW_BATCH_SIZE = 131_072
 _SCORE_ASSET_CHUNK_SIZE = 256
@@ -1017,6 +1020,9 @@ def _build_market_data_matrix_from_dataset(
         names,
         latest_limits,
         apply_latest_limits=actual_dates[-1] == _latest_partition_date(root),
+        no_limit=_no_limit_mask(instruments, actual_symbols, actual_dates, seen),
+        high=arrays["high"],
+        low=arrays["low"],
     )
     timestamps, session_ids = _matrix_time_axes(actual_dates)
     _make_read_only(
@@ -1426,6 +1432,24 @@ def _populate_matrix_derived_arrays(
             np.copyto(fields[name], values, where=seen)
     if "raw_close" in wanted_fields and "raw_close" not in parquet_fields:
         np.copyto(fields["raw_close"], arrays["close"])
+    if "turnover_rate" in wanted_fields and "turnover_rate" in fields:
+        # 存储列优先, 空值逐格回填: 源不提供换手率的板块 (深市) 历史分区整列为
+        # null, 缺失的格子静默按 NaN 参与筛选 → turnover 条件把该板块整段剔除。
+        # 已核实 2023-04-24 / 2025-09-08 沪市真值与 volume*1e4/float_shares
+        # 逐行 100% 一致, 同一公式可安全回填。
+        # 确有空格的帧才额外装股本, 满值帧不付这份内存。
+        if not np.isfinite(fields["turnover_rate"][seen]).all():
+            # 显式 None 判断: fields 里是 ndarray, `or` 会触发逐元素真值
+            # (ValueError: truth value of an array ... is ambiguous)。
+            float_shares = fields.get("float_shares")
+            if float_shares is None:
+                float_shares = _instrument_axis_values(
+                    actual_symbols, {"float_shares"}, instruments, time_count=seen.shape[0],
+                )[1].get("float_shares")
+            if float_shares is not None:
+                _fill_turnover_rate_matrix(
+                    fields["turnover_rate"], arrays["volume"], float_shares, seen,
+                )
     if "turnover_rate" in wanted_fields and "turnover_rate" not in parquet_fields:
         float_shares = fields.get("float_shares")
         if float_shares is None:
@@ -1448,6 +1472,40 @@ def _populate_matrix_derived_arrays(
             )
     return names, latest_limits
 
+
+def _fill_turnover_rate_matrix(
+    target: np.ndarray,
+    volume: np.ndarray,
+    float_shares: np.ndarray,
+    seen: np.ndarray,
+) -> None:
+    """只回填空格子: volume*1e4/float_shares, 不碰已有值。
+
+    股本随公告期变化, 历史行应尽量用存储列 (当时口径); 只在追溯不到的格子补算。
+    """
+    shares = (
+        float_shares
+        if float_shares.ndim == 2
+        else np.broadcast_to(float_shares.reshape(1, -1), volume.shape)
+    )
+    rows_per_chunk = max(1, (32 * 1024 * 1024) // max(1, volume.shape[1] * 4))
+    for start in range(0, volume.shape[0], rows_per_chunk):
+        stop = min(volume.shape[0], start + rows_per_chunk)
+        vol = volume[start:stop]
+        share_chunk = shares[start:stop]
+        valid = (
+            np.isnan(target[start:stop])
+            & seen[start:stop]
+            & np.isfinite(vol)
+            & (vol > 0)
+            & np.isfinite(share_chunk)
+            & (share_chunk != 0)
+        )
+        # share_chunk 先替换为 1 再除, 避免 0/NaN 的除法警告; 非 valid 格不 copy
+        computed = np.multiply(vol, np.float32(10_000.0)) / np.where(
+            np.isfinite(share_chunk) & (share_chunk > 0), share_chunk, np.float32(1.0),
+        )
+        np.copyto(target[start:stop], computed, where=valid)
 
 def _write_turnover_rate_matrix(
     target: np.ndarray,
@@ -1598,7 +1656,8 @@ def _instrument_fingerprint(instruments: pl.DataFrame | None) -> bytes:
         return b"no-instruments"
     columns = [
         name
-        for name in ("symbol", "name", "total_shares", "float_shares", "limit_up", "limit_down")
+        for name in ("symbol", "name", "listing_date", "total_shares", "float_shares",
+                     "limit_up", "limit_down")
         if name in instruments.columns
     ]
     payload = instruments.select(columns).sort("symbol").to_dicts()
@@ -2177,6 +2236,58 @@ def _instrument_axis_values(
     return names, fields, limits
 
 
+def _no_limit_mask(
+    instruments: pl.DataFrame | None,
+    symbols: list[str],
+    trading_dates: Sequence[date],
+    seen: np.ndarray,
+) -> np.ndarray | None:
+    """注册制新股上市初期无涨跌幅日 (True = 当日无涨跌停限制)。
+
+    用 instruments.listing_date + 「symbol 内日期序号 <= 窗口交易日数」判定,
+    与 indicators/pipeline.py 的同名门控同口径。缺少 listing_date 列时返回 None,
+    调用方按「有限价」处理 (与旧行为一致)。
+    """
+    if instruments is None or instruments.is_empty():
+        return None
+    if "symbol" not in instruments.columns or "listing_date" not in instruments.columns:
+        return None
+    from app.price_limits import is_no_limit_day, no_limit_window_days, parse_listing_date
+
+    by_symbol = {
+        str(row["symbol"]): parse_listing_date(row.get("listing_date"))
+        for row in instruments.unique(subset=["symbol"]).iter_rows(named=True)
+    }
+    mask = np.zeros(seen.shape, dtype=bool)
+    hit = False
+    for asset_id, symbol in enumerate(symbols):
+        listing = by_symbol.get(symbol)
+        if no_limit_window_days(symbol, listing) == 0:
+            continue
+        rows = np.flatnonzero(seen[:, asset_id])
+        for rank, time_id in enumerate(rows, start=1):
+            if is_no_limit_day(symbol, listing, trading_dates[time_id], day_rank=rank):
+                mask[time_id, asset_id] = True
+                hit = True
+    return mask if hit else None
+
+
+def _board_limit_vector(
+    symbols: list[str],
+    pct: np.ndarray,
+    *,
+    pre_gem: bool,
+) -> np.ndarray:
+    """把 ST 的 5% 带宽换成板块带 (创业板注册制前是 10%)。"""
+    from app.price_limits import board_limit_pct
+
+    result = pct.astype(np.float64, copy=True)
+    for i, symbol in enumerate(symbols):
+        if result[i] <= 0.05 + 1e-9:
+            result[i] = 0.10 if pre_gem and symbol.startswith(("300", "301", "302")) else board_limit_pct(symbol)
+    return result
+
+
 def _limit_lock_matrices(
     close: np.ndarray,
     raw_close: np.ndarray,
@@ -2189,6 +2300,9 @@ def _limit_lock_matrices(
     out_up: np.ndarray | None = None,
     out_down: np.ndarray | None = None,
     apply_latest_limits: bool = True,
+    no_limit: np.ndarray | None = None,
+    high: np.ndarray | None = None,
+    low: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     shape = close.shape
     up_locked = out_up if out_up is not None else np.zeros(shape, dtype=np.uint8)
@@ -2201,6 +2315,21 @@ def _limit_lock_matrices(
     down_locked.fill(0)
     legacy_pct, current_pct = numpy_limit_pct_vectors(symbols, names)
     pre_gem_pct = numpy_gem_pre_registration_vector(symbols, legacy_pct, names)
+    # 同一套向量的「板块带」版本 (把 5% 的 ST 带换成 10%/20%), 供带宽自证使用
+    board_pre_gem = _board_limit_vector(symbols, pre_gem_pct, pre_gem=True)
+    board_legacy = _board_limit_vector(symbols, legacy_pct, pre_gem=False)
+    board_current = _board_limit_vector(symbols, current_pct, pre_gem=False)
+    # 原始 high/low: OHLC 与 close 共享当日复权比例, 由 raw_close/close 还原
+    raw_high = raw_low = None
+    if high is not None and low is not None:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(
+                np.isfinite(raw_close) & np.isfinite(close) & (close != 0),
+                raw_close / close,
+                np.nan,
+            )
+        raw_high = high.astype(np.float64, copy=False) * ratio
+        raw_low = low.astype(np.float64, copy=False) * ratio
 
     previous_close = np.full(shape[1], np.nan, dtype=np.float64)
     previous_raw = np.full(shape[1], np.nan, dtype=np.float64)
@@ -2243,6 +2372,34 @@ def _limit_lock_matrices(
             & (current_raw > 0)
         )
         if valid.any():
+            # 风险警示带宽自证 (与 indicators/pipeline.py 同口径): instruments.name
+            # 是同步当日快照, 拿它套全历史会让 ST 前的年份按 ±5% 算, 一年多出
+            # 数百个假涨停/假跌停。市场能证伪 —— 当日 high 冲过板块带 (10%/20%)
+            # 涨停价, 或 low 跌破其跌停价, 就必然不是 5% 带。
+            board_pct = np.select(
+                [
+                    trading_dates[time_id] < GEM_20PCT_LIMIT_START_DATE,
+                    trading_dates[time_id] < MAIN_BOARD_ST_LIMIT_CHANGE_DATE,
+                ],
+                [board_pre_gem, board_legacy],
+                default=board_current,
+            )
+            if raw_high is not None and raw_low is not None:
+                st_pct = np.full(shape[1], LEGACY_MAIN_BOARD_ST_LIMIT, dtype=np.float64)
+                st_up = numpy_limit_price(reference, st_pct, up=True)
+                st_dn = numpy_limit_price(reference, st_pct, up=False)
+                bd_up = numpy_limit_price(reference, board_pct, up=True)
+                bd_dn = numpy_limit_price(reference, board_pct, up=False)
+                hi = raw_high[time_id]
+                lo = raw_low[time_id]
+                wider = np.isfinite(hi) & (hi > bd_up + 0.005)
+                wider |= np.isfinite(lo) & (lo < bd_dn - 0.005)
+                # 只对「按 5% 带」判定的格生效; 板块带本身已经是 10%/20% 的保持原样
+                st_mask = (limit_pct <= LEGACY_MAIN_BOARD_ST_LIMIT + 1e-9) & wider
+                limit_pct = np.where(st_mask, board_pct, limit_pct)
+            # 无涨跌幅限制日 (注册制新股上市前 5 个交易日) 一律不 lock
+            if no_limit is not None:
+                valid = valid & ~no_limit[time_id]
             up_price = numpy_limit_price(reference, limit_pct, up=True)
             down_price = numpy_limit_price(reference, limit_pct, up=False)
             if apply_latest_limits and time_id == shape[0] - 1:

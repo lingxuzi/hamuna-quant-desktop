@@ -36,11 +36,9 @@ type FieldDef = { label: string; fmt: FmtType; group?: string }
 const FIELD_DEFS: Record<TabKey, FieldDef[]> = {
   metrics: [
     { label: '基本每股收益 EPS', fmt: 'perShare', key: 'eps_basic' } as any,
-    { label: '稀释每股收益 EPS', fmt: 'perShare', key: 'eps_diluted' } as any,
     { label: '每股净资产 BPS', fmt: 'perShare', key: 'bps' } as any,
-    { label: '每股经营现金流', fmt: 'perShare', key: 'ocfps' } as any,
     { label: '净资产收益率 ROE', fmt: 'pct', key: 'roe' } as any,
-    { label: '稀释 ROE', fmt: 'pct', key: 'roe_diluted' } as any,
+    { label: '扣非加权平均 ROE', fmt: 'pct', key: 'index_deduct_weighted_avg_roe' } as any,
     { label: '总资产收益率 ROA', fmt: 'pct', key: 'roa' } as any,
     { label: '销售毛利率', fmt: 'pct', key: 'gross_margin' } as any,
     { label: '销售净利率', fmt: 'pct', key: 'net_margin' } as any,

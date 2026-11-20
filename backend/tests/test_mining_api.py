@@ -246,7 +246,8 @@ def test_start_accepts_iso_dates_and_persists_json_safe_request(tmp_path):
     manifest = store.get(run_id)
     assert manifest is not None
     assert manifest["request"]["start"] == "2022-08-15"
-    assert manifest["request"]["end"] == "2026-08-15"
+    # end 截到实际最后一个分区 (前一交易日): 盘中当天分区每轮重写, 不用今日数据
+    assert manifest["request"]["end"] == "2023-03-21"
     assert client.post(
         "/api/backtest/mining/runs",
         json={

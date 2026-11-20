@@ -1,6 +1,6 @@
 ---
 name: "shareholder-holding-framework"
-description: "股东&资金持仓分析框架"
+description: "股东与资金持仓分析：股东结构、机构与北向资金动向、股东增减持动机、融资融券情绪与股权质押风险的交叉验证，研判主力资金流向。"
 ---
 
 # 股东&资金持仓分析框架

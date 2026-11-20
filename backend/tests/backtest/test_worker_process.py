@@ -128,7 +128,14 @@ def _write_mining_market_data(
             })
         partition = data_dir / "kline_daily_enriched" / f"date={current.isoformat()}"
         partition.mkdir(parents=True)
-        pl.DataFrame(rows).write_parquet(partition / "part.parquet")
+        pl.DataFrame(
+            rows,
+            schema_overrides={
+                # 与 enriched 落盘 schema 一致: Int64 会让 DuckDB 视图注册报类型冲突
+                "consecutive_limit_ups": pl.UInt32,
+                "consecutive_limit_downs": pl.UInt32,
+            },
+        ).write_parquet(partition / "part.parquet")
 
     instruments_dir = data_dir / "instruments"
     instruments_dir.mkdir(parents=True)
@@ -260,6 +267,38 @@ def test_spawn_mining_writes_four_artifacts_and_returns_compact_summary(tmp_path
         if name == "folds":
             assert "n_dates" in frame.columns
             assert frame.filter(pl.col("regime_state") == "overall")["n_dates"].min() > 0
+
+def test_spawn_screening_runs_l1_screen_in_subprocess(tmp_path):
+    """L1 筛选在 spawn 子进程里跑: 进度事件从子进程回传, 结果结构齐全。
+
+    这是「不阻塞其它 API」的前提 —— 子进程有独立的重活闸 (进程内单例),
+    API 进程的闸不被占用 (见 app/services/mining_screening.py)。
+    """
+    start = date(2023, 1, 2)
+    data_dir = tmp_path / "data"
+    _write_mining_market_data(data_dir, start)
+    events: list[dict] = []
+
+    result = run_worker_task(
+        make_worker_task("screening", data_dir, {
+            "asset_type": "stock",
+            "start": None,
+            "end": (start + timedelta(days=218)).isoformat(),
+            "profile": "exploratory",
+        }),
+        progress_cb=events.append,
+    )
+
+    screening = result["screening"]
+    assert screening["profile"] == "exploratory"
+    assert screening["n_total"] > 0
+    assert screening["screen_window"]["end"] == (start + timedelta(days=218)).isoformat()
+    assert result["worker"]["worker_exitcode"] == 0
+    # 进度事件: 至少一条, 且 done/total 单调到 n_total
+    assert events and events[-1]["phase"] == "screening"
+    assert events[-1]["done"] == events[-1]["total"] == screening["n_total"]
+    assert all(event["done"] <= event["total"] for event in events)
+
 
 def test_spawn_mining_benchmarks_strategy_on_every_outer_fold(tmp_path):
     start = date(2023, 1, 2)
@@ -572,14 +611,14 @@ def _patch_generation_drift(monkeypatch, data_dir, *, always: bool) -> dict:
     original = BacktestEngine.assert_data_generation
     state = {"drifts": 0}
 
-    def drift(engine_self, asset_type, expected):
+    def drift(engine_self, asset_type, expected, **kwargs):
         if expected is not None and (always or state["drifts"] == 0):
             state["drifts"] += 1
             bump_enriched_generation(data_dir, asset_type)
             raise EnrichedGenerationUnavailableError(
                 "simulated concurrent publication"
             )
-        return original(engine_self, asset_type, expected)
+        return original(engine_self, asset_type, expected, **kwargs)
 
     monkeypatch.setattr(BacktestEngine, "assert_data_generation", drift)
     return state

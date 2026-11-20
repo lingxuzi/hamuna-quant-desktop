@@ -9,6 +9,10 @@ interface DailyLiveRow {
   high?: number | null
   low?: number | null
   close?: number | null
+  /** enriched 当日成交量/额: 必须一并带进补出的蜡烛, 否则 VOL5/量比按 0 摊薄 */
+  volume?: number | null
+  amount?: number | null
+  change_pct?: number | null
 }
 
 /** 自选日K尾部修补；只生成展示序列，不修改查询缓存。 */
@@ -31,7 +35,13 @@ export function extendDailyTail(
       patched[symbol] = rows
       continue
     }
-    const candle = { date: asOf, open: open!, high: high!, low: low!, close: close! }
+    const candle = {
+      date: asOf, open: open!, high: high!, low: low!, close: close!,
+      // 量/额/涨跌幅是可选携带: 缺了也别写 null, 让下游拿不到就当缺失
+      ...(typeof live?.volume === 'number' && Number.isFinite(live.volume) ? { volume: live.volume } : {}),
+      ...(typeof live?.amount === 'number' && Number.isFinite(live.amount) ? { amount: live.amount } : {}),
+      ...(typeof live?.change_pct === 'number' && Number.isFinite(live.change_pct) ? { change_pct: live.change_pct } : {}),
+    }
     const last = rows[rows.length - 1]
     patched[symbol] = last.date === asOf
       ? [...rows.slice(0, -1), { ...last, ...candle }]

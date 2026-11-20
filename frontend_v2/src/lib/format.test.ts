@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { cnDateTimeFromUtc, fmtAssetPrice, fmtPrice, fmtPct, roundPriceToTick } from './format'
+import { cnDateTimeFromUtc, fmtCoeff, fmtPrice, fmtPct, formatLogTime, roundPriceToTick, fmtAssetPrice } from './format'
 import { getLimitPrices } from './intraday-chart'
 
 describe('价格按资产类型保留交易精度', () => {
@@ -56,5 +56,31 @@ describe('cnDateTimeFromUtc: naive UTC 串 → 北京时间', () => {
     for (const v of ['', '   ', null, undefined, 'garbage', 'not-a-date']) {
       expect(cnDateTimeFromUtc(v)).toBe('')
     }
+  })
+})
+
+describe('formatLogTime: 日志时间戳一律渲染成北京时间', () => {
+  // 后端 pipeline_jobs 写的 ts 是 UTC (带 Z)。用 toLocaleTimeString 会按浏览器
+  // 本地时区渲染, CI(UTC) 或欧美用户看到的时间整体偏移 8 小时。
+  it('UTC 串换算为北京时间', () => {
+    expect(formatLogTime('2026-09-19T03:21:07Z')).toBe('11:21:07')
+  })
+
+  it('跨日不越界显示为 00:00 而非 24:00', () => {
+    expect(formatLogTime('2026-09-18T16:00:00Z')).toBe('00:00:00')
+  })
+
+  it('空值与非法值返回空串', () => {
+    for (const v of ['', 'garbage']) expect(formatLogTime(v)).toBe('')
+  })
+})
+
+describe('fmtCoeff: IC/IR 是裸系数不是涨跌幅', () => {
+  it('不乘 100, 不带百分号', () => {
+    // 后端门槛是 |IC|≥0.02, 显示成 "+2.00%" 会与门槛差 100 倍
+    expect(fmtCoeff(0.0213)).toBe('+0.021')
+    expect(fmtCoeff(-0.15)).toBe('-0.150')
+    expect(fmtCoeff(0)).toBe('0.000')
+    expect(fmtCoeff(null)).toBe('—')
   })
 })

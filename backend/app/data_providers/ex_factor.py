@@ -16,10 +16,35 @@ ponytail: 只放公式 + 自检 + 事件结构, 不做通用因子引擎; 需要
 from __future__ import annotations
 
 import logging
-import math
 from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
+
+# 上游 (TDX 协议) 字段全是 float32: 日K收盘价、派息、送转、配股、配股价。
+# float32 相对噪声 ~6e-8, 而参考价恰好落在 x.xx5 分界时 (前收与派息都落在
+# 3 位小数网格上, 差值压在分界上的概率约两成), 噪声会决定舍入方向 ——
+# 参考价差 1 分 → 单事件因子差 0.09% → 除权日限价差 1 分, 收盘贴着限价时
+# 会被误判成涨跌停 (实测 556/21665 行 / 470 只标的)。
+#
+# 还原策略: 只把「float32 噪声量级」的输入还原到十进制网格; 供应商自己按股本
+# 比例推出的值 (送转 0.3999975919723511, 相对偏差 ~6e-6) 不还原 ——
+# 那是供应商的精度问题, 强行落到网格会把误差放大到 0.2 分。
+_CLEAN_REL_TOL = 1e-7
+
+# 各输入的自然网格: 价格 2 位 (分), 事件参数 3 位 (每 10 股口径 ÷10 后的精度)
+_PRICE_DIGITS = 2
+_EVENT_DIGITS = 3
+
+
+def _snap_grid(value: float, digits: int) -> float:
+    """把 float32 噪声还原到十进制网格; 偏差超过噪声量级则原样保留。"""
+    if not value:
+        return 0.0
+    grid = round(value, digits)
+    if abs(value - grid) <= _CLEAN_REL_TOL * max(abs(value), 1.0):
+        return grid
+    return value
 
 
 def ref_price(
@@ -28,12 +53,42 @@ def ref_price(
     """交易所除权参考价: (P - D + AR·AP) / (1 + S + AR), 四舍五入(half-up)保留 2 位。
 
     half-up 是交易所口径; 银行家舍入会让约半数事件在第 2 位小数上偏离(对拍实证)。
+    输入先还原到十进制网格 (见 _snap_grid) 再用 Decimal 做 half-up ——
+    float 路径在 x.xx5 分界上会被 float32 噪声带偏 1 分。
     """
-    denom = 1.0 + bonus + allot
+    p = _snap_grid(prev_close, _PRICE_DIGITS)
+    d = _snap_grid(dividend, _EVENT_DIGITS)
+    s = _snap_grid(bonus, _EVENT_DIGITS)
+    ar = _snap_grid(allot, _EVENT_DIGITS)
+    ap = _snap_grid(allot_price, _PRICE_DIGITS)
+    denom = Decimal(1) + Decimal(str(s)) + Decimal(str(ar))
     if denom <= 0:
         return None
-    x = (prev_close - dividend + allot * allot_price) / denom
-    return math.floor(x * 100 + 0.5) / 100
+    x = (Decimal(str(p)) - Decimal(str(d)) + Decimal(str(ar)) * Decimal(str(ap))) / denom
+    return float(x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def recompute_ex_factor(
+    prev_close: float | None,
+    dividend: float | None,
+    bonus: float | None,
+    allot: float | None,
+    allot_price: float | None,
+) -> float | None:
+    """按明细列重算单事件因子 (存量归一化用, 与 factor_rows 同口径)。
+
+    明细列是公式的唯一输入, 存量行的 ex_factor 由旧公式算出 → 与公式漂移。
+    分子用原始前收 (与 factor_rows 一致), 参考价在 ref_price 内部还原。
+    返回 None = 无法重算 (缺明细 / 参考价非法) —— 调用方保留原值。
+    """
+    if prev_close is None:
+        return None
+    ref = ref_price(
+        prev_close, dividend or 0.0, bonus or 0.0, allot or 0.0, allot_price or 0.0
+    )
+    if ref is None or ref <= 0:
+        return None
+    return prev_close / ref
 
 
 def price_limit(symbol: str) -> float:

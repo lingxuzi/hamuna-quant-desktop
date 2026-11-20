@@ -176,7 +176,8 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
           <span className="text-muted">BOLL</span>
           {bollFields.map(([field, label, token]) => <span key={field} style={{ color: color(token) }}>{`${label} ${price(current?.[field], precision)}`}</span>)}
         </span>}
-        {index >= 0 && previous && <span className="text-secondary">至今 <span style={{ color: rows.at(-1)!.close >= previous.close ? palette.bull : palette.bear }}>{fmtPct(rows.at(-1)!.close / previous.close - 1)}</span> · 周期 {rows.length - index}</span>}
+        {/* 分母是该根昨收, 不是该根收盘 —— 标签叫「至今」会让悬停最后一根时显示当日涨跌幅而非 0% */}
+        {index >= 0 && previous && <span className="text-secondary">持仓 <span style={{ color: rows.at(-1)!.close >= previous.close ? palette.bull : palette.bear }}>{fmtPct(rows.at(-1)!.close / previous.close - 1)}</span> · 周期 {rows.length - index}</span>}
       </div>
     </div>}
     <FinancialPlot scope={scope} series={model} height={plotHeight} paneHeights={paneHeights} pricePrecision={precision}

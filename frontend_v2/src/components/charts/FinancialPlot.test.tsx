@@ -142,15 +142,15 @@ it('only uses the price pane for date selection and alerts, including an invisib
   expect(native.series[0].coordinateToPrice).not.toHaveBeenCalled()
 })
 
-it('daily hover uses the previous close for 至今, preserves indicator panes and resets on symbol changes', async () => {
+it('daily hover uses the previous close for 持仓, preserves indicator panes and resets on symbol changes', async () => {
   const rows = [10, 12, 15].map((close, i) => ({ date: `2026-11-0${i + 3}`, open: close, high: close + 1, low: close - 1, close, volume: 100, rsi_6: 52 }))
   const render = async (symbol: string) => act(async () => root.render(<LightweightDaily symbol={symbol} data={rows} activeIndicators={['vol', 'rsi']} />))
   await render('A')
   await act(async () => native.handlers.hover({ time: rows[1].date }))
-  expect(host.textContent).toContain('至今 +50.00% · 周期 2')
+  expect(host.textContent).toContain('持仓 +50.00% · 周期 2')
   expect(native.chart.addSeries.mock.calls.some(call => call[2] === 2)).toBe(true)
   await render('B')
-  expect(host.textContent).not.toContain('至今')
+  expect(host.textContent).not.toContain('持仓')
 })
 
 it('shows every indicator readout at the hovered date, including MACD histogram and both volume averages', async () => {

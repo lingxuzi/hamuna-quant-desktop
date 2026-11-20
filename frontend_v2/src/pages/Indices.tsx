@@ -143,11 +143,10 @@ export function Indices() {
     && minute.data?.date === selectedDate && daily.data?.symbol === selectedSymbol
     ? minute.data.rows : []
   const selectedIdx = selectedDate ? chartRows.findIndex(r => r.date === selectedDate) : -1
-  const prevClose = selectedIdx > 0
-    ? chartRows[selectedIdx - 1].close
-    : chartRows.length >= 2
-      ? chartRows[chartRows.length - 2].close
-      : undefined
+  const selectedBar = selectedIdx >= 0 ? chartRows[selectedIdx] : undefined
+  // 昨收 = 所选日的前一根收盘; 区间第一根没有前一根, 不要回落到「倒数第二天」
+  // (那会让分时图中轴取到未来某天的价格, 整条线偏离数十个百分点)。
+  const prevClose = selectedIdx > 0 ? chartRows[selectedIdx - 1].close : undefined
 
   useEffect(() => {
     setSelectedDate(null)
@@ -161,17 +160,24 @@ export function Indices() {
     }
   }, [chartRows, daily.data?.symbol, selectedDate, selectedSymbol])
 
-  // 读数优先取当日行情快照; 快照日期与日K末根不一致时退回日K, 不混口径
+  // 读数优先取实时快照, 但仅当所选日期就是该快照的日期。点历史某根 K 线时必须
+  // 显示那一天的 OHLC, 否则「今开/最高/最低」永远是最近一日, 与选中蜡烛对不上。
   const quoteDate = selectedQuote?.date
-  const quoteIsCurrent = !quoteDate || quoteDate === lastBar?.date
-  const closeValue = quoteIsCurrent ? (selectedQuoteValue ?? lastBar?.close) : lastBar?.close
+  const bar = selectedBar ?? lastBar
+  const quoteIsCurrent = !!bar && (!quoteDate || quoteDate === bar.date)
+  const closeValue = quoteIsCurrent ? (selectedQuoteValue ?? bar?.close) : bar?.close
   const changeAmt = quoteIsCurrent ? selectedQuote?.change_amount : null
-  const openValue = quoteIsCurrent ? (selectedQuote?.open ?? lastBar?.open) : lastBar?.open
-  const highValue = quoteIsCurrent ? (selectedQuote?.high ?? lastBar?.high) : lastBar?.high
-  const lowValue = quoteIsCurrent ? (selectedQuote?.low ?? lastBar?.low) : lastBar?.low
+  const openValue = quoteIsCurrent ? (selectedQuote?.open ?? bar?.open) : bar?.open
+  const highValue = quoteIsCurrent ? (selectedQuote?.high ?? bar?.high) : bar?.high
+  const lowValue = quoteIsCurrent ? (selectedQuote?.low ?? bar?.low) : bar?.low
+  // 前收与图例昨收同源 (prevClose), 不能再单独取「倒数第二根」—— 那是最近一日的
+  // 前收, 点历史 K 线时与上面的今开/最高/最低不一致。
   const prevCloseValue = quoteIsCurrent && selectedQuote?.prev_close != null
     ? selectedQuote.prev_close
-    : chartRows.length >= 2 ? chartRows[chartRows.length - 2].close : undefined
+    : prevClose
+  // 选中历史日时不能用实时快照的涨跌幅 (那是最近一日的); 按该日收盘与前收现算。
+  const barPct = bar && prevClose ? (bar.close - prevClose) / prevClose : null
+  const displayPct = quoteIsCurrent ? selectedQuotePct : barPct
 
   return (
     <div className="min-w-0">
@@ -254,9 +260,9 @@ export function Indices() {
               <h2>{selectedInfo?.name || selectedSymbol || '未选择指数'}</h2>
               <div className="px">
                 <b className="num">{fmtNum(closeValue)}</b>
-                <i className={tone(selectedQuotePct)}>
-                  {changeAmt != null && `${Number(changeAmt) > 0 ? '+' : ''}${fmtNum(changeAmt)}　`}
-                  {fmtPct(selectedQuotePct)}
+                <i className={tone(displayPct)}>
+                  {changeAmt != null && quoteIsCurrent && `${Number(changeAmt) > 0 ? '+' : ''}${fmtNum(changeAmt)}　`}
+                  {fmtPct(displayPct)}
                 </i>
               </div>
             </div>

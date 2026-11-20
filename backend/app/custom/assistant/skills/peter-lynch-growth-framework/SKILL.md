@@ -1,6 +1,6 @@
 ---
 name: "peter-lynch-growth-framework"
-description: "Peter Lynch Growth Stock Perspective"
+description: "彼得·林奇成长股视角：成长赛道筛选、个股成长性分析、中小盘标的研判与题材加成长结合选股，含散户优势、常识投资与十倍股导向的心智模型。"
 title: "彼得林奇成长股"
 ---
 

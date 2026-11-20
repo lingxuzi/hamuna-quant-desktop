@@ -23,6 +23,14 @@ it('uses the row date over the asset snapshot date, and tolerates legacy rows wi
   expect(extendDailyTail(base, legacy, undefined)[stock]).toBe(base[stock])
 })
 
+it('carries volume/amount into the appended live candle', () => {
+  // 补出的蜡烛缺 volume 时, VOL5/VOL10/量比会把当日按 0 摊薄 (VOL5 低约 23%)
+  const withVol = [{ ...live[0], volume: 120, amount: 4_200, change_pct: 0.02 }]
+  const out = extendDailyTail(base, withVol, { stock: '2026-11-05' })[stock]
+  expect(out.at(-1)).toMatchObject({ date: '2026-11-05', volume: 120, amount: 4200 })
+  expect(out.at(-1)?.change_pct).toBeCloseTo(0.02)
+})
+
 it('ignores invalid prices and dates older than the last stored candle', () => {
   expect(extendDailyTail(base, [{ ...live[0], close: NaN }], { stock: '2026-11-05' })[stock]).toBe(base[stock])
   expect(extendDailyTail(base, [{ ...live[0], date: '2026-11-03' }], { stock: '2026-11-05' })[stock]).toBe(base[stock])

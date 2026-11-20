@@ -220,7 +220,7 @@ export function Factors() {
         {activeTab === 'create' && (
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="flex shrink-0 items-center px-1">
-              <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+              <div className="inline-flex rounded-btn border border-border bg-surface/80">
                 {CREATE_MODES.map(({ id, label }) => (
                   <button
                     key={id}

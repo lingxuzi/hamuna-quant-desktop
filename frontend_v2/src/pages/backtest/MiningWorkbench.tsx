@@ -215,8 +215,12 @@ function foldKindLabel(kind?: string | null) {
   return undefined
 }
 
-function pctText(value: number | null | undefined, digits = 1) {
-  return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : '—'
+/**
+ * IC / IR 是 Spearman 秩相关系数与信息比率, 不是涨跌幅 —— 后端门槛是 |IC|≥0.02 这种
+ * 裸数值 (见 auto_mining.SCREEN_GATES), 这里必须同口径显示, 不能 ×100 写成「2.0%」。
+ */
+function icText(value: number | null | undefined, digits = 3) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '—'
 }
 
 /** 自动挖掘 L1 筛选摘要: 达标因子清单 + 失败原因分布 (来自任务请求的 auto_screening)。 */
@@ -245,12 +249,12 @@ function AutoScreeningCard({ screening }: { screening: AutoScreening }) {
           {screening.qualified.map(item => (
             <span
               key={item.factor_name}
-              title={`${item.factor_name} · IC ${pctText(item.ic)} · IR ${item.ir?.toFixed(2) ?? '—'} · t ${item.t?.toFixed(2) ?? '—'} · q ${item.q?.toFixed(3) ?? '—'}`}
+              title={`${item.factor_name} · IC ${icText(item.ic)} · IR ${item.ir?.toFixed(2) ?? '—'} · t ${item.t?.toFixed(2) ?? '—'} · q ${item.q?.toFixed(3) ?? '—'}`}
               className={`inline-flex items-center gap-1 rounded-btn border px-1.5 py-0.5 text-[10px] font-medium ${item.direction > 0 ? 'border-bull/30 bg-bull/10 text-bull' : 'border-bear/30 bg-bear/10 text-bear'}`}
             >
               {item.label}
               {item.direction > 0 ? '↑' : '↓'}
-              <span className="font-mono opacity-80">{pctText(item.ic)}</span>
+              <span className="font-mono opacity-80">{icText(item.ic)}</span>
             </span>
           ))}
         </div>

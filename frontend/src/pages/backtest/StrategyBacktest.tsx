@@ -2158,7 +2158,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
       <section className="min-w-0 space-y-3 bg-base/15 px-3 py-3 xl:overflow-y-auto">
         {/* 模式切换: 仓位模拟 / 全量模拟 */}
         <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5 shadow-sm">
+          <div className="inline-flex rounded-btn border border-border bg-surface/80 shadow-sm">
             {([['position', '仓位模拟'], ['full', '全量模拟']] as const).map(([val, label]) => (
               <button
                 key={val}

@@ -117,7 +117,7 @@ function DisclaimerStep({ onNext }: { onNext: () => void }) {
   return (
     <div className="ob">
       <section className="thesis">
-        <h1>TSP · 智能量化<br /><em>工作台引擎</em></h1>
+        <h1>量化<br /><em>工作台引擎</em></h1>
         <p>接入行情与扩展数据，用开源引擎回测自己的策略，盘后复核结果。</p>
         <ol className="flow">
           <li><u>01</u><div><b>接入数据</b><small>连接已获授权的数据源，建立研究基础。</small></div></li>
@@ -137,13 +137,14 @@ function DisclaimerStep({ onNext }: { onNext: () => void }) {
             <dt>不荐股，不预测，不承诺收益</dt>
             <dd>筛选、评分、监控和 AI 输出仅用于学习与研究，不构成投资建议。回测呈现历史表现，不代表未来收益。</dd>
           </div>
-          <div>
-            <dt>遵守开源许可与服务协议</dt>
-            <dd>
-              <p>使用、修改或分发本项目须遵守 {PROJECT_LICENSE_NAME} 许可，保留版权与许可声明。软件按现状提供，不作保证。</p>
-              <p>数据源、插件与模型服务适用各自条款。请取得必要授权，遵守使用范围与访问限制；软件开源不等于数据开放授权。</p>
+
+          {/*<div className="pt-5">
+            <dt>使用公开数据</dt>
+            <dd className="mt-2 space-y-2 leading-6 text-secondary">
+              <p>通达信提供了日线，分时数据</p>
+              <p>同花顺提供了公司财务数据</p>
             </dd>
-          </div>
+          </div>*/}
         </dl>
       </section>
 

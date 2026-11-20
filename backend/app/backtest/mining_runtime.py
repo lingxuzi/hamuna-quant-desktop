@@ -19,14 +19,15 @@ import polars as pl
 
 from app.backtest.factor import (
     FACTOR_METHODOLOGY_VERSION,
-    FACTOR_WARMUP_DAYS,
     FactorBacktestService,
     FactorBatchConfig,
+    factor_warmup_days,
 )
 from app.backtest.fundamentals import (
     FUNDAMENTAL_FACTOR_NAMES,
     attach_fundamental_factors,
     load_fundamental_snapshot,
+    requires_raw_close,
 )
 from app.backtest.mining import (
     MAX_FINALISTS,
@@ -61,7 +62,7 @@ from app.enriched_generation import (
 )
 from app.factors.registry import factor_columns_view
 from app.services.mining_jobs import MiningRunStore
-from app.services.mining_preflight import enriched_partition_dates
+from app.services.mining_preflight import enriched_partition_dates, mining_data_end
 from app.services.mining_schedule import MINING_ALGORITHM_VERSION
 from app.strategy import config as strategy_config
 from app.strategy.engine import StrategyEngine
@@ -346,10 +347,13 @@ def _load_compact_factor_panel(
         for name in factor_names
     ):
         panel_columns.append("consecutive_limit_ups")
+    # 同 factor._load_factor_panel: PB 类要未复权价, 否则回退复权 close 低估 PB。
+    if config.asset_type == "stock" and requires_raw_close(factor_names):
+        panel_columns.append("raw_close")
     load_start = (
         config.start
         if all(name == "turnover_rate" for name in factor_names)
-        else config.start - timedelta(days=FACTOR_WARMUP_DAYS)
+        else config.start - timedelta(days=factor_warmup_days(factor_names))
     )
     raw = factor_service.engine.load_panel(
         config.symbols,
@@ -508,7 +512,7 @@ def run_mining_runtime(
             service.engine.clear_panel_cache()
         panel_started = time.perf_counter()
         try:
-            generation = factor_service._data_generation(request.asset_type)
+            generation = factor_service._data_generation(request.asset_type, request.end)
             if attempt == 0 and generation != expected_generation:
                 raise ValueError(
                     "mining data generation changed after the run was queued"
@@ -529,7 +533,9 @@ def run_mining_runtime(
                 request.start,
                 request.end,
             )
-            factor_service._assert_data_generation(request.asset_type, generation)
+            factor_service._assert_data_generation(
+                request.asset_type, generation, request.end
+            )
             panel = attach_single_forward_return(
                 source_panel,
                 start=request.start,
@@ -572,7 +578,9 @@ def run_mining_runtime(
                 expected_generation=generation,
                 cancel_check=cancel_check,
             )
-            factor_service._assert_data_generation(request.asset_type, generation)
+            factor_service._assert_data_generation(
+                request.asset_type, generation, request.end
+            )
             phase_ms["matrix"] = round(
                 (time.perf_counter() - matrix_started) * 1000.0, 3
             )
@@ -854,7 +862,10 @@ def _decode_runtime_request(
     ):
         raise ValueError("mining start must not be after end")
     start = max(requested_start or all_dates[0], all_dates[0])
-    end = min(requested_end or all_dates[-1], all_dates[-1])
+    # 不用今日数据: 盘中实时行情每轮覆写当天分区并换世代, 挖掘读到当天数据
+    # 必然撞世代漂移。池化到前一交易日 (及更早) 才能拿稳定快照。
+    capped_end = mining_data_end(data_dir, asset_type, requested_end, dates=all_dates)
+    end = capped_end if capped_end is not None else all_dates[-1]
     if start > end:
         raise ValueError("mining date range contains no enriched data")
 

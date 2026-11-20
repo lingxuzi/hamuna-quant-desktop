@@ -902,15 +902,16 @@ export function EChartsCandlestick({
       html += `<span style="color:${CT().text}">换手</span>`
       html += `<span style="color:${CT().text}">${turnoverRate.toFixed(2)}%</span>`
     }
-    // 至今: 仅当竖虚线(crosshair)在图上且鼠标悬停某根 K 线时显示。
+    // 持仓收益: 仅当竖虚线(crosshair)在图上且鼠标悬停某根 K 线时显示。
     // 最新价取最后一根K线收盘 (后端 _maybe_inject_live_candle 盘中注入实时价, 收盘后即最近收盘)。
     // 基准取该K线昨收(前一日收盘), 与同花顺及全市场涨幅口径一致; 数据第一根K线无昨收则跳过。
+    // 标签不能叫「至今」—— 分母是昨收不是该根收盘, 悬停最后一根会显示当日涨跌幅而非 0%。
     if (hoverActiveRef.current && prev && Number.isFinite(prev.close) && prev.close > 0) {
       const latestPrice = data[data.length - 1].close
       if (Number.isFinite(latestPrice)) {
         const sinceRatio = (latestPrice - prev.close) / prev.close
         const sinceClr = sinceRatio >= 0 ? THEME().bull : THEME().bear
-        html += `<span style="color:${CT().text}">至今</span>`
+        html += `<span style="color:${CT().text}">持仓</span>`
         html += `<span style="color:${sinceClr}">${fmtPct(sinceRatio)}</span>`
         // 周期数: 从该K线(含)到最新一根K线共多少根; 悬停最后一根时为 1
         html += `<span style="color:${CT().text}">周期 ${data.length - idx}</span>`
@@ -987,6 +988,9 @@ export function EChartsCandlestick({
       let foundIdx = -1
       if (axesInfo) {
         for (const info of Object.values(axesInfo)) {
+          // 只认 x 轴: y 轴的 value 是价格, 把 3777.00 当索引会命中末根 K 线并跳错位置。
+          // 当前 echarts 5.6 里 x 恒排在前, 但键顺序无契约保证, 必须显式过滤。
+          if ((info as any)?.axisDim !== 'x') continue
           const val = (info as any)?.value
           if (val == null) continue
           const idx = typeof val === 'number' ? val : d.findIndex(x => x.date === val)

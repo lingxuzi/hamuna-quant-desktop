@@ -187,11 +187,10 @@ export function StockPanel({
 
   const selectedIdx = selectedDate ? rows.findIndex(r => r.date === selectedDate) : -1
   const selectedRow = selectedIdx >= 0 ? rows[selectedIdx] : undefined
-  const prevClose = selectedIdx > 0
-    ? rows[selectedIdx - 1].close
-    : rows.length >= 2
-      ? rows[rows.length - 2].close
-      : undefined
+  // 昨收 = 所选日的前一根日线收盘。区间第一根没有前一根, 必须是 undefined ——
+  // 之前回落取 rows[length-2](区间倒数第二天), 点第一根时分时图以未来价格为中轴,
+  // 整条线被压成偏离数十个百分点的贴地横线。
+  const prevClose = selectedIdx > 0 ? rows[selectedIdx - 1].close : undefined
   if (!symbol) return null
 
   // 财务指标最新一期（metrics 按 period_end 排序，取首项）

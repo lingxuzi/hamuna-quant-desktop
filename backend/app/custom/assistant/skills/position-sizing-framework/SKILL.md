@@ -1,6 +1,6 @@
 ---
 name: "position-sizing-framework"
-description: "仓位与资金管理框架"
+description: "仓位与资金管理：凯利公式定仓、Van Tharp 头寸管理、风险预算与止损纪律，给出单笔风险敞口、总仓位与加减仓的量化规则。"
 ---
 
 # SKILL.md — 仓位与资金管理框架

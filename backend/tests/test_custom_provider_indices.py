@@ -65,19 +65,21 @@ def _service_with_provider(
 
     monkeypatch.setattr(custom_mod, "provider_has_dataset", lambda name, dataset: dataset == "realtime")
     monkeypatch.setattr(custom_mod, "get_provider", lambda name: provider)
-    monkeypatch.setattr(
-        service, "_process_full_market_records",
-        lambda records, *, t0, now_ts, replace_index_cache=True, final_boundary_ms=None: (
-            captured.append(records),
-            index_cache_replacements.append(replace_index_cache),
-        ),
-    )
-    return service, captured, index_cache_replacements
+    captured_extra: list[set[str] | None] = []
+
+    def _capture(records, *, t0, now_ts, replace_index_cache=True,
+                 final_boundary_ms=None, extra_index_symbols=None):
+        captured.append(records)
+        captured_extra.append(extra_index_symbols)
+        index_cache_replacements.append(replace_index_cache)
+
+    monkeypatch.setattr(service, "_process_full_market_records", _capture)
+    return service, captured, index_cache_replacements, captured_extra
 
 
 def test_custom_provider_fetch_appends_index_records(monkeypatch):
     provider = _FakeProvider([_stock_rec()], [_index_rec("000001.SH"), _index_rec("399001.SZ")])
-    service, captured, replacements = _service_with_provider(monkeypatch, provider)
+    service, captured, replacements, extras = _service_with_provider(monkeypatch, provider)
     service._fetch_full_market_quotes()
 
     assert len(captured) == 1
@@ -86,12 +88,16 @@ def test_custom_provider_fetch_appends_index_records(monkeypatch):
     assert replacements == [True]
     # 请求清单 = 核心四只 (无指数监控规则时)
     assert provider.index_calls == [sorted(set(CORE_INDEX_SYMBOLS) | BENCHMARK_INDEX_SYMBOLS)]
+    # 显式拉过的指数代码必须交给分流逻辑, 否则基准指数 (000002.SH 等, 不在 101 行
+    # 指数维表里) 会被当股票写进 kline_daily
+    assert extras[0] is not None
+    assert set(BENCHMARK_INDEX_SYMBOLS) <= extras[0]
 
 
 def test_custom_provider_monitor_indices_join_fetch(monkeypatch):
     """指数监控规则标的并入请求清单 (quote_service._collect_monitor_index_symbols)。"""
     provider = _FakeProvider([_stock_rec()], [_index_rec("000300.SH")])
-    service, _captured, _replacements = _service_with_provider(monkeypatch, provider)
+    service, _captured, _replacements, _extras = _service_with_provider(monkeypatch, provider)
 
     class _Engine:
         rules: ClassVar[dict] = {
@@ -108,7 +114,7 @@ def test_custom_provider_monitor_indices_join_fetch(monkeypatch):
 
 def test_custom_provider_without_indices_protocol_is_silent(monkeypatch):
     """未实现 get_realtime_indices 的源: 个股 records 照常, 指数不补充不报错。"""
-    service, captured, replacements = _service_with_provider(monkeypatch, _ProviderNoIndices())
+    service, captured, replacements, extras = _service_with_provider(monkeypatch, _ProviderNoIndices())
     service._fetch_full_market_quotes()
     assert captured == [[{"symbol": "600519.SH", "last_price": 1480.0}]]
     assert replacements == [True]
@@ -123,7 +129,7 @@ def test_custom_provider_index_fetch_error_is_soft(monkeypatch):
         def get_realtime_indices(self, symbols: list[str]) -> list[dict]:
             raise RuntimeError("index endpoint down")
 
-    service, captured, replacements = _service_with_provider(monkeypatch, _Boom())
+    service, captured, replacements, extras = _service_with_provider(monkeypatch, _Boom())
     service._fetch_full_market_quotes()
     assert len(captured) == 1 and captured[0][0]["symbol"] == "600519.SH"
     assert replacements == [False]
@@ -138,7 +144,7 @@ def test_custom_provider_index_fetch_failure_preserves_cache(monkeypatch):
         def get_realtime_indices(self, symbols: list[str]) -> None:
             return None
 
-    service, captured, replacements = _service_with_provider(monkeypatch, _Unavailable())
+    service, captured, replacements, extras = _service_with_provider(monkeypatch, _Unavailable())
     service._fetch_full_market_quotes()
 
     assert captured == [[_stock_rec()]]
@@ -147,7 +153,7 @@ def test_custom_provider_index_fetch_failure_preserves_cache(monkeypatch):
 
 def test_custom_provider_successful_empty_index_fetch_replaces_cache(monkeypatch):
     """空 list 是成功响应: 与失败 None 区分, 仍按现有语义替换缓存。"""
-    service, captured, replacements = _service_with_provider(
+    service, captured, replacements, extras = _service_with_provider(
         monkeypatch, _FakeProvider([_stock_rec()], []),
     )
     service._fetch_full_market_quotes()

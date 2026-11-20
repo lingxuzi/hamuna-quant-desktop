@@ -1538,52 +1538,28 @@ def market_aware_facts(payload: MarketFactsRequest, request: Request) -> dict:
 
 
 @router.post("/market-aware/build")
-async def market_aware_build(payload: MarketAwareBuildRequest, request: Request) -> dict:
-    """挖掘成功后: 事实 + 冠军因子池 → AI 决策 → 渲染落盘为因子排名策略。"""
-    from app.services.ai_provider import generate_ai_text
-    from app.services.market_aware import (
-        champion_from_run,
-        new_market_aware_id,
-        render_market_aware_strategy,
-        validate_decisions,
-    )
-    from app.services.market_facts import MarketFactsUnavailableError
+async def market_aware_build(payload: MarketAwareBuildRequest, request: Request) -> StreamingResponse:
+    """挖掘成功后: 事实 + 冠军因子池 → AI 决策 → 渲染落盘为因子排名策略。
+
+    NDJSON 阶段流: 前端可实时看到「汇总事实 → 读冠军 → AI 生成 → 校验 → 落盘」,
+    不再是几十秒起步的黑箱等待。落盘失败以 error 事件返回 (流已 200)。
+    """
+    from app.services.market_aware import build_market_aware_stream
     from app.services.mining_jobs import MiningRunStore
-    from app.strategy.market_plan import build_messages, parse_and_validate
 
     data_dir = _data_dir(request)
     run_store = MiningRunStore(data_dir)
     try:
-        facts = _market_facts(payload, request)
-        champion = champion_from_run(run_store, payload.run_id)
-    except (MarketFactsUnavailableError, ValueError, KeyError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    try:
-        text = await generate_ai_text(
-            build_messages(
-                facts,
-                factors=champion["factors"],
-                directions=champion["directions"],
-                asset_type=payload.asset_type,
-            ),
-            temperature=0.2,
-            max_tokens=None,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"AI 生成失败: {exc}") from exc
-    try:
-        decisions = validate_decisions(
-            parse_and_validate(text, factors=champion["factors"]), champion["factors"]
-        )
+        manifest = run_store.get(payload.run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    strategy_id = new_market_aware_id()
-    source = render_market_aware_strategy(
-        champion, decisions, strategy_id=strategy_id, asset_type=payload.asset_type
-    )
-    # 复用唯一落盘实现 (校验链 + 回滚 + engine.reload)
-    try:
-        save_strategy_code_core(
+    if manifest is None:
+        raise HTTPException(status_code=400, detail="挖掘任务不存在")
+
+    async def _persist(source: str, strategy_id: str, decisions: dict) -> None:
+        # 复用唯一落盘实现 (校验链 + 回滚 + engine.reload); 实盘自检较重, 放线程池
+        await run_in_threadpool(
+            save_strategy_code_core,
             StrategyCodeSaveRequest(
                 code=source,
                 strategy_id=strategy_id,
@@ -1595,13 +1571,28 @@ async def market_aware_build(payload: MarketAwareBuildRequest, request: Request)
             _get_engine(request),
             data_dir,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _invalidate_strategy_runtime(request)
-    return {
-        "ok": True,
-        "strategy_id": strategy_id,
-        "champion": champion,
-        "decisions": decisions,
-        "facts": facts,
-    }
+        _invalidate_strategy_runtime(request)
+
+    async def _events():
+        async for event in build_market_aware_stream(
+            data_dir=data_dir,
+            repo=request.app.state.repo,
+            run_store=run_store,
+            run_id=payload.run_id,
+            dimensions=payload.dimensions,
+            asset_type=payload.asset_type,
+            window_days=payload.window_days,
+            persist=_persist,
+        ):
+            yield json.dumps(event, ensure_ascii=False)
+
+    # 与复盘/个股/财务/轮动的流式端点同口径: 事件行不带换行, 由外层统一补换行
+    async def _stream():
+        async for line in with_heartbeat(_events()):
+            yield line + "\n"
+
+    return StreamingResponse(
+        _stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

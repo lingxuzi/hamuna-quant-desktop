@@ -436,7 +436,9 @@ def test_summarize_tool_result_whitelist() -> None:
         },
     }
     summary = assistant_tools.summarize_tool_result("run_backtest", backtest)
-    assert "总收益 0.23" in summary
+    # 回测统计是小数, 足迹卡必须换算成百分数 (0.23 → 23.00%), 不能原样打印
+    assert "总收益 23.00%" in summary
+    assert "回撤 -12.00%" in summary
     assert "夏普 1.4" in summary
     assert "equity_curve" not in summary
 

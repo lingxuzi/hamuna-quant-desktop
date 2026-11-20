@@ -183,6 +183,10 @@ def make_worker_task(kind: str, data_dir: Path, config) -> dict[str, Any]:
         if not isinstance(config, dict):
             raise TypeError("guardian worker config must be a dict")
         encoded = dict(config)
+    elif kind == "screening":
+        if not isinstance(config, dict):
+            raise TypeError("screening worker config must be a dict")
+        encoded = dict(config)
     else:
         raise ValueError(f"unsupported worker task kind: {kind}")
     return {
@@ -289,6 +293,31 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
                 progress_cb=_progress,
                 cancel_check=cancel_event,
             )
+        elif kind == "screening":
+            # L1 全量因子筛选: 放在 spawn 子进程跑, API 进程的重活闸不受影响
+            from app.services.auto_mining import screen_all_factors
+
+            config = task["config"]
+            raw_start = config.get("start")
+
+            def _screening_progress(done: int, total: int, _factor_name: str) -> None:
+                _progress({
+                    "phase": "screening",
+                    "label": f"正在筛选因子（{done}/{total}）",
+                    "done": done,
+                    "total": total,
+                })
+
+            result = {
+                "screening": screen_all_factors(
+                    service.engine,
+                    asset_type=str(config["asset_type"]),
+                    start=date.fromisoformat(str(raw_start)) if raw_start else None,
+                    end=date.fromisoformat(str(config["end"])),
+                    profile=str(config["profile"]),
+                    progress=_screening_progress,
+                )
+            }
         else:
             raise ValueError(f"unsupported worker task kind: {kind}")
 

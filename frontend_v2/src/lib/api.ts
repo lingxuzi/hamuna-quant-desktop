@@ -50,6 +50,9 @@ export function friendlyStreamError(message: string | undefined | null): string 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 /** 同步计算型接口 (回测/筛选等) 的放宽超时: 合法耗时可能远超轮询类接口。 */
 const COMPUTE_REQUEST_TIMEOUT_MS = 300_000
+/** L1 全量因子筛选 (mining/auto) 的超时: 后端同步跑完才返回, 实测 1-3 分钟,
+ *  默认 30s 必炸; 给 10 分钟余量, 超时后后端任务其实还在跑。 */
+const MINING_SCREEN_TIMEOUT_MS = 600_000
 /** 扩展数据拉取类长请求: 跟随后端配置的单次超时 (timeoutSeconds, 默认 30s) + 10s 解析/写盘缓冲。
  *  浏览器端 fetch 默认 30s abort 会先于后端超时触发, 大响应接口 (如全量集合竞价
  *  /day, 后端超时 120s) 必须把这层同步放宽。 */
@@ -105,6 +108,47 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
     throw new ApiError(msg, res.status, retryAfter > 0 && Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined)
   }
   return (responseType === 'blob' ? res.blob() : res.json()) as Promise<T>
+}
+
+/** NDJSON 流 (application/x-ndjson) 读取: 逐行解析 JSON, 忽略坏行。 */
+async function* readNdjson<T>(res: Response): AsyncGenerator<T> {
+  if (!res.body) throw new Error('响应无 body')
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    // 按行分割(保留最后不完整的行在 buf)
+    const lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+    for (const line of lines) {
+      const s = line.trim()
+      if (!s) continue
+      try { yield JSON.parse(s) as T } catch { /* 忽略无法解析的行 */ }
+    }
+  }
+  if (buf.trim()) {
+    try { yield JSON.parse(buf.trim()) as T } catch { /* ignore */ }
+  }
+}
+
+/** POST 一个 NDJSON 流端点: 非 2xx 时按后端 detail 弹提示并抛错。 */
+async function* postNdjsonStream<T>(url: string, body: unknown): AsyncGenerator<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    let detail = ''
+    try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
+    const msg = detail || `${res.status} ${res.statusText}`
+    toast(msg, 'error')
+    throw new Error(msg)
+  }
+  yield* readNdjson<T>(res)
 }
 
 // ===== Capabilities =====
@@ -1769,6 +1813,8 @@ export interface MarketFacts {
     phases: { phase: string; days: number }[]
     score: { mean: number | null; last: number | null }
     up_ratio: { mean: number | null; last: number | null }
+    /** 上涨家数占比 up/(up+down), 0-1。up_ratio 是 up/down 比值, 不用于展示占比。 */
+    up_share?: { mean: number | null; last: number | null }
     avg_pct: { mean: number | null; last: number | null }
     above_ma20_pct: { mean: number | null; last: number | null }
     phase_last: string | null
@@ -1823,11 +1869,36 @@ export interface MarketAwareBuildResult {
   facts: MarketFacts
 }
 
+/** 市场感知生成的 NDJSON 事件 (后端 /market-aware/build)。 */
+export type MarketAwareBuildEvent =
+  | { type: 'stage'; key: string; label: string }
+  | { type: 'delta'; content: string }
+  | { type: 'done'; result: MarketAwareBuildResult }
+  | { type: 'error'; message: string }
+  | { type: 'ping' }
+
 export interface MiningAutoStartResponse {
   started: boolean
+  /** L1 筛选后台作业 id — 进度与结果用 miningScreening(id) 查 */
+  screening_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
   reason?: string
   run?: MiningRun
   screening?: AutoScreening
+}
+
+/** L1 因子筛选后台作业状态 (POST /mining/auto 立即返回后轮询)。 */
+export interface MiningScreeningJob {
+  screening_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  label: string
+  done: number
+  total: number
+  started: boolean
+  reason?: string | null
+  error?: string | null
+  screening?: AutoScreening | null
+  run?: MiningRun
 }
 
 export interface MiningResultSummary {
@@ -3902,7 +3973,10 @@ export const api = {
     request<MiningAutoStartResponse>('/api/backtest/mining/auto', {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: MINING_SCREEN_TIMEOUT_MS,
     }),
+  miningScreening: (screeningId: string) =>
+    request<MiningScreeningJob>(`/api/backtest/mining/screening/${encodeURIComponent(screeningId)}`),
 
   miningStart: (payload: MiningRequestV1) =>
     request<MiningRun>('/api/backtest/mining/runs', {
@@ -3918,13 +3992,11 @@ export const api = {
       method: 'POST',
       quiet: true,
       body: JSON.stringify(payload),
+      timeoutMs: COMPUTE_REQUEST_TIMEOUT_MS,
     }),
 
-  marketAwareBuild: (payload: MarketFactsPayload & { run_id: string }) =>
-    request<MarketAwareBuildResult>('/api/strategies/market-aware/build', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  marketAwareBuildStream: (payload: MarketFactsPayload & { run_id: string }) =>
+    postNdjsonStream<MarketAwareBuildEvent>('/api/strategies/market-aware/build', payload),
 
   miningCancel: (runId: string) =>
     request<MiningRun>(`/api/backtest/mining/runs/${encodeURIComponent(runId)}/cancel`, {
@@ -4481,44 +4553,7 @@ export const api = {
     content?: string
     message?: string
   }> {
-    const res = await fetch('/api/financials/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol, focus: focus ?? '' }),
-    })
-    if (!res.ok) {
-      let detail = ''
-      try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
-      const msg = detail || `${res.status} ${res.statusText}`
-      toast(msg, 'error')
-      throw new Error(msg)
-    }
-    if (!res.body) throw new Error('响应无 body')
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      // 按行分割(保留最后不完整的行在 buf)
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        const s = line.trim()
-        if (!s) continue
-        try {
-          yield JSON.parse(s)
-        } catch {
-          // 忽略无法解析的行
-        }
-      }
-    }
-    // 处理残余
-    if (buf.trim()) {
-      try { yield JSON.parse(buf.trim()) } catch { /* ignore */ }
-    }
+    yield* postNdjsonStream('/api/financials/analyze', { symbol, focus: focus ?? '' })
   },
 
   // ===== 个股分析 =====
@@ -4553,38 +4588,7 @@ export const api = {
     content?: string
     message?: string
   }> {
-    const res = await fetch('/api/stock-analysis/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol, focus: focus ?? '' }),
-    })
-    if (!res.ok) {
-      let detail = ''
-      try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
-      const msg = detail || `${res.status} ${res.statusText}`
-      toast(msg, 'error')
-      throw new Error(msg)
-    }
-    if (!res.body) throw new Error('响应无 body')
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        const s = line.trim()
-        if (!s) continue
-        try { yield JSON.parse(s) } catch { /* ignore */ }
-      }
-    }
-    if (buf.trim()) {
-      try { yield JSON.parse(buf.trim()) } catch { /* ignore */ }
-    }
+    yield* postNdjsonStream('/api/stock-analysis/analyze', { symbol, focus: focus ?? '' })
   },
 
   // ===== 大盘复盘 =====
@@ -4628,38 +4632,7 @@ export const api = {
     content?: string
     message?: string
   }> {
-    const res = await fetch('/api/market-recap/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ as_of: asOf ?? null, focus: focus ?? '' }),
-    })
-    if (!res.ok) {
-      let detail = ''
-      try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
-      const msg = detail || `${res.status} ${res.statusText}`
-      toast(msg, 'error')
-      throw new Error(msg)
-    }
-    if (!res.body) throw new Error('响应无 body')
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        const s = line.trim()
-        if (!s) continue
-        try { yield JSON.parse(s) } catch { /* ignore */ }
-      }
-    }
-    if (buf.trim()) {
-      try { yield JSON.parse(buf.trim()) } catch { /* ignore */ }
-    }
+    yield* postNdjsonStream('/api/market-recap/analyze', { as_of: asOf ?? null, focus: focus ?? '' })
   },
 
   /** AI 概念轮动分析 — 流式 NDJSON。 */
@@ -4670,38 +4643,7 @@ export const api = {
     content?: string
     message?: string
   }> {
-    const res = await fetch('/api/rps/rotation-analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ days, focus: focus ?? '', kind: kind ?? 'concept', level: level ?? null }),
-    })
-    if (!res.ok) {
-      let detail = ''
-      try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
-      const msg = detail || `${res.status} ${res.statusText}`
-      toast(msg, 'error')
-      throw new Error(msg)
-    }
-    if (!res.body) throw new Error('响应无 body')
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        const s = line.trim()
-        if (!s) continue
-        try { yield JSON.parse(s) } catch { /* ignore */ }
-      }
-    }
-    if (buf.trim()) {
-      try { yield JSON.parse(buf.trim()) } catch { /* ignore */ }
-    }
+    yield* postNdjsonStream('/api/rps/rotation-analyze', { days, focus: focus ?? '', kind: kind ?? 'concept', level: level ?? null })
   },
 
   // ===== Strategy Engine =====
@@ -5038,38 +4980,7 @@ export const api = {
     ),
 
   async *strategyBuildStream(step: number, payload: Record<string, any>): AsyncGenerator<StrategyBuildStreamEvent> {
-    const res = await fetch('/api/strategies/build/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ step, ...payload }),
-    })
-    if (!res.ok) {
-      let detail = ''
-      try { const j = JSON.parse(await res.text()); detail = j.detail ?? j.message ?? '' } catch { /* ignore */ }
-      const msg = detail || `${res.status} ${res.statusText}`
-      toast(msg, 'error')
-      throw new Error(msg)
-    }
-    if (!res.body) throw new Error('响应无 body')
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        const s = line.trim()
-        if (!s) continue
-        try { yield JSON.parse(s) } catch { /* ignore */ }
-      }
-    }
-    if (buf.trim()) {
-      try { yield JSON.parse(buf.trim()) } catch { /* ignore */ }
-    }
+    yield* postNdjsonStream('/api/strategies/build/stream', { step, ...payload })
   },
 
   strategyValidateCode: (payload: { code: string; strategy_id?: string; name?: string; description?: string }) =>

@@ -1208,9 +1208,12 @@ class KlineRepository:
         if df_hist.is_empty():
             return df_hist, pl.DataFrame()
         window_start = _live_agg_window_start(df_hist["date"], latest, start_60d)
-        df_hist = df_hist.filter(pl.col("date") >= window_start)
-
+        # 递推状态 (ema12/26、macd_dea、rsi_6/14/24、kdj、atr) 必须用读到的全部
+        # ~150 天暖机。先切到 90 天窗口再算, 窗口外的 60 天正是长周期指标的暖机
+        # 数据, 切掉后状态与盘后全量口径不一致 (实测 rsi_24 偏 ~10%, macd_dea ~4.7%)。
+        # 主路径用完整历史缓存暖机, 这里只是它的降级等价物。
         df_with_indicators = compute_indicators(df_hist)
+        df_hist = df_hist.filter(pl.col("date") >= window_start)
 
         state_cols = [
             "symbol",
@@ -2635,12 +2638,33 @@ class KlineRepository:
             self.append_etf_enriched(df)
 
     def save_index_instruments(self, df: pl.DataFrame) -> None:
-        """保存指数标的维表。"""
+        """保存指数标的维表 (与既有维表合并, 不删旧行)。
+
+        源的指数列表不稳定 (实测 MAC 的 ZS 分类从 607 掉到 100), 整表覆盖会
+        把已知指数从维表里删掉 —— 维表同时是日K同步的标的全集, 删了就永远
+        不再刷新, 且历史行情还在但取不到名称。
+
+        合并语义: 新数据覆盖同名行, 但新数据为 null 的字段沿用旧值 (源偶尔
+        漏名字段, 不能把已有名称抹成 null); 新源没给的旧行保留。
+        """
         if df.is_empty() or "symbol" not in df.columns:
             return
         out = self.store.data_dir / "instruments_index" / "instruments_index.parquet"
         out.parent.mkdir(parents=True, exist_ok=True)
-        self._atomic_write_parquet(df.unique(subset=["symbol"], keep="last").sort("symbol"), out)
+        new = df.unique(subset=["symbol"], keep="last")
+        merged = new
+        if out.exists():
+            try:
+                old = pl.read_parquet(out)
+            except Exception:  # noqa: BLE001
+                old = pl.DataFrame()
+            if not old.is_empty() and "symbol" in old.columns:
+                # update 只用 new 的非空值覆盖旧行; 只在 new 出现的行追加
+                common = [c for c in new.columns if c != "symbol" and c in old.columns]
+                merged = old.update(new.select(["symbol", *common]), on="symbol", how="left")
+                extra = new.join(old.select("symbol"), on="symbol", how="anti")
+                merged = pl.concat([merged, extra], how="diagonal_relaxed")
+        self._atomic_write_parquet(merged.sort("symbol"), out)
         self._index_instruments_cache = None
         self._etf_instruments_cache = None
         self._name_map_cache = None

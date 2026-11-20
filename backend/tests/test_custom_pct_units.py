@@ -99,6 +99,33 @@ def test_small_batch_uses_max():
     assert out2["change_pct"].to_list() == [0.005, 0.002]
 
 
+def _df_with_prices(pcts, implied):
+    """implied = 真实涨跌幅小数 (由 last_price/prev_close 决定), pcts = 源上报值。"""
+    prev = 10.0
+    return pl.DataFrame({
+        "change_pct": pcts,
+        "prev_close": [prev] * len(pcts),
+        "last_price": [prev * (1 + x) for x in implied],
+    })
+
+def test_quiet_percent_batch_detected_by_prices():
+    # 全市场平淡日: 百分制中位数 0.25 落在小数制合法区间, 中位数判定会漏判 (100 倍)
+    pcts = [0.25, 0.30, 0.28, 0.27, 0.26, 0.22]
+    implied = [x / 100 for x in pcts]
+    out = _normalize_pct_units(_df_with_prices(pcts, implied))
+    assert out["change_pct"][0] == pytest.approx(0.0025)
+
+def test_decimal_batch_with_prices_not_divided():
+    pcts = [0.0025, 0.0030, 0.0028, 0.0027, 0.0026, 0.0022]
+    out = _normalize_pct_units(_df_with_prices(pcts, pcts))
+    assert out["change_pct"][0] == pytest.approx(0.0025)
+
+def test_prices_all_quiet_falls_back_to_median():
+    # 价差不足 2 个跳价 (1 分钱舍入噪声) → 价格不可判, 退回中位数判定
+    pcts = [1.5, -2.2, 0.9, 2.8, 3.3, 0.6]
+    out = _normalize_pct_units(_df_with_prices(pcts, [0.0001] * 6))
+    assert out["change_pct"][0] == pytest.approx(0.015)
+
 def test_string_values_are_cast():
     out = _normalize_pct_units(_df(["1.5", "-2.2", "0.9", "2.8", "3.3", "0.6"]))
     assert out["change_pct"][0] == pytest.approx(0.015)

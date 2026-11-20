@@ -421,6 +421,7 @@ class ScreenerService:
         # 再关闭 external_access, 让注入的文件读写函数 (read_parquet/COPY 等) 直接报错,
         # 视图数据仍通过 con.register 注入, 不受该开关影响 (#224)。
         con = None
+        total = 0
         try:
             import duckdb
             con = duckdb.connect(
@@ -428,6 +429,9 @@ class ScreenerService:
             )
             con.register("enriched", df.to_arrow())
             where = " AND ".join(f"({c})" for c in conditions)
+            # total 必须是命中总数, 不是被 LIMIT 截断后的行数 — 否则前端显示
+            # 「共 30 只」而实际命中 200 只, 与预设策略路径口径不一致。
+            total = int(con.execute(f"SELECT count(*) FROM enriched WHERE {where}").fetchone()[0])
             sql = f"SELECT * FROM enriched WHERE {where}"
             if order_by:
                 sql += f" ORDER BY {order_by}"
@@ -437,6 +441,7 @@ class ScreenerService:
         except Exception as e:  # noqa: BLE001
             logger.warning("screener SQL query failed: %s", e)
             df_result = pl.DataFrame()
+            total = 0
         finally:
             if con is not None:
                 try:
@@ -451,7 +456,7 @@ class ScreenerService:
             as_of=as_of,
             strategy=None,
             rows=rows,
-            total=len(rows),
+            total=total,
             elapsed_ms=elapsed,
         )
 

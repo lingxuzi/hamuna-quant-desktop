@@ -51,6 +51,34 @@ _PCT_FRACTION_MAX = 0.31
 _PCT_COLUMNS = ("change_pct", "amplitude", "turnover_rate")
 
 
+def _pct_scale_from_prices(df: pl.DataFrame) -> float | None:
+    """用 last_price/prev_close 反推 change_pct 的单位倍数: 1 = 小数制, 100 = 百分制。
+
+    截面中位数只能证明「不可能是小数制」(涨跌停上限), 全市场平淡日百分制中位数
+    0.25 (= 0.25%) 恰好落在小数制合法区间内, 中位数会把方向判反 (100 倍误差)。
+    价格反推是逐行恒等式, 不依赖分布: 只听 |价差| >= 0.02 元 (即至少 2 个跳价,
+    1 分钱舍入噪声不参与) 的行, 取 declared/implied 的中位数, 落在 [50, 200]
+    视为百分制。无可用行 (缺列/全 null/全静默) 返回 None, 交调用方退回中位数判定。
+    """
+    if not {"change_pct", "last_price", "prev_close"} <= set(df.columns):
+        return None
+    price = df["last_price"].cast(pl.Float64, strict=False)
+    prev = df["prev_close"].cast(pl.Float64, strict=False)
+    declared = df["change_pct"].cast(pl.Float64, strict=False)
+    implied = (price - prev) / prev
+    usable = (
+        prev.is_finite() & (prev > 0) & price.is_finite()
+        & declared.is_finite() & implied.is_finite()
+        & ((price - prev).abs() >= 0.02) & (declared.abs() > 1e-12)
+    )
+    if not usable.any():
+        return None
+    ratio = (declared.filter(usable) / implied.filter(usable)).median()
+    if ratio is None or not (50.0 <= float(ratio) <= 200.0):
+        return 1.0
+    return 100.0
+
+
 def _normalize_pct_units(
     df: pl.DataFrame,
     pct_unit: str | None = None,
@@ -61,8 +89,9 @@ def _normalize_pct_units(
 
       - pct_unit="percent"  → 三列无条件 /100 (声明即契约, 即使数值看着像小数制);
       - pct_unit="decimal"  → 原样透传 (即使数值看着像百分制也不动);
-      - 未声明 → change_pct 保留截面中位数判定(涨跌停 30% 上限使其物理可判:
-        样本 >= 5 用 |值| 中位数, 小样本退用最大值, 整批同除 100);
+      - 未声明 → change_pct 先用 last_price/prev_close 反推单位 (逐行恒等式);
+        无价格列时保留截面中位数判定(涨跌停 30% 上限使其物理可判: 样本 >= 5
+        用 |值| 中位数, 小样本退用最大值, 整批同除 100);
         amplitude/turnover_rate 置 None 交下游重算(enriched 管道按
         high/low/prev_close 与股本口径重算), 除非该列已被 transforms 显式
         处理过(视为用户已接管单位, 原样透传)。
@@ -77,11 +106,15 @@ def _normalize_pct_units(
         elif pct_unit == "decimal" or col in transformed_cols:
             continue
         elif col == "change_pct":
-            vals = df[col].drop_nulls().abs()
-            if vals.is_empty():
-                continue
-            stat = vals.median() if vals.len() >= 5 else vals.max()
-            if stat > _PCT_FRACTION_MAX:
+            # 价格反推优先 (逐行恒等式); 缺价格列时才退中位数判定
+            scale = _pct_scale_from_prices(df)
+            if scale is None:
+                vals = df[col].drop_nulls().abs()
+                if vals.is_empty():
+                    continue
+                stat = vals.median() if vals.len() >= 5 else vals.max()
+                scale = 100.0 if stat > _PCT_FRACTION_MAX else 1.0
+            if scale == 100.0:
                 df = df.with_columns((pl.col(col) / 100).alias(col))
         else:
             df = df.with_columns(pl.lit(None, dtype=pl.Float64).alias(col))

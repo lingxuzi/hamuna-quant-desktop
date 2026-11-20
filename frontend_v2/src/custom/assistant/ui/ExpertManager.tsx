@@ -1,16 +1,15 @@
 /**
- * 专家管理 — 分类体系 + 专家列表 (专家页与设置页共用同一份实现)。
+ * 专家管理 — 分类体系 + 专家名录 (专家页唯一入口)。
  *
  * 一个专家 = 一个 skill: 正文在 <data_dir>/assistant/skills/<名称>/SKILL.md,
  * 分类归属与启用状态在 <data_dir>/assistant/experts.json (后端单一真相)。
  *
- * scope='all'     专家页: 全部专家, 用户专家可新建/编辑/删除, 可导入导出。
- * scope='builtin' 设置页: 只管内置专家 —— 正文只读 (改了会被下次部署覆盖),
- *                 只能配分类归属与启用状态。
+ * 版式: 卷首下一条工具条 (左: 分类筛选 + 批量选择, 右: 页内动作), 往下按分类
+ * 分节, 每节一排专家卡。分类只出现一次 —— 筛选下拉给「看哪一类」, 分节题头给
+ * 「这一组是谁」; 从前顶部页签与分节标题摆的是同一套分类, 读两遍。
  *
  * 样式走全站控件刻度 (.ctl-*): 列表行里的控件一律 24px (sm), 弹窗表单里的
- * 输入框与按钮一律 28px (md) —— 并排控件必须齐高。选中标签用「墨底反白」
- * (同 .seg), 不与主按钮的赭石实心撞脸。
+ * 输入框与按钮一律 28px (md) —— 并排控件必须齐高。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -24,7 +23,10 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Download, FolderCog, GripVertical, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { Modal } from '@/components/Modal'
+import { EmptyState } from '@/components/EmptyState'
+import { SectionHead } from '@/components/SectionHead'
 import { Switch } from '@/components/Switch'
+import { Toolbar } from '@/components/Toolbar'
 import {
   BTN_GHOST_MD, BTN_GHOST_SM, BTN_SM, ICON_BTN_SM, TEXTAREA_MD, btnCls, inputCls, selectCls,
 } from '@/components/controls'
@@ -48,7 +50,25 @@ const UNCATEGORIZED = '未分类'
 /** 筛选用的保留名: 「全部」是不筛选, 「未分类」是没有归属的专家 —— 分类不能叫这个。 */
 const RESERVED_CATEGORIES = ['全部', UNCATEGORIZED]
 
-type Scope = 'all' | 'builtin'
+/**
+ * 卡片上给用户看的那一句描述。
+ *
+ * 内置专家的 description 是写给模型路由用的元数据: 开头常把标题重抄一遍, 末尾
+ * 还挂着「触发词: …」清单, 中间偶尔带 Markdown 记号。这里只做显示层的归一 ——
+ * 后端那一份不动 (它要喂给模型), 但界面上不该出现重复与路由黑话。
+ */
+function cardDescription(item: ExpertItem): string {
+  let text = (item.description ?? '').replace(/\*\*/g, '').replace(/Skill/g, '专家')
+  const title = (item.title || item.name).trim()
+  if (title && text.startsWith(title)) text = text.slice(title.length)
+  text = text.replace(/^[（(][^）)]*[）)]\s*/, '')   // 标题的括号注解
+  text = text.replace(/^[。、,，:：—–\-·\s]+/, '')     // 分隔符
+  text = text.replace(/^(?:智能体|框架|技能|系统|助手)(?:[。.、,，:：]\s*)?/, '')
+  text = text.replace(/^是(?:一个|一种|一套)\s*/, '')
+  const cut = text.indexOf('触发词：')
+  if (cut > 0) text = text.slice(0, cut)
+  return text.trim().replace(/。$/, '')
+}
 
 /** 布局保存的载荷: 每个专家的分类归属 + 启用状态 (后端整份保存)。 */
 type Assignments = Record<string, { category: string; enabled: boolean }>
@@ -61,7 +81,7 @@ function assignmentsOf(layout: ExpertLayout): Assignments {
   return map
 }
 
-export function ExpertManager({ scope }: { scope: Scope }) {
+export function ExpertManager() {
   const [layout, setLayout] = useState<ExpertLayout | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -88,25 +108,32 @@ export function ExpertManager({ scope }: { scope: Scope }) {
 
   const categories = useMemo(() => layout?.categories ?? [], [layout])
 
-  /** 当前作用域内的全部专家 (设置页只算内置专家)。 */
-  const scoped = useMemo(() => {
-    const all = layout?.experts ?? []
-    return scope === 'builtin' ? all.filter(item => item.builtin) : all
-  }, [layout, scope])
+  const allExperts = useMemo(() => layout?.experts ?? [], [layout])
 
   const experts = useMemo(() => {
-    if (!filter) return scoped
-    return scoped.filter(item =>
+    if (!filter) return allExperts
+    return allExperts.filter(item =>
       filter === UNCATEGORIZED ? !item.category : item.category === filter)
-  }, [scoped, filter])
+  }, [allExperts, filter])
 
-  /** 筛选标签只列出真正有专家的分类 —— 空分类点进去是空白, 反而误导。 */
-  const chips = useMemo(() => {
-    const used = new Set(scoped.map(item => item.category))
-    const list = categories.filter(name => used.has(name))
-    if (scoped.some(item => !item.category)) list.push(UNCATEGORIZED)
-    return ['', ...list]
-  }, [scoped, categories])
+  /** 筛选下拉: 只列真正有专家的分类 (空分类点进去是空白, 反而误导), 带个数。 */
+  const filterOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of allExperts) {
+      const key = item.category || UNCATEGORIZED
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const list = categories
+      .filter(name => counts.has(name))
+      .map(name => ({ value: name, label: `${name} (${counts.get(name)})` }))
+    if (counts.has(UNCATEGORIZED)) {
+      list.push({
+        value: UNCATEGORIZED,
+        label: `${UNCATEGORIZED} (${counts.get(UNCATEGORIZED)})`,
+      })
+    }
+    return [{ value: '', label: `全部 (${allExperts.length})` }, ...list]
+  }, [allExperts, categories])
 
   /** 分类归属/启用状态 —— 整份保存 (后端是唯一真相, 前端不另存一份)。 */
   const patchLayout = async (name: string, patch: { category?: string; enabled?: boolean }) => {
@@ -272,66 +299,90 @@ export function ExpertManager({ scope }: { scope: Scope }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-muted">分类</span>
-        {chips.map(name => (
-          <button
-            key={name || 'all'}
-            type="button"
-            onClick={() => setFilter(name)}
-            aria-pressed={filter === name}
-            className={cn(
-              BTN_SM,
-              'max-w-[10rem] truncate',
-              filter === name
-                ? 'border-foreground bg-foreground text-surface hover:bg-foreground hover:text-surface'
-                : '',
+      {/* 工具条: 左 = 分类筛选 + 批量选择, 右 = 页内动作。走共享 Toolbar 件,
+          窄屏折行由 .toolbar 的窄屏规则管 (≤720px 两组各占一行)。 */}
+      <Toolbar
+        left={
+          <>
+            <select
+              id="expert-filter"
+              aria-label="按分类筛选专家"
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className={cn(selectCls('sm'), 'min-w-0 max-w-[12rem]')}
+            >
+              {filterOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-secondary">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+                aria-label="全选当前列表"
+              />
+              全选
+            </label>
+            {/* 批量动作只在有选中时出现 —— 空按钮是噪音, 不是功能。
+                数量写进按钮文案, 不另起一行读注。 */}
+            {selected.size > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void batchEnable(true)}
+                  className={BTN_SM}
+                >
+                  启用 {selected.size} 个
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void batchEnable(false)}
+                  className={BTN_SM}
+                >
+                  停用 {selected.size} 个
+                </button>
+              </>
             )}
-          >
-            {name || '全部'}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          {scope === 'all' && (
-            <>
-              <button
-                type="button"
-                onClick={() => setImportOpen(true)}
-                className={cn(BTN_GHOST_SM, 'gap-1.5')}
-              >
-                <Upload className="h-3.5 w-3.5" />
-                导入
-              </button>
-              <button
-                type="button"
-                onClick={() => void downloadPack()}
-                className={cn(BTN_GHOST_SM, 'gap-1.5')}
-              >
-                <Download className="h-3.5 w-3.5" />
-                导出
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => setCatOpen(true)}
-            className={cn(BTN_GHOST_SM, 'gap-1.5')}
-          >
-            <FolderCog className="h-3.5 w-3.5" />
-            管理分类
-          </button>
-          {scope === 'all' && (
+          </>
+        }
+        right={
+          <>
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className={BTN_GHOST_SM}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              导入
+            </button>
+            <button
+              type="button"
+              onClick={() => void downloadPack()}
+              className={BTN_GHOST_SM}
+            >
+              <Download className="h-3.5 w-3.5" />
+              导出
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatOpen(true)}
+              className={BTN_GHOST_SM}
+            >
+              <FolderCog className="h-3.5 w-3.5" />
+              管理分类
+            </button>
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className={cn(btnCls('primary', 'sm'), 'gap-1.5')}
+              className={btnCls('primary', 'sm')}
             >
               <Plus className="h-3.5 w-3.5" />
               新建专家
             </button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {error && (
         <div className="rounded-card border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
@@ -342,73 +393,63 @@ export function ExpertManager({ scope }: { scope: Scope }) {
       {loading ? (
         <div className="text-xs text-muted">加载中…</div>
       ) : experts.length === 0 ? (
-        <div className="rounded-card border border-border bg-surface px-4 py-8 text-center text-xs text-muted">
-          {scope === 'builtin' ? '暂无内置专家' : '还没有专家, 点「新建专家」创建第一个'}
-        </div>
+        filter ? (
+          <EmptyState
+            eyebrow="NO EXPERT"
+            title="这个分类下还没有专家"
+            hint="换个分类看看, 或新建一个专家放进来"
+          />
+        ) : (
+          <EmptyState
+            eyebrow="NO EXPERT"
+            title="还没有专家"
+            hint="新建一个专家, 之后在对话里 @ 就能引用它"
+            action={
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className={cn(btnCls('primary', 'md'), 'gap-1.5')}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                新建专家
+              </button>
+            }
+          />
+        )
       ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className={cn(BTN_GHOST_SM, 'cursor-pointer gap-1.5')}>
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={toggleSelectAll}
-                aria-label="全选当前列表"
-              />
-              全选
-            </label>
-            <span className="text-[11px] text-muted">已选 {selected.size} 个</span>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                disabled={!selected.size}
-                onClick={() => void batchEnable(true)}
-                className={BTN_GHOST_SM}
-              >
-                批量启用
-              </button>
-              <button
-                type="button"
-                disabled={!selected.size}
-                onClick={() => void batchEnable(false)}
-                className={BTN_GHOST_SM}
-              >
-                批量停用
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-5">
-            {categories.concat(UNCATEGORIZED).map(category => {
-              const rows = experts.filter(item =>
-                category === UNCATEGORIZED ? !item.category : item.category === category)
-              if (!rows.length) return null
-              return (
-                <section key={category} className="flex flex-col gap-2">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-[13px] font-medium text-foreground">{category}</h3>
+        <div className="flex flex-col gap-5">
+          {categories.concat(UNCATEGORIZED).map(category => {
+            const rows = experts.filter(item =>
+              category === UNCATEGORIZED ? !item.category : item.category === category)
+            if (!rows.length) return null
+            return (
+              <section key={category} className="flex flex-col gap-3">
+                <SectionHead
+                  className="border-b border-border pb-2"
+                  title={category}
+                  right={
                     <span className="font-mono text-[11px] text-muted">{rows.length}</span>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {rows.map(item => (
-                      <ExpertCard
-                        key={item.name}
-                        item={item}
-                        selected={selected.has(item.name)}
-                        categories={categories}
-                        onToggleSelect={() => toggleSelect(item.name)}
-                        onToggle={enabled => void patchLayout(item.name, { enabled })}
-                        onCategory={category => void patchLayout(item.name, { category })}
-                        onEdit={() => setEditing(item)}
-                        onDelete={() => void remove(item.name)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-        </>
+                  }
+                />
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {rows.map(item => (
+                    <ExpertCard
+                      key={item.name}
+                      item={item}
+                      selected={selected.has(item.name)}
+                      categories={categories}
+                      onToggleSelect={() => toggleSelect(item.name)}
+                      onToggle={enabled => void patchLayout(item.name, { enabled })}
+                      onCategory={category => void patchLayout(item.name, { category })}
+                      onEdit={() => setEditing(item)}
+                      onDelete={() => void remove(item.name)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
       )}
 
       {catOpen && layout && (
@@ -459,12 +500,15 @@ function ExpertCard({
 }) {
   // 二次确认: 删除会连带正文一起没了, 按一次只把按钮换成「确认删除」
   const [confirming, setConfirming] = useState(false)
+  const description = cardDescription(item)
 
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-card border p-3',
-        selected ? 'border-accent/60 bg-surface' : 'border-border bg-surface',
+        'flex flex-col gap-2 rounded-card border bg-surface p-3',
+        // 选中态是一个来回动作, 描边换色太轻, 补一点缩放让手上有反馈。
+        'transition-[border-color,transform] duration-200 ease-smooth',
+        selected ? 'border-accent scale-[1.01]' : 'border-border',
       )}
     >
       <div className="flex items-start gap-2">
@@ -477,29 +521,37 @@ function ExpertCard({
           />
         </label>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5">
+          <div className="flex items-start gap-2">
             <b
-              className="line-clamp-2 min-w-0 text-[12.5px] font-medium leading-snug text-foreground"
+              className={cn(
+                'line-clamp-2 min-w-0 text-sm font-medium leading-snug',
+                item.enabled ? 'text-foreground' : 'text-secondary',
+              )}
               title={item.title || item.name}
             >
               {item.title || item.name}
             </b>
-            <span
-              className={cn(
-                'tb-chip inline-block shrink-0',
-                !item.builtin && 'border-accent/40 text-accent',
-              )}
-            >
-              {item.builtin ? '内置' : '自定义'}
-            </span>
+            {/* 只有自定义专家挂签 —— 内置专家张张都写「内置」, 等于没写。
+                签用弱化文字: 赭石留给主操作, 等宽状态签是给拉丁定长词设计的。 */}
+            {!item.builtin && (
+              <span className="shrink-0 text-[11px] text-muted">自定义</span>
+            )}
           </div>
-          <p
-            className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted"
-            title={item.description}
-          >
-            {item.description}
-          </p>
+          {description && (
+            <p
+              className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted"
+              title={description}
+            >
+              {description}
+            </p>
+          )}
         </div>
+        {/* 启停是这张卡的主动作, 提到题名同层 —— 放脚注里只剩一个方块, 认不出是开关。 */}
+        <Switch
+          checked={item.enabled}
+          onChange={onToggle}
+          label={`启用专家 ${item.title}`}
+        />
       </div>
 
       {/* 控件行贴卡片底部 (mt-auto): 描述长短不一时, 同行卡片的控件仍齐平。 */}
@@ -523,25 +575,26 @@ function ExpertCard({
           </div>
         ) : (
           <>
+            {/* 分类下拉只报动作, 不报现状 —— 卡片所在分节已经说了这一组是谁,
+                每张卡再抄一遍分类名, 37 张卡就是 37 次重复。
+                「未分类」是保留名 (分类管理里禁建), 拿来当「移到未分类」的取值。 */}
             <select
-              aria-label={`${item.title} 的分类`}
-              value={item.category}
-              onChange={e => onCategory(e.target.value)}
-              className={cn(selectCls('sm'), 'min-w-0 flex-1 truncate')}
+              aria-label={`把 ${item.title} 移到其他分类`}
+              value={''}
+              onChange={e => {
+                if (!e.target.value) return
+                onCategory(e.target.value === UNCATEGORIZED ? '' : e.target.value)
+              }}
+              className={cn(selectCls('sm'), 'min-w-0 max-w-[11rem]')}
             >
-              <option value="">{UNCATEGORIZED}</option>
+              <option value={''}>移动到分类</option>
+              <option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>
               {categories.map(name => (
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
-            <Switch
-              size="md"
-              checked={item.enabled}
-              onChange={onToggle}
-              label={`启用专家 ${item.title}`}
-            />
             {!item.builtin && (
-              <>
+              <div className="ml-auto flex items-center gap-2">
                 <button
                   type="button"
                   onClick={onEdit}
@@ -560,7 +613,7 @@ function ExpertCard({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
-              </>
+              </div>
             )}
           </>
         )}

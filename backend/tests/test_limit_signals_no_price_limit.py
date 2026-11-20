@@ -69,6 +69,13 @@ CASES = {
     "down_close": dict(open_=19.0, high=19.5, low=17.5, close=17.6),      # 跌超 10% 收盘
     "down_touch_up": dict(open_=18.2, high=19.0, low=17.8, close=18.8),   # 跌破理论跌停价后收阳
 }
+# 收在理论涨停/跌停价上 (板限内) —— 用于「窗口判定不适用时理论价照判」的用例。
+# 板限外的行 (CASES 里 +17% / -12% 那两个) 由「涨跌幅必须落在板限内」这道闸
+# 判为「不是涨跌停」, 判定价置 null —— 见 test_limit_move_out_of_band.py。
+CASES_IN_BAND = {
+    "up_at_limit": dict(open_=21.0, high=22.0, low=20.5, close=22.0),     # 收在理论涨停价
+    "down_at_limit": dict(open_=19.0, high=19.5, low=18.0, close=18.0),   # 收在理论跌停价
+}
 LIMIT_PRICES = ("limit_up_price", "limit_down_price")
 
 
@@ -101,7 +108,7 @@ def test_down_signals_alone_also_respect_sentinel():
 
 def test_sentinel_only_applies_to_matching_instrument_date():
     """维表日期不是该行情日 (历史行) 时无法得知是否无限制, 保持理论价口径。"""
-    rows = _rows(20.0, **CASES["up_close"])
+    rows = _rows(20.0, **CASES_IN_BAND["up_at_limit"])
     stale = _instruments(limit_up=100000.0, limit_down=0.0, as_of=YESTERDAY)
 
     full = pipeline.compute_limit_signals(rows, stale).row(-1, named=True)
@@ -194,7 +201,7 @@ def test_sixth_trading_day_after_window_resumes_limit_signals():
 
 def test_pre_registration_listing_keeps_theoretical_limit():
     """注册制改革前上市的老股不受窗口判定影响, 理论价照判。"""
-    rows = _rows(20.0, **CASES["up_close"])
+    rows = _rows(20.0, **CASES_IN_BAND["up_at_limit"])
     instruments = _instruments(limit_up=0.0, limit_down=0.0, as_of=date(2026, 9, 20))
     instruments = instruments.with_columns(
         pl.lit(date(2019, 6, 1)).cast(pl.Date).alias("listing_date")
@@ -209,7 +216,7 @@ def test_pre_registration_listing_keeps_theoretical_limit():
 def test_partial_local_history_old_stock_not_marked_no_limit():
     """listing 近但本地日K首行晚于窗口边界 (历史被裁剪) 时序号不可信, 不标记。"""
     # 上市 2026-09-10, 本地历史从 09-16 开始 (首行在窗口外) → 回退理论价
-    rows = _rows(20.0, **CASES["up_close"])  # 行情日 09-16/09-17
+    rows = _rows(20.0, **CASES_IN_BAND["up_at_limit"])  # 行情日 09-16/09-17
     instruments = _instruments(limit_up=0.0, limit_down=0.0, as_of=date(2026, 9, 20))
     instruments = instruments.with_columns(
         pl.lit(date(2026, 9, 1)).cast(pl.Date).alias("listing_date")

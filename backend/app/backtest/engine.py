@@ -33,6 +33,38 @@ from app.data_providers.repository import KlineRepository
 logger = logging.getLogger(__name__)
 
 
+def _sample_periods_per_year(date_strings: list[str]) -> float:
+    """样本序列的年化周期数: 一年样本数 = 落在这个日历跨度里的样本数 / 跨度年数。
+
+    回测统计里的 sharpe/sortino 输入是「每个卖出日」的样本均值 (不是每个交易日),
+    直接 ×√252 等于假装一年有 252 个卖出日。12 次月度卖出 → 12 次/年 → √12,
+    虚高 15 倍的 √252 是旧口径。单样本 / 无法解析时退回 252 (不改变行为)。
+    """
+    from datetime import date as _date
+
+    try:
+        days = sorted({_date.fromisoformat(s[:10]) for s in date_strings})
+    except (ValueError, TypeError):
+        return 252.0
+    if len(days) < 2:
+        return 252.0
+    span_years = max((days[-1] - days[0]).days / 365.25, 1.0 / 365.25)
+    return max(len(days) / span_years, 1.0)
+
+
+def _annualize(total_return: float, years: float) -> float:
+    """按日历年数年化; 样本跨度不足 1 个月时直接返回总收益。
+
+    年化的数学表达式对短跨度是「正确」的, 但没有信息量: 3 根 K 线 +20% 会得到
+    数百万倍的「年化收益」, 前端和 AI 助手都会把它当真。不足 1 个月一律不年化。
+    """
+    if total_return <= -1.0 or years <= 0:
+        return total_return
+    if years < 1.0 / 12.0:
+        return total_return
+    return (1.0 + total_return) ** (1.0 / years) - 1.0
+
+
 def _matrix_entry_score(matrix: MarketMatrix, time_id: int, asset_id: int) -> float:
     source_time = int(matrix.entry_signal_time[time_id, asset_id])
     if source_time < 0:
@@ -400,12 +432,25 @@ class BacktestEngine:
         loader = getattr(self.repo, "get_matrix_data_generation", None)
         return loader(asset_type) if callable(loader) else None
 
+    def prefix_data_generation(self, asset_type: str, end: date) -> str | None:
+        """返回 ≤end 分区的前缀世代 (盘中实时刷新只重写当天分区, 前缀不变)。
+
+        盘后/实时发布每轮换一个全局 generation, 但 2026-11-18 及更早的分区内容
+        没动; 以全局世代做读后校验会在盘中反复失败, 限定到前一交易日只用前缀。
+        """
+        loader = getattr(self.repo, "get_enriched_generation_snapshot", None)
+        if not callable(loader):
+            return self.data_generation(asset_type)
+        self.data_generation(asset_type)  # 修补未完成 / 发布进行中 → fail-closed
+        return loader(asset_type).through(end)
+
     def data_generation_await(
         self,
         asset_type: str = "stock",
         *,
         cancel_event: threading.Event | None = None,
         timeout_s: float = _GENERATION_WAIT_TIMEOUT_S,
+        end: date | None = None,
     ) -> str | None:
         """获取 generation; 发布进行中时在超时窗口内轮询, 可被取消事件打断。"""
         deadline = time.monotonic() + timeout_s
@@ -413,7 +458,11 @@ class BacktestEngine:
 
         while True:
             try:
-                return self.data_generation(asset_type)
+                return (
+                    self.prefix_data_generation(asset_type, end)
+                    if end is not None
+                    else self.data_generation(asset_type)
+                )
             except DailyIntegrityError:
                 raise
             except EnrichedGenerationUnavailableError:
@@ -427,25 +476,33 @@ class BacktestEngine:
         self,
         asset_type: str,
         expected: str | None,
+        *,
+        end: date | None = None,
     ) -> None:
+        """expected 为全局世代 (end=None) 或 ≤end 的前缀世代。"""
         if expected is None:
             return
-        current = self.data_generation(asset_type)
+        current = (
+            self.prefix_data_generation(asset_type, end)
+            if end is not None
+            else self.data_generation(asset_type)
+        )
         if current != expected:
             raise EnrichedGenerationUnavailableError(
                 "enriched data changed while the snapshot was being read"
             )
 
     def _range_cache_generation(self, asset_type: str, end: date, expected: str | None) -> str | None:
+        """expected 是 ≤end 的前缀世代: 只校验读到的前缀, end 之后的分区重写不算换代。"""
         loader = getattr(self.repo, "get_enriched_generation_snapshot", None)
         if not callable(loader) or expected is None:
             return expected
-        snapshot = loader(asset_type)
-        if snapshot.generation != expected:
+        token = loader(asset_type).through(end)
+        if token != expected:
             raise EnrichedGenerationUnavailableError(
                 "enriched data changed while the snapshot was being read"
             )
-        return snapshot.through(end)
+        return token
 
     def load_panel(
         self,
@@ -466,11 +523,11 @@ class BacktestEngine:
             generation = (
                 expected
                 if expected is not None
-                else self.data_generation(asset_type)
+                else self.prefix_data_generation(asset_type, end)
             )
             try:
-                # Cache identity follows the consumed prefix. The global generation
-                # still guards the read, including in-progress/partial publications.
+                # 缓存身份与读后校验都用 ≤end 的前缀世代: 盘中只重写当天分区,
+                # 前缀不变 → 快照稳定且缓存不会被每轮刷新打穿。
                 cache_generation = self._range_cache_generation(asset_type, end, generation)
                 panel = self._cache.get_or_compute(
                     symbols,
@@ -481,7 +538,7 @@ class BacktestEngine:
                     asset_type=asset_type,
                     generation=cache_generation,
                 )
-                self.assert_data_generation(asset_type, generation)
+                self.assert_data_generation(asset_type, generation, end=end)
             except EnrichedGenerationUnavailableError:
                 if attempt + 1 >= attempts:
                     raise
@@ -503,24 +560,29 @@ class BacktestEngine:
         evidence=None,
     ) -> pl.DataFrame:
         """按解析后的依赖加载窄基础列并计算回测所需特征。"""
-        df = self.load_panel(
-            symbols,
-            start,
-            end,
-            columns=sorted(feature_plan.base_columns),
-            asset_type=asset_type,
-        )
-        if df.is_empty():
-            return df
-
         from app.backtest.fundamentals import (
             load_fundamental_snapshot,
+            requires_raw_close,
         )
 
         fundamental_names = sorted(
             getattr(feature_plan, "fundamental_columns", frozenset())
             or frozenset()
         )
+        panel_columns = set(feature_plan.base_columns)
+        # PB 类要未复权价: base_columns 不含 raw_close 时 attach 会静默回退复权 close。
+        if asset_type == "stock" and requires_raw_close(fundamental_names):
+            panel_columns.add("raw_close")
+        df = self.load_panel(
+            symbols,
+            start,
+            end,
+            columns=sorted(panel_columns),
+            asset_type=asset_type,
+        )
+        if df.is_empty():
+            return df
+
         financials = load_fundamental_snapshot(
             self.repo.store.data_dir if self.repo is not None else None,
         ) if fundamental_names else None
@@ -642,6 +704,13 @@ class BacktestEngine:
             | set(feature_plan.instrument_columns)
             | set(feature_plan.matrix_columns)
         )
+        # PB 类财务因子要用未复权价; 矩阵字段缺 raw_close 时 build 侧回退复权 close。
+        from app.backtest.fundamentals import requires_raw_close
+
+        if asset_type == "stock" and requires_raw_close(
+            getattr(feature_plan, "fundamental_columns", frozenset()) or frozenset()
+        ):
+            field_columns.add("raw_close")
         # 扩展时序数值字段不进 parquet 解析 (enriched 只落 14 存储列), 矩阵构建后
         # 按 (日期, 标的) 对齐现场注入 — 与财务因子 attach 同构。快照模式/字符串
         # 字段/未注册名在此拦截 (快照回看历史 = 未来函数)。
@@ -674,10 +743,13 @@ class BacktestEngine:
             if cache_profile is not None
             else settings.backtest_matrix_cache_max_mb * 1024 * 1024
         )
+        prefix_end = coverage_end or end
         source_generation = (
             expected_generation
             if expected_generation is not None
-            else self.data_generation_await(asset_type, cancel_event=cancel_event)
+            else self.data_generation_await(
+                asset_type, cancel_event=cancel_event, end=prefix_end,
+            )
         )
         # 快照世代路径也给第二次机会 (issue #517): 循环内撞换代时下方 except
         # 已用 data_generation_await 刷新世代, 这里只需不再限定单次尝试。
@@ -685,7 +757,7 @@ class BacktestEngine:
         for attempt in range(attempts):
             try:
                 cache_generation = self._range_cache_generation(
-                    asset_type, coverage_end or end, source_generation,
+                    asset_type, prefix_end, source_generation,
                 )
                 market = load_market_data_matrix_from_parquet(
                     parquet_root,
@@ -705,7 +777,7 @@ class BacktestEngine:
                     source_generation=cache_generation,
                     cancel_event=cancel_event,
                 )
-                self.assert_data_generation(asset_type, source_generation)
+                self.assert_data_generation(asset_type, source_generation, end=prefix_end)
                 from app.backtest.fundamentals import attach_matrix_fundamental_fields
 
                 fundamental_names = sorted(
@@ -733,7 +805,7 @@ class BacktestEngine:
                 if attempt + 1 >= attempts:
                     raise
                 source_generation = self.data_generation_await(
-                    asset_type, cancel_event=cancel_event
+                    asset_type, cancel_event=cancel_event, end=prefix_end,
                 )
             except pa.ArrowException as exc:
                 raise ValueError(f"direct market matrix parquet scan failed: {exc}") from exc
@@ -1853,6 +1925,12 @@ class BacktestEngine:
         if volumes is not None and amounts is not None:
             total_vol = float(np.nansum(volumes))
             total_amt = float(np.nansum(amounts))
+            # 量、额必须成对取: 某根 bar 只有额没有量 (数据缺口) 时, 单独 nansum
+            # 会把它的额并进分母为其它 bar 的量 → VWAP 虚高 (实测 10.0 → 15.0)。
+            paired = np.isfinite(volumes) & np.isfinite(amounts) & (volumes > 0) & (amounts > 0)
+            if paired.any():
+                total_vol = float(np.sum(volumes[paired]))
+                total_amt = float(np.sum(amounts[paired]))
             if total_vol > 0 and total_amt > 0:
                 # volume 单位是手 (1 手 = 100 股), amount 是元 — 与 scoring/
                 # intraday_features/matrix 的 VWAP 同口径; 缺 x100 会放大 100 倍 (#387)
@@ -2499,6 +2577,19 @@ class BacktestEngine:
                 set(),
             )
 
+        # 强平会扣卖出成本并改 cash, 但上面的曲线点已按「强平前」的现金+市值记录。
+        # 不回填最后一个点, total_return/final_equity 会比已落账的 trade 虚高
+        # (费率 1.1% 时虚高约 10.9% 本金), equity_curve 也仍标 positions:1。
+        if equity_values:
+            final_value = round(float(cash + _market_value()), 2)
+            equity_values[-1] = final_value
+            peak = max(peak, final_value)
+            if options.include_curves and equity_curve:
+                equity_curve[-1]["value"] = final_value
+                equity_curve[-1]["cash"] = round(float(cash), 2)
+                equity_curve[-1]["positions"] = len(positions)
+                drawdown_curve[-1]["value"] = round((final_value - peak) / peak, 4) if peak > 0 else 0.0
+
         statistics_started = time.perf_counter()
         stats = self._calc_portfolio_stats_from_values(
             equity_values,
@@ -2506,6 +2597,7 @@ class BacktestEngine:
             trades,
             config.initial_capital,
             include_monte_carlo=options.include_monte_carlo,
+            dates=[matrix.timestamp_labels[t][:10] for t in range(len(equity_values))],
         )
         stats["statistics_ms"] = round(
             (time.perf_counter() - statistics_started) * 1000,
@@ -3154,6 +3246,17 @@ class BacktestEngine:
                 set(),
             )
 
+        # 与矩阵路径同因: 强平扣了卖出成本, 最后一个曲线点必须回填, 否则净值虚高
+        if equity_curve:
+            final_value = round(float(cash + _market_value()), 2)
+            equity_curve[-1]["value"] = final_value
+            equity_curve[-1]["cash"] = round(float(cash), 2)
+            equity_curve[-1]["positions"] = len(positions)
+            last_peak = max(row["value"] for row in equity_curve)
+            drawdown_curve[-1]["value"] = (
+                round((final_value - last_peak) / last_peak, 4) if last_peak > 0 else 0.0
+            )
+
         stats = self._calc_portfolio_stats(equity_curve, trades, config.initial_capital)
         stats["execution"] = execution_stats
         stats["pending_exit_positions"] = pending_exit_count
@@ -3248,7 +3351,10 @@ class BacktestEngine:
         eff_sims = min(n_sims, max(200, 2_000_000 // n))
         rng = np.random.default_rng(42)
         samples = rng.choice(pnls, size=(eff_sims, n), replace=True)
-        equity = np.cumprod(1.0 + samples, axis=1)
+        # 首列补 1.0 (初始净值): 否则峰值从第一笔交易后开始, 首笔亏损的回撤被吞掉
+        equity = np.concatenate(
+            [np.ones((eff_sims, 1)), np.cumprod(1.0 + samples, axis=1)], axis=1
+        )
         peak = np.maximum.accumulate(equity, axis=1)
         dd = (equity - peak) / peak
         maxdds = dd.min(axis=1)
@@ -3304,7 +3410,7 @@ class BacktestEngine:
 
         # 胜率
         wins = pnls[pnls > 0]
-        losses = pnls[pnls <= 0]
+        losses = pnls[pnls < 0]   # 0% 是平局, 不是亏损
         win_rate = len(wins) / n_trades
 
         # 盈亏比
@@ -3414,7 +3520,7 @@ class BacktestEngine:
         pnls = np.array([t.pnl_pct for t in trades], dtype=float)
         durations = np.array([t.duration for t in trades], dtype=float)
         wins = pnls[pnls > 0]
-        losses = pnls[pnls <= 0]
+        losses = pnls[pnls < 0]   # 0% 是平局, 不是亏损
         avg_win = float(np.mean(wins)) if len(wins) else 0.0
         avg_loss = abs(float(np.mean(losses))) if len(losses) else 0.0
 
@@ -3428,11 +3534,17 @@ class BacktestEngine:
         equity_values: list[float] = []
         equity = 1.0
         peak = 1.0
+        # 曲线首点必须是初始资金 1.0: 只从第一个卖出日开始记, 首段亏损
+        # (例如先跌 20% 再反弹) 会被 max_drawdown 完全吞掉。
+        equity_values.append(1.0)
         daily_avg: list[float] = []
+        # 卖出日序列, 供 sharpe/sortino 的「每年样本数」折算
+        exit_days: list[str] = []
         for d_str in sorted(daily_returns.keys()):
             values = daily_returns[d_str]
             avg_ret = float(np.mean(values)) if values else 0.0
             daily_avg.append(avg_ret)
+            exit_days.append(str(d_str))
             equity *= (1 + avg_ret)
             peak = max(peak, equity)
             dd = (equity - peak) / peak if peak > 0 else 0.0
@@ -3458,8 +3570,12 @@ class BacktestEngine:
         daily = np.array(daily_avg, dtype=float)
         # 样本标准差 (ddof=1), 与主流回测库惯例一致
         _std = float(np.std(daily, ddof=1)) if len(daily) > 1 else 0.0
-        sharpe = float(np.mean(daily) / _std * np.sqrt(252)) if _std > 0 else 0.0
-        sortino = BacktestEngine._sortino_ratio(daily)
+        # 这里的 daily 是「每个卖出日」的横截面均值, 不是每个交易日 — 直接 ×√252
+        # 等于假设一年只有这么几个样本日。按实际日历跨度折算年化因子:
+        # 12 次月度卖出跨一年 → 一年 12 个样本 → √12≈3.46, 而不是 √252≈15.9。
+        _periods_per_year = _sample_periods_per_year(exit_days)
+        sharpe = float(np.mean(daily) / _std * np.sqrt(_periods_per_year)) if _std > 0 else 0.0
+        sortino = BacktestEngine._sortino_ratio(daily, periods_per_year=round(_periods_per_year))
 
         stats = {
             "mode": "full",
@@ -3522,12 +3638,14 @@ class BacktestEngine:
     ) -> dict:
         equity_values = [float(row["value"]) for row in equity_curve]
         exposure_values = [float(row.get("exposure", 0.0)) for row in equity_curve]
+        dates = [str(row.get("date")) for row in equity_curve]
         return BacktestEngine._calc_portfolio_stats_from_values(
             equity_values,
             exposure_values,
             trades,
             initial_capital,
             include_monte_carlo=include_monte_carlo,
+            dates=dates,
         )
 
     @staticmethod
@@ -3538,6 +3656,7 @@ class BacktestEngine:
         initial_capital: float,
         *,
         include_monte_carlo: bool = True,
+        dates: list[str] | None = None,
     ) -> dict:
         if not equity_values:
             return {"total_return": 0, "n_trades": 0}
@@ -3545,19 +3664,28 @@ class BacktestEngine:
         total_return = final_equity / initial_capital - 1 if initial_capital > 0 else 0.0
         values = np.array(equity_values, dtype=float)
         daily = values[1:] / values[:-1] - 1 if len(values) > 1 else np.array([])
-        annual_return = (1 + total_return) ** (252 / max(len(equity_values), 1)) - 1 if total_return > -1 else total_return
-        peaks = np.maximum.accumulate(values)
-        drawdowns = values / peaks - 1
+        # 年化按日历年跨度, 不是点数: 点数隐含「每天一个点」, 3 点 +20% 会算出
+        # 数百万倍。曲线首日即建仓日, 起点可视为建仓前一日。
+        if dates and len(dates) >= 2:
+            _span = max((date.fromisoformat(dates[-1][:10]) - date.fromisoformat(dates[0][:10])).days, 1)
+            annual_return = _annualize(total_return, _span / 365.25)
+        else:
+            annual_return = _annualize(total_return, len(equity_values) / 252.0)
+        # 峰值必须从初始资金起算: 曲线首点已是建仓后净值, 首段亏损否则被吞掉
+        # (stats 与同函数生成的 drawdown_curve 会自相矛盾)。
+        peaks = np.maximum.accumulate(np.concatenate([[float(initial_capital)], values]))
+        drawdowns = values / peaks[1:] - 1
         max_drawdown = float(drawdowns.min()) if len(drawdowns) else 0.0
         # 样本标准差 (ddof=1), 与主流回测库惯例一致
         _std = float(np.std(daily, ddof=1)) if len(daily) > 1 else 0.0
+        # 组合模式 daily 是逐日收益, 每天一个点 → ×√252 是标准年化, 不改。
         sharpe = float(np.mean(daily) / _std * np.sqrt(252)) if _std > 0 else 0.0
         sortino = BacktestEngine._sortino_ratio(daily)
         pnls = np.array([t.pnl_pct for t in trades], dtype=float) if trades else np.array([])
         durations = np.array([t.duration for t in trades], dtype=float) if trades else np.array([])
         exposures = np.array(exposure_values, dtype=float)
         wins = pnls[pnls > 0]
-        losses = pnls[pnls <= 0]
+        losses = pnls[pnls < 0]   # 0% 是平局, 不是亏损
         avg_win = float(np.mean(wins)) if len(wins) else 0.0
         avg_loss = abs(float(np.mean(losses))) if len(losses) else 0.0
         stats = {
@@ -3599,13 +3727,23 @@ class BacktestEngine:
 
     @staticmethod
     def cross_section_rank(panel: pl.DataFrame, col: str) -> pl.DataFrame:
+        """截面秩。method 必须是确定性的: "random" 会在并列值间随机打破,
+        同一份数据每次跑出不同因子值 (复现不了、参数优化不可比)。
+        "average" 让并列值共享平均秩, 不虚增也不随机。"""
         return panel.with_columns(
-            pl.col(col).rank(method="random").over("date").alias(f"{col}_rank")
+            pl.col(col).rank(method="average").over("date").alias(f"{col}_rank")
         )
 
     @staticmethod
     def cross_section_qcut(panel: pl.DataFrame, col: str, n_groups: int) -> pl.DataFrame:
+        """截面等频分组。allow_duplicates=True: 分位点重复 (低波动日、整数因子)
+        时 qcut 默认抛 DuplicateError, 整批因子回测直接失败。放开后实际组数
+        少于 n_groups (标签出现空洞, 如只剩 Q1/Q5), 由调用方按现有标签聚合。"""
         return panel.with_columns(
-            pl.col(col).qcut(n_groups, labels=[f"Q{i+1}" for i in range(n_groups)])
+            pl.col(col).qcut(
+                n_groups,
+                labels=[f"Q{i+1}" for i in range(n_groups)],
+                allow_duplicates=True,
+            )
             .over("date").alias("_group")
         )

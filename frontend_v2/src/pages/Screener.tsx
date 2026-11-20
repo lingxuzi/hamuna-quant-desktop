@@ -10,6 +10,7 @@ import { toast } from '@/components/Toast'
 import { useDataStatus, usePreferences, useCapabilities, useQuoteStatus } from '@/lib/useSharedQueries'
 import { useWatchlistBatchAdd } from '@/lib/useSharedMutations'
 import { QK } from '@/lib/queryKeys'
+import { openMarketAware } from '@/lib/marketAwareStore'
 import { pendingStrategyIds, pollingInterval, useDocumentVisible } from '@/lib/refreshPolicy'
 import { storage } from '@/lib/storage'
 import { PageHeader } from '@/components/PageHeader'
@@ -30,7 +31,6 @@ import { DefaultStrategyParamsDialog } from '@/components/screener/DefaultStrate
 import { ResourceTransferButton } from '@/components/ResourceTransferDialog'
 import { StrategyPoolDialog } from '@/components/screener/StrategyPoolDialog'
 import { StrategyBuilderDialog } from '@/components/screener/StrategyBuilderDialog'
-import { MarketAwareDialog } from '@/components/screener/MarketAwareDialog'
 import { StrategyStoreDialog } from '@/components/screener/StrategyStoreDialog'
 import { CompositeStrategyDialog } from '@/components/screener/CompositeStrategyDialog'
 import { ListColumnCustomizer } from '@/components/ListColumnCustomizer'
@@ -70,7 +70,6 @@ export function Screener() {
   const [settingsStrategyId, setSettingsStrategyId] = useState<string | null>(null)
   const [showPoolDialog, setShowPoolDialog] = useState(false)
   const [showBuilder, setShowBuilder] = useState(false)
-  const [showMarketAware, setShowMarketAware] = useState(false)
   const [builderMode, setBuilderMode] = useState<'create' | 'modify'>('create')
   const [showStore, setShowStore] = useState(false)
   const [showDefaultParams, setShowDefaultParams] = useState(false)
@@ -1077,7 +1076,7 @@ export function Screener() {
             </button>
             {/* 市场感知生成 */}
             <button
-              onClick={() => setShowMarketAware(true)}
+              onClick={() => openMarketAware()}
               className="ctl ctl-md ctl-btn inline-flex items-center gap-1.5 px-2.5 text-accent border-accent/25 bg-accent/5 hover:bg-accent/15 bg-surface"
             >
               <Radar className="h-3.5 w-3.5" />
@@ -1515,9 +1514,6 @@ export function Screener() {
           }}
           onClose={() => setShowPoolDialog(false)}
         />
-      )}
-      {showMarketAware && (
-        <MarketAwareDialog onClose={() => setShowMarketAware(false)} />
       )}
       <StrategyBuilderDialog
         open={showBuilder}

@@ -89,7 +89,7 @@ export function Factors() {
             </button>
             <span className="hidden h-5 w-px shrink-0 bg-border sm:block" aria-hidden="true" />
             <nav className="order-last min-w-0 flex-1 basis-full overflow-x-auto sm:order-none sm:basis-auto lg:flex-none" aria-label="因子视图">
-              <div className="inline-flex min-w-max items-center gap-0.5 rounded-btn border border-border bg-surface/80 p-0.5">
+              <div className="inline-flex min-w-max items-center gap-0.5 rounded-btn border border-border bg-surface/80">
                 {(Object.keys(TABS) as Tab[]).map(tab => {
                   const mode = TABS[tab]
                   const Icon = mode.icon
@@ -124,7 +124,7 @@ export function Factors() {
         {activeTab === 'create' && (
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="flex shrink-0 items-center px-1">
-              <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5">
+              <div className="inline-flex rounded-btn border border-border bg-surface/80">
                 {CREATE_MODES.map(({ id, label }) => (
                   <button
                     key={id}

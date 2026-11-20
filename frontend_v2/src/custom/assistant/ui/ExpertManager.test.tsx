@@ -60,7 +60,7 @@ afterEach(async () => {
 
 async function render() {
   root = createRoot(host)
-  await act(async () => { root!.render(<ExpertManager scope="all" />) })
+  await act(async () => { root!.render(<ExpertManager />) })
 }
 
 function buttonByText(text: string): HTMLButtonElement {
@@ -78,7 +78,7 @@ it('批量停用只改选中的专家, 一次整份保存', async () => {
   expect(boxes.length).toBe(3)
   await act(async () => { boxes[1].click() })
 
-  await act(async () => { buttonByText('批量停用').click() })
+  await act(async () => { buttonByText('停用 1 个').click() })
 
   expect(saveExpertLayout).toHaveBeenCalledTimes(1)
   const [categories, assignments] = saveExpertLayout.mock.calls[0]
@@ -87,4 +87,16 @@ it('批量停用只改选中的专家, 一次整份保存', async () => {
     alpha: { category: '自选', enabled: false },
     beta: { category: '自选', enabled: true },
   })
+})
+
+it('没选中专家时不摆批量按钮', async () => {
+  await render()
+
+  const labels = () => Array.from(host.querySelectorAll('button')).map(b => b.textContent?.trim() ?? '')
+  expect(labels().some(t => t.startsWith('启用 ') || t.startsWith('停用 '))).toBe(false)
+
+  const boxes = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+  await act(async () => { boxes[1].click() })
+  expect(labels()).toContain('启用 1 个')
+  expect(labels()).toContain('停用 1 个')
 })

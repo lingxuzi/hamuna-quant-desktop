@@ -21,6 +21,7 @@ import polars as pl
 
 from app.data_providers.base import AssetType, ProviderRequestError
 from app.data_providers.capabilities import Cap, CapabilitySet
+from app.data_providers.ex_factor import recompute_ex_factor
 from app.data_providers.rate_limits import chunked, resolve_limit
 from app.data_providers.repository import KlineRepository, replace_with_retry
 from app.indicators.pipeline import filter_halt_days
@@ -698,6 +699,62 @@ def _align_adj_factor_frame(df: pl.DataFrame) -> pl.DataFrame:
     return df.select(["symbol", "trade_date", "ex_factor", *ADJ_DETAIL_COLS])
 
 
+def _recompute_adj_factors(df: pl.DataFrame) -> pl.DataFrame:
+    """按明细列重算单事件因子 (公式口径修正后的存量归一化)。
+
+    明细列 (prev_close/dividend/bonus/allot/allot_price) 是公式的唯一输入;
+    存量行的 ex_factor 由旧公式算出 → 与公式漂移 (参考价差 1 分 → 因子差
+    0.09% → 除权日限价差 1 分 → 收盘贴着限价时被误判成涨跌停)。
+    归一化后整表同口径; 变化行会进 changed_symbols → 触发 enriched 重算。
+    缺明细的行无法重算 → 保留原值。
+    """
+    if df.is_empty() or "prev_close" not in df.columns:
+        return df
+
+    def _recompute(row: dict) -> float | None:
+        return recompute_ex_factor(
+            row.get("prev_close"), row.get("dividend"), row.get("bonus"),
+            row.get("allot"), row.get("allot_price"),
+        )
+
+    recomputed = (
+        pl.struct(["prev_close", "dividend", "bonus", "allot", "allot_price"])
+        .map_elements(_recompute, return_dtype=pl.Float64)
+    )
+    return df.with_columns(
+        pl.when(recomputed.is_not_null())
+        .then(recomputed)
+        .otherwise(pl.col("ex_factor"))
+        .alias("ex_factor")
+    )
+
+
+def recompute_adj_factor_store(out: Path, *, dry_run: bool = False) -> tuple[int, list[str]]:
+    """离线归一化存量除权因子 (不联网): 按明细列重算 ex_factor。
+
+    公式改过之后 (参考价口径从 float 换成 Decimal) 存量行的因子必须重算,
+    否则整表口径不一致。除权因子同步 (任意窗口) 也会做同样的归一化,
+    本函数给「不联网、只修存量」的场景用 (见 scripts/repair_adj_factor.py)。
+
+    返回 (变化行数, 受影响标的)。幂等: 再跑一遍无变化。
+    """
+    if not out.exists():
+        return 0, []
+    existing = pl.read_parquet(out)
+    merged = _recompute_adj_factors(existing)
+    diffed = merged.select(["symbol", "trade_date", "ex_factor"]).join(
+        existing.select(["symbol", "trade_date", "ex_factor"]),
+        on=["symbol", "trade_date"], how="left", suffix="_old",
+    ).filter(
+        pl.col("ex_factor_old").is_null()
+        | ((pl.col("ex_factor") - pl.col("ex_factor_old")).abs() > 1e-9)
+    )
+    changed_symbols = sorted(set(diffed["symbol"].to_list()))
+    if diffed.height and not dry_run:
+        _atomic_write_parquet(merged, out)
+    return diffed.height, changed_symbols
+
+
 def _merge_adj_factor_store(out: Path, new_data: pl.DataFrame) -> tuple[int, list[str]]:
     """合并写入 adj_factor 的 all.parquet, 返回 (新增行数, 因子发生变化的 symbol 列表)。
 
@@ -708,6 +765,10 @@ def _merge_adj_factor_store(out: Path, new_data: pl.DataFrame) -> tuple[int, lis
     变化判定只看 ex_factor (新键 + 因子值差异 > 1e-9): 仅明细列回填
     (dividend/prev_close 等补 null) 不改变复权价格 → 不计入变化列表,
     enriched 局部重算因此不会被明细回填触发全市场重算。
+
+    合并后整表按明细列归一化 (见 _recompute_adj_factors): 公式改过之后,
+    存量行的因子必须重算, 否则整表口径不一致 (差异行进变化列表 → enriched 重算)。
+    本次拉取的行以数据源的因子为准 (keep="last"), 归一化只作用于存量行。
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     new_data = _align_adj_factor_frame(new_data)
@@ -716,9 +777,12 @@ def _merge_adj_factor_store(out: Path, new_data: pl.DataFrame) -> tuple[int, lis
         return new_data.height, sorted(new_data["symbol"].unique().to_list())
     existing = pl.read_parquet(out)
     before = existing.height
+    merged = pl.concat([_recompute_adj_factors(existing), new_data], how="diagonal").unique(
+        subset=["symbol", "trade_date"], keep="last",
+    ).sort(["symbol", "trade_date"])
     # ex_factor 变化判定 (明细回填不算): 与存量按 (symbol, trade_date) 对齐,
     # 旧值缺失 (新事件) 或值差超容差即视为变化。
-    diffed = new_data.select(["symbol", "trade_date", "ex_factor"]).join(
+    diffed = merged.select(["symbol", "trade_date", "ex_factor"]).join(
         existing.select(["symbol", "trade_date", "ex_factor"]),
         on=["symbol", "trade_date"], how="left", suffix="_old",
     ).filter(
@@ -726,9 +790,6 @@ def _merge_adj_factor_store(out: Path, new_data: pl.DataFrame) -> tuple[int, lis
         | ((pl.col("ex_factor") - pl.col("ex_factor_old")).abs() > 1e-9)
     )
     changed_symbols = sorted(set(diffed["symbol"].to_list()))
-    merged = pl.concat([existing, new_data], how="diagonal").unique(
-        subset=["symbol", "trade_date"], keep="last",
-    ).sort(["symbol", "trade_date"])
     _atomic_write_parquet(merged, out)
     return merged.height - before, changed_symbols
 

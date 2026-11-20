@@ -7,17 +7,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { SettingsSystemPanel } from './System'
 
-const mocks = vi.hoisted(() => ({ guard: vi.fn(), sounds: vi.fn() }))
+const mocks = vi.hoisted(() => ({ sounds: vi.fn() }))
 vi.mock('@/lib/api', () => ({ api: {
-  upgradeGuardStatus: mocks.guard,
   listSoundPacks: mocks.sounds,
   updateRealtimeMonitorConfig: vi.fn(),
   updateDailyBatchSymbols: vi.fn(),
   updateMinuteBatchSymbols: vi.fn(),
   updateBacktestWorkerRssLimit: vi.fn(),
-  upgradeGuardScan: vi.fn(),
-  upgradeGuardRestore: vi.fn(),
-  upgradeGuardDismiss: vi.fn(),
   uploadSoundPack: vi.fn(),
   deleteSoundPack: vi.fn(),
 } }))
@@ -45,9 +41,7 @@ async function render() {
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  mocks.guard.mockReset()
   mocks.sounds.mockReset()
-  mocks.guard.mockResolvedValue({ enabled: false })
   mocks.sounds.mockResolvedValue([])
 })
 

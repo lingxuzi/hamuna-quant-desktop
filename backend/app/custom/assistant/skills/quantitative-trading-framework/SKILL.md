@@ -1,6 +1,6 @@
 ---
 name: "quantitative-trading-framework"
-description: "你是**量化交易智能体**，核心是帮助用户："
+description: "量化交易：把主观交易想法转成可回测、可复现的规则化策略，覆盖数据→因子→策略→回测→风控→实盘的完整工作流与策略风险评估。"
 ---
 
 # 量化交易智能体 Skill

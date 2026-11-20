@@ -291,8 +291,9 @@ export async function startMining(payload: Parameters<typeof api.miningStart>[0]
   }
 }
 
-/** 自动挖掘: L1 全量筛选在后端同步跑 (数十秒到几分钟)。
- *  模块级提交即返回, 弹窗可立刻关闭; 筛选期间用 progress 呈现, run 创建后走 SSE/轮询。
+/** 自动挖掘: 后端 L1 筛选跑在独立 worker 子进程里 (1-3 分钟, 不占 API 进程)。
+ *  POST 立即返回 screening_id, 这里轮询作业状态: 筛选进度进 progress,
+ *  run 创建后切到 SSE/轮询; 无达标因子则用 error 呈现原因分布。
  */
 export async function startAutoMining(payload: Parameters<typeof api.miningAutoStart>[0]) {
   closeEvents()
@@ -312,36 +313,7 @@ export async function startAutoMining(payload: Parameters<typeof api.miningAutoS
   try {
     const data = await api.miningAutoStart(payload)
     if (connectionToken !== token || current.runId !== null) return
-    if (data.started && data.run) {
-      const run = data.run
-      trackRun(run.run_id)
-      update({
-        runId: run.run_id,
-        run,
-        progress: run.progress ?? current.progress,
-        isPending: !TERMINAL_STATES.has(run.status),
-      })
-      if (TERMINAL_STATES.has(run.status)) {
-        await refreshTerminalRun(run.run_id, run.status, run, token)
-      } else {
-        connect(run.run_id)
-      }
-      return
-    }
-    // 无达标因子: 不创建任务, 以 task.error 呈现原因分布 (挖掘页红字展示)
-    const screening = data.screening
-    const topReasons = Object.entries(screening?.reason_counts ?? {})
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([reason, count]) => `${reason} ${count} 个`)
-      .join('；')
-    update({
-      isPending: false,
-      progress: null,
-      error: `${screening?.n_total ?? 0} 个因子里 0 个达标，未启动挖掘。`
-        + (topReasons ? `主要失败原因：${topReasons}。` : '')
-        + '可改选「探索」档（门槛更低）或拉长日期区间后重试。',
-    })
+    await followScreening(data.screening_id, token)
   } catch (error) {
     if (connectionToken !== token || current.runId !== null) return
     update({
@@ -349,6 +321,77 @@ export async function startAutoMining(payload: Parameters<typeof api.miningAutoS
       progress: null,
       error: String((error as Error).message || error),
     })
+  }
+}
+
+/** 轮询 L1 筛选作业直到终态, 再接管它创建的挖掘 run。 */
+async function followScreening(screeningId: string, token: number) {
+  for (;;) {
+    if (connectionToken !== token || current.runId !== null) return
+    let job
+    try {
+      job = await api.miningScreening(screeningId)
+    } catch (error) {
+      // 网络抖动不该直接判死 (筛选还在后端跑), 继续轮询直到超时/取消
+      update({ reconnecting: true, error: String((error as Error).message || error) })
+      await new Promise(resolve => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
+      continue
+    }
+    if (connectionToken !== token || current.runId !== null) return
+    update({
+      reconnecting: false,
+      error: null,
+      progress: {
+        phase: 'screening',
+        label: job.label || '正在全量筛选因子（约 1-3 分钟）',
+        done: job.done,
+        total: job.total,
+        percent: job.total > 0 ? (job.done / job.total) * 100 : undefined,
+      },
+    })
+    if (job.status === 'failed') {
+      update({ isPending: false, progress: null, error: job.error || '因子筛选失败' })
+      return
+    }
+    if (job.status === 'succeeded') {
+      if (job.started && !job.run) {
+        // run 已建但快照还没读到 (存储竞态) — 再轮一次, 别误判成"无达标因子"
+        await new Promise(resolve => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
+        continue
+      }
+      if (job.started && job.run) {
+        const run = job.run
+        trackRun(run.run_id)
+        update({
+          runId: run.run_id,
+          run,
+          progress: run.progress ?? { phase: 'running', label: '筛选完成，挖掘任务已启动' },
+          isPending: !TERMINAL_STATES.has(run.status),
+        })
+        if (TERMINAL_STATES.has(run.status)) {
+          await refreshTerminalRun(run.run_id, run.status, run, token)
+        } else {
+          connect(run.run_id)
+        }
+        return
+      }
+      // 无达标因子: 不创建任务, 以 task.error 呈现原因分布 (挖掘页红字展示)
+      const screening = job.screening
+      const topReasons = Object.entries(screening?.reason_counts ?? {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([reason, count]) => `${reason} ${count} 个`)
+        .join('；')
+      update({
+        isPending: false,
+        progress: null,
+        error: `${screening?.n_total ?? 0} 个因子里 0 个达标，未启动挖掘。`
+          + (topReasons ? `主要失败原因：${topReasons}。` : '')
+          + '可改选「探索」档（门槛更低）或拉长日期区间后重试。',
+      })
+      return
+    }
+    await new Promise(resolve => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
   }
 }
 

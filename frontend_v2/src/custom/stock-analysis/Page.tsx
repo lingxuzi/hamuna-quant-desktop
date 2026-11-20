@@ -12,7 +12,7 @@ import { PriceAlertDialog } from '@/components/stock-analysis/PriceAlertDialog'
 import { api, type KlineRow, type LevelSeries } from '@/lib/api'
 import { useLastStock } from '@/lib/useLastStock'
 import { QK } from '@/lib/queryKeys'
-import { fmtPrice, priceColorClass } from '@/lib/format'
+import { fmtPrice, fmtPct, priceColorClass } from '@/lib/format'
 import { toast } from '@/components/Toast'
 import { Modal } from '@/components/Modal'
 import {
@@ -283,17 +283,14 @@ function PoolSymbols({ active, activeName, activePrice, activePct, onSelect }: {
   )
 }
 
-function fmtPct(pct: number | null | undefined): string {
-  if (pct == null || Number.isNaN(pct)) return '—'
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
-}
-
 // ===== 详情抬头: 名称 + 代码 + 现价 + 涨跌 (design/v2/06 的 .detail-hd) =====
 function StockDetailHead({ rows, name, symbol }: { rows: KlineRow[]; name: string; symbol: string }) {
   const last = rows[rows.length - 1]
   const prev = rows[rows.length - 2]
   const changeAmt = last && prev ? last.close - prev.close : null
-  const pct = last?.change_pct ?? (last && prev && prev.close ? ((last.close - prev.close) / prev.close) * 100 : null)
+  // change_pct 与自算值都必须是小数制, fmtPct 统一 ×100; 之前 fallback 乘了 100,
+  // 两个分支口径不一致, 缺 change_pct 时会多出两个数量级。
+  const pct = last?.change_pct ?? (last && prev && prev.close ? (last.close - prev.close) / prev.close : null)
   return (
     <div className="detail-hd">
       <h2>{name || symbol}</h2>
@@ -485,10 +482,10 @@ function toWeekly(rows: KlineRow[]): KlineRow[] {
     }
   }
   if (cur) out.push(cur)
-  // 周涨跌幅按相邻周收盘计算
+  // 周涨跌幅按相邻周收盘计算; 保持小数制, 与日线 change_pct 同口径 (fmtPct 才 ×100)
   for (let i = 0; i < out.length; i++) {
     const prev = out[i - 1]
-    out[i].change_pct = prev && prev.close ? ((out[i].close - prev.close) / prev.close) * 100 : undefined
+    out[i].change_pct = prev && prev.close ? (out[i].close - prev.close) / prev.close : undefined
   }
   return out
 }

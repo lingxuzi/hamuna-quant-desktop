@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from itertools import pairwise
@@ -23,6 +23,7 @@ from app.backtest.fundamentals import (
     FUNDAMENTAL_FACTOR_NAMES,
     attach_fundamental_factors,
     load_fundamental_snapshot,
+    requires_raw_close,
 )
 from app.factors.registry import factor_columns_view as _factor_columns_view
 from app.strategy.scoring import (
@@ -40,6 +41,23 @@ FACTOR_COLUMNS: list[dict] = _factor_columns_view()
 
 FACTOR_WARMUP_DAYS = 120
 FACTOR_METHODOLOGY_VERSION = "factor_v2"
+
+
+def factor_warmup_days(factor_names) -> int:
+    """按所选因子的最长 warmup 折算自然日预热窗口 (下限仍为 FACTOR_WARMUP_DAYS)。
+
+    固定 120 自然日 ≈ 80 根日 K, 而 position_240d / distance_to_high_240d 要
+    241 根、momentum_120d 要 121 根 —— 这些因子区间头部整段 null, 截面数只剩
+    1/3, IC 与分层结论直接变形。换算同 app/api/factors.py: 交易日 ×1.6 + 15。
+    """
+    from app.factors.registry import get_factor
+
+    bars = 0
+    for name in factor_names:
+        spec = get_factor(str(name))
+        if spec is not None:
+            bars = max(bars, int(spec.warmup_bars or 1))
+    return max(FACTOR_WARMUP_DAYS, int(bars * 1.6) + 15)
 _DAILY_FORWARD_HORIZONS = (1, 3, 5)
 
 
@@ -199,7 +217,7 @@ class FactorBacktestService:
     ) -> FactorResult:
         t0 = time.perf_counter()
         run_id = uuid.uuid4().hex[:10]
-        generation = self._data_generation(config.asset_type)
+        generation = self._data_generation(config.asset_type, config.end)
         panel = self._load_factor_panel(
             config,
             [config.factor_name],
@@ -215,7 +233,7 @@ class FactorBacktestService:
             )
 
         trading_dates = self._global_trading_dates(config)
-        self._assert_data_generation(config.asset_type, generation)
+        self._assert_data_generation(config.asset_type, generation, config.end)
         panel = self._attach_shared_next_return(
             panel,
             config,
@@ -240,12 +258,16 @@ class FactorBacktestService:
         config: FactorBatchConfig,
         *,
         regime_by_date: Mapping[object, Any] | None = None,
+        progress: Callable[[int, int, str], None] | None = None,
     ) -> FactorBatchResult:
+        """progress(done, total, factor_name): 每评估完一个因子回调一次。"""
         from app.services.heavy_job_limiter import shared_heavy_job_limiter
 
         with shared_heavy_job_limiter.slot("exclusive"):
             return self._with_snapshot_retry(
-                lambda: self._run_batch(config, regime_by_date=regime_by_date)
+                lambda: self._run_batch(
+                    config, regime_by_date=regime_by_date, progress=progress
+                )
             )
 
     def _run_batch(
@@ -253,6 +275,7 @@ class FactorBacktestService:
         config: FactorBatchConfig,
         *,
         regime_by_date: Mapping[object, Any] | None = None,
+        progress: Callable[[int, int, str], None] | None = None,
     ) -> FactorBatchResult:
         """在同一份 Panel 上依次评估多个因子, 避免重复读取和计算指标。"""
         t0 = time.perf_counter()
@@ -266,7 +289,7 @@ class FactorBacktestService:
                 error="至少选择一个因子",
             )
 
-        generation = self._data_generation(config.asset_type)
+        generation = self._data_generation(config.asset_type, config.end)
         panel = self._load_factor_panel(
             config,
             factor_names,
@@ -282,7 +305,7 @@ class FactorBacktestService:
 
         # P1: 预计算共享下期收益 (仅依赖 close/date/symbol), 避免每个因子重复 shift/调仓日 JOIN。
         trading_dates = self._global_trading_dates(config)
-        self._assert_data_generation(config.asset_type, generation)
+        self._assert_data_generation(config.asset_type, generation, config.end)
         panel = self._attach_shared_next_return(
             panel,
             config,
@@ -320,6 +343,8 @@ class FactorBacktestService:
                     elapsed_ms=round((time.perf_counter() - item_t0) * 1000, 1),
                     error="本地没有财务数据: 请先在数据页同步财务数据后再使用财务因子",
                 ))
+                if progress is not None:
+                    progress(len(items), len(factor_names), factor_name)
                 continue
             try:
                 evaluate_kwargs = (
@@ -378,6 +403,8 @@ class FactorBacktestService:
                     elapsed_ms=round((time.perf_counter() - item_t0) * 1000, 1),
                     error=str(exc),
                 ))
+            if progress is not None:
+                progress(len(items), len(factor_names), factor_name)
 
         n_symbols = max((item.n_symbols for item in items), default=0)
         n_dates = max((item.n_dates for item in items), default=0)
@@ -394,7 +421,11 @@ class FactorBacktestService:
             n_dates=n_dates,
         )
 
-    def _data_generation(self, asset_type: str) -> str | None:
+    def _data_generation(self, asset_type: str, end: date) -> str | None:
+        """≤end 的前缀世代: 盘中只重写当天分区, 限定到 end 才拿得到稳定快照。"""
+        loader = getattr(self.engine, "prefix_data_generation", None)
+        if callable(loader):
+            return loader(asset_type, end)
         loader = getattr(self.engine, "data_generation", None)
         return loader(asset_type) if callable(loader) else None
 
@@ -409,9 +440,15 @@ class FactorBacktestService:
         self,
         asset_type: str,
         expected: str | None,
+        end: date,
     ) -> None:
         verifier = getattr(self.engine, "assert_data_generation", None)
-        if callable(verifier):
+        if not callable(verifier):
+            return
+        # 兜底引擎没有前缀世代时读的是全局世代, 校验也得比全局 (别拿前缀比全局)
+        if callable(getattr(self.engine, "prefix_data_generation", None)):
+            verifier(asset_type, expected, end=end)
+        else:
             verifier(asset_type, expected)
 
     def _load_factor_panel(
@@ -430,9 +467,13 @@ class FactorBacktestService:
             for name in factor_names
         ):
             panel_columns.append("consecutive_limit_ups")
+        # PB 类要未复权价: 不加 raw_close 时 attach_fundamental_factors 会静默
+        # 回退到复权 close, 历史 PB 系统性偏低。
+        if config.asset_type == "stock" and requires_raw_close(factor_names):
+            panel_columns.append("raw_close")
         load_start = config.start
         if any(name != "turnover_rate" for name in factor_names):
-            load_start = config.start - timedelta(days=FACTOR_WARMUP_DAYS)
+            load_start = config.start - timedelta(days=factor_warmup_days(factor_names))
 
         load_kwargs = {
             "columns": panel_columns,
@@ -1288,6 +1329,9 @@ class FactorBacktestService:
         with np.errstate(divide="ignore", invalid="ignore"):
             top_ret = np.where(prev_top > 0, top / prev_top - 1.0, 0.0)
             bot_ret = np.where(prev_bot > 0, bot / prev_bot - 1.0, 0.0)
+        # 看似「二次扣费」, 其实不是: 组净值是满仓口径, 两腿各扣 c 后在差值里抵消,
+        # 多空组合若不在这里补 c 就等于零成本。50/50 两腿各自成本 0.5c,
+        # 合计正好一次 _round_trip_cost。改动前先看 test_factor_metrics 的成本断言。
         ls_ret = (
             (top_ret - bot_ret) / 2.0
             - FactorBacktestService._round_trip_cost(config)

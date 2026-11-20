@@ -1720,9 +1720,26 @@ export interface MiningAutoStartPayload {
 
 export interface MiningAutoStartResponse {
   started: boolean
+  /** L1 筛选后台作业 id — 进度与结果用 miningScreening(id) 查 */
+  screening_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
   reason?: string
   run?: MiningRun
   screening?: AutoScreening
+}
+
+/** L1 因子筛选后台作业状态 (POST /mining/auto 立即返回后轮询)。 */
+export interface MiningScreeningJob {
+  screening_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  label: string
+  done: number
+  total: number
+  started: boolean
+  reason?: string | null
+  error?: string | null
+  screening?: AutoScreening | null
+  run?: MiningRun
 }
 
 export interface MiningResultSummary {
@@ -3844,6 +3861,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  miningScreening: (screeningId: string) =>
+    request<MiningScreeningJob>(`/api/backtest/mining/screening/${encodeURIComponent(screeningId)}`),
 
   miningStart: (payload: MiningRequestV1) =>
     request<MiningRun>('/api/backtest/mining/runs', {

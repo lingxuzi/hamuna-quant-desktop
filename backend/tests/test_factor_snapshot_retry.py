@@ -59,7 +59,7 @@ def test_run_batch_retries_on_generation_change(monkeypatch):
     svc = FactorBacktestService(_FakeEngine())
     calls = []
 
-    def _fake_batch(config, *, regime_by_date=None):
+    def _fake_batch(config, *, regime_by_date=None, progress=None):
         calls.append(1)
         if len(calls) < 3:
             raise EnrichedGenerationUnavailableError("changed")

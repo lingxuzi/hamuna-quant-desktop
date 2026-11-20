@@ -31,6 +31,18 @@ export function fmtPct(v: number | null | undefined, digits = 2): string {
   return `${sign}${(v * 100).toFixed(digits)}%`
 }
 
+/**
+ * IC / IR / 相关系数这类「无量纲系数」的展示: 裸数值, 不带百分号也不 ×100。
+ *
+ * IC 是逐日截面 Spearman 相关, 门槛语义是 |IC|≥0.02 (见 auto_mining.SCREEN_GATES)。
+ * 之前用 fmtPct 显示会变成 "+2.00%", 与同屏的 0.02 门槛对不上, 差 100 倍。
+ */
+export function fmtCoeff(v: number | null | undefined, digits = 3): string {
+  if (v == null || Number.isNaN(v)) return '—'
+  const sign = v > 0 ? '+' : ''
+  return `${sign}${v.toFixed(digits)}`
+}
+
 export function fmtVolume(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—'
   const sign = v < 0 ? '-' : ''
@@ -134,9 +146,18 @@ export function isToday(iso: string): boolean {
   return cnDateFromUtc(iso) === cnToday()
 }
 
+/** 日志时间戳 → 北京时间 HH:MM:SS。
+ *
+ * 后端日志 ts 是 UTC (带 Z); 用 toLocaleTimeString 会按**浏览器本地时区**渲染,
+ * 非东八区用户 (或 UTC 容器里的 headless 截图) 看到的时间整体偏移。全系统北京时间
+ * 口径见 CLAUDE.md, 必须显式按 Asia/Shanghai 格式化。
+ */
 export function formatLogTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  const d = parseUtcNaive(iso)
+  if (!d) return ''
+  const parts = CN_DATE_TIME.formatToParts(d)
+  const pick = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  return `${pick('hour')}:${pick('minute')}:${pick('second')}`
 }
 
 /**

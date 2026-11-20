@@ -100,8 +100,14 @@ def _market(data_dir, start: date, end: date) -> dict:
         if "phase" in window.columns
         else []
     )
+    # up_ratio 是 up/down 的比值 (regime_builder 口径), 直接 ×100 会得到 155% 这种
+    # 不可能值。这里另给一个真正的上涨占比 (up/(up+down), 0-1), 前端一律用它展示。
+    if {"up_count", "down_count"} <= set(window.columns):
+        total_ud = (window["up_count"] + window["down_count"]).cast(pl.Float64)
+        share = pl.when(total_ud > 0).then(window["up_count"] / total_ud).otherwise(None)
+        window = window.with_columns(share.alias("up_share"))
     detail_cols = [
-        c for c in ("date", "state", "score", "phase", "up_ratio", "index_pct")
+        c for c in ("date", "state", "score", "phase", "up_ratio", "up_share", "index_pct")
         if c in window.columns
     ]
     return {
@@ -110,6 +116,7 @@ def _market(data_dir, start: date, end: date) -> dict:
         "phases": [{"phase": p, "days": n} for p, n in phases],
         "score": {"mean": _mean("score"), "last": _last("score")},
         "up_ratio": {"mean": _mean("up_ratio"), "last": _last("up_ratio")},
+        "up_share": {"mean": _mean("up_share"), "last": _last("up_share")},
         "avg_pct": {"mean": _mean("avg_pct"), "last": _last("avg_pct")},
         "index_pct": {"mean": _mean("index_pct"), "last": _last("index_pct")},
         "above_ma20_pct": {"mean": _mean("above_ma20_pct"), "last": _last("above_ma20_pct")},

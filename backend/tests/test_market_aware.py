@@ -262,6 +262,9 @@ def test_build_messages_contains_facts_and_factor_pool() -> None:
             "phases": [{"phase": "repair", "days": 70}],
             "score": {"mean": 40.0, "last": 10.0},
             "up_ratio": {"mean": 1.2, "last": 0.9},
+            # up_rate 是占比 (0-1), 与 up_ratio (比值) 不同口径, 两个都要写:
+            # 文本侧只喂 up_share, 缺失即 KeyError。
+            "up_share": {"mean": 0.55, "last": 0.52},
             "avg_pct": {"mean": -0.001, "last": -0.002},
             "above_ma20_pct": {"mean": 0.4, "last": 0.3},
             "phase_last": "repair",
