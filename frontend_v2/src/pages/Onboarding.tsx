@@ -23,7 +23,6 @@ import { useCapabilityMatrix } from '@/lib/useSharedQueries'
 import { QK } from '@/lib/queryKeys'
 import { Inscription, useQuoteDate, useQuoteRunning } from '@/components/Inscription'
 import { cn } from '@/lib/cn'
-import { PROJECT_LICENSE_NAME } from '@/data/ossLicenses'
 
 // ===== 引导页:5 步向导 =====
 // 0. 使用须知  1. 功能介绍  2. 数据源与 Key  3. 能力路由检测  4. 完成 → 写标记 → 进面板
