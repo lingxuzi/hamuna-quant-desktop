@@ -25,7 +25,7 @@ from app.custom.assistant import experts as assistant_experts
 from app.custom.assistant import fetch_guard as assistant_fetch_guard
 from app.custom.assistant import tools as assistant_tools
 from app.custom.assistant.codex import stream_codex_round
-from app.custom.assistant.prompt import build_system_prompt
+from app.custom.assistant.prompt import build_system_prompt, experts_reminder
 from app.custom.assistant.streaming import stream_openai_round
 from app.services.ai_provider import (
     ai_configured,
@@ -232,18 +232,27 @@ async def chat_stream(
     guard = assistant_fetch_guard.FetchGuard.from_question(
         _last_question(truncated), repo, str((context or {}).get("symbol") or ""),
     )
+    referenced = assistant_experts.referenced_bodies(data_dir, experts)
     system_prompt = build_system_prompt(
         context,
         skills=assistant_experts.usable_skills(data_dir),
-        experts=assistant_experts.referenced_bodies(data_dir, experts),
+        experts=referenced,
     )
-    if guard.asked:
+    if guard.asked or guard.wants_market:
         system_prompt += guard.prompt_addendum()
 
     req_messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         *truncated,
     ]
+    # @ 引用的专家: 再复述到最后一条 user 消息上。system prompt 里的专家正文
+    # 离生成点太远, 历史里最近几轮的通用格式会把它冲淡 (见 experts_reminder)。
+    reminder = experts_reminder(referenced)
+    if reminder and req_messages[-1].get("role") == "user":
+        req_messages[-1] = {
+            **req_messages[-1],
+            "content": str(req_messages[-1].get("content") or "") + reminder,
+        }
     schemas = assistant_tools.build_tool_schemas()
     tool_ctx = assistant_tools.ToolContext.build(
         repo=repo,
@@ -309,7 +318,7 @@ async def chat_stream(
         result = await assistant_tools.execute_assistant_tool(name, args, tool_ctx)
         if result.get("ok"):
             # 取数记账: 只认成功返回 —— 工具报错不算取到了数。
-            guard.record_call(args)
+            guard.record_call(name, args)
         elapsed_ms = int((time.monotonic() - started) * 1000)
         event = {
             "type": "tool_result",
@@ -355,7 +364,10 @@ async def chat_stream(
                 async for event in stream_round(req_messages, schemas, temperature=0.3, timeout=240.0):
                     if event["type"] == "text":
                         round_text.append(event["delta"])
-                        if guard.missing():
+                        # 取数清单没覆盖, 或者一个取数工具都还没调过 —— 正文先攒着。
+                        # 后者是「没点名标的」的场景: 守卫认不出这题要不要数据,
+                        # 只能等模型真的取了数, 才敢把带数字的正文放出去。
+                        if guard.incomplete() or not guard.data_calls:
                             pending_text.append(event["delta"])
                         else:
                             await queue.put({"type": "delta", "content": event["delta"]})
@@ -371,29 +383,35 @@ async def chat_stream(
                     })
 
                 if not tool_calls:
+                    round_content = "".join(round_text)
                     # 模型没调工具就收尾 —— 清单没覆盖说明它没取数, 这段正文不可信:
                     # 丢掉正文, 先催它回去取数。
-                    if guard.should_nudge():
+                    if guard.should_nudge(round_content):
                         guard.nudges += 1
                         pending_text.clear()  # 这段正文没经过取数校验, 丢掉
                         if round_text:
                             req_messages.append({"role": "assistant", "content": "".join(round_text)})
-                        req_messages.append({"role": "user", "content": guard.nudge_text()})
+                        # 催取数的消息会成为最后一条 —— 专家框架得跟着往前走一程,
+                        # 否则被纠偏后模型更容易滑回通用格式 (提醒留在前一条消息里)。
+                        req_messages.append({
+                            "role": "user",
+                            "content": reminder + guard.nudge_text(),
+                        })
                         continue
                     # 催了还是不动 → 代它取一次: 合成一次工具调用, 把真实数据塞回上下文。
                     # 模型嘴硬不调工具, 但数据必须到位 —— 这是最后一道兜底。
-                    if guard.should_force():
+                    forced = guard.force_call() if guard.should_force() else None
+                    if forced is not None:
                         guard.mark_forced()
                         pending_text.clear()
-                        symbols = sorted(guard.missing())
+                        tool_name, args = forced
                         call_id = assistant_actions.new_call_id()
-                        args = {"symbols": symbols}
-                        result = await execute("get_stock_quote", args, call_id=call_id)
+                        result = await execute(tool_name, args, call_id=call_id)
                         req_messages.append({
                             "role": "assistant",
                             "tool_calls": [_assistant_tool_call({
                                 "id": call_id,
-                                "name": "get_stock_quote",
+                                "name": tool_name,
                                 "arguments": json.dumps(args, ensure_ascii=False),
                             })],
                         })
@@ -403,9 +421,16 @@ async def chat_stream(
                             "content": json.dumps(result, ensure_ascii=False),
                         })
                         continue
+                    # 一个取数工具都没成功调过, 正文里的行情数字全是没出处的 ——
+                    # 宁可不交付, 也不能把编的数给用户。
+                    if guard.unverified_numbers("".join(pending_text)):
+                        pending_text.clear()
+                        text_seen = True
+                        await queue.put({"type": "notice", "message": guard.blocked_notice()})
+                        return
                     # 到上限仍没取到: 放行, 但明确告诉用户相关数字没经过校验。
                     await flush_pending()
-                    if guard.missing():
+                    if guard.incomplete():
                         await queue.put({"type": "notice", "message": guard.notice_text()})
                     # 模型把行动计划当答案交了 → 纠偏一次, 让它继续取数。
                     if _looks_like_plan("".join(round_text)) and plan_nudges < _MAX_PLAN_NUDGES:
@@ -471,7 +496,7 @@ async def chat_stream(
                         "content": json.dumps(result, ensure_ascii=False),
                     })
                 # 数据到手 → 清单覆盖完整, 攒着的正文可以放行了。
-                if not guard.missing():
+                if not guard.incomplete():
                     await flush_pending()
         except Exception as exc:  # 单轮失败收敛为 error 事件, 不打断流
             await queue.put(_classify_exception(exc))

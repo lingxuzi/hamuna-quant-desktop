@@ -194,6 +194,19 @@ def test_referenced_expert_body_goes_into_prompt() -> None:
     assert "必须以这些专家的身份与框架作答" in prompt
 
 
+def test_experts_reminder_names_the_pinned_experts() -> None:
+    """@ 引用的专家要复述到最后一条 user 消息上 —— system prompt 离生成点太远。"""
+    from app.custom.assistant.prompt import experts_reminder
+
+    text = experts_reminder([{"name": "buffett", "title": "巴菲特价值投资视角"}])
+
+    assert "巴菲特价值投资视角" in text
+    assert "不要沿用前几轮的通用分析格式" in text
+    # 没有引用就不该往 user 消息里塞任何东西
+    assert experts_reminder([]) == ""
+    assert experts_reminder(None) == ""
+
+
 def test_referenced_expert_not_repeated_in_skill_catalog() -> None:
     """已 @ 引用 (正文已进 prompt) 的专家不再列进技能目录, 免得重复 load_skill。"""
     prompt = build_system_prompt(

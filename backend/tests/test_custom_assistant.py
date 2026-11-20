@@ -135,19 +135,23 @@ async def test_chat_stream_uses_codex_tool_loop(monkeypatch: pytest.MonkeyPatch)
 
 
 async def test_chat_stream_streams_text_deltas_word_by_word(monkeypatch: pytest.MonkeyPatch) -> None:
-    """纯文本回答: 逐字 delta 顺序产出, 内容按序拼接。"""
-    script = [{"text_pieces": ["你", "好", "共有 ", "2 ", "个策略。"]}]
+    """纯文本回答: 逐字 delta 顺序产出, 内容按序拼接。
+
+    问题必须是「不需要取数」的 —— 问自己的策略时模型得先查工具, 那条路径在
+    test_assistant_fetch_guard.py 里覆盖。
+    """
+    script = [{"text_pieces": ["你", "好", "，", "有什么", "可以帮您？"]}]
     monkeypatch.setattr(chat_service, "ai_configured", lambda: True)
     monkeypatch.setattr(chat_service, "is_codex_cli_provider", lambda provider=None: False)
     monkeypatch.setattr(chat_service, "stream_openai_round", _stream_script(script))
 
     events = await _collect(await _drain(chat_service.chat_stream(
-        history=[{"role": "user", "content": "我有哪些策略?"}],
+        history=[{"role": "user", "content": "你好"}],
     )))
 
     kinds = [e["type"] for e in events]
     assert kinds == ["delta"] * 5 + ["done"]
-    assert "".join(e["content"] for e in events[:-1]) == "你好共有 2 个策略。"
+    assert "".join(e["content"] for e in events[:-1]) == "你好，有什么可以帮您？"
 
 
 async def test_chat_stream_emits_tool_events_in_order(monkeypatch: pytest.MonkeyPatch) -> None:

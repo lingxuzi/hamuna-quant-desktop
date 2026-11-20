@@ -19,6 +19,15 @@ def _write_index_instruments(repo, rows):
     repo._refresh_index_instruments()
 
 
+def test_name_map_works_before_any_refresh(repo):
+    """新建的 repo 直接查名称映射不能报错。
+
+    __init__ 漏初始化 _name_map_cache 时, 助手取数工具整条失败, 模型拿不到真数据
+    只能编 —— 复现: 600337 的财务取数报 AttributeError, 正文写出了编造的毛利率/ROE。
+    """
+    assert repo.get_name_map() == {}
+
+
 def test_name_map_includes_index(repo):
     _write_index_instruments(repo, {
         "symbol": ["000001.SH"], "name": ["上证指数"],

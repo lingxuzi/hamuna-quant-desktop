@@ -46,9 +46,9 @@ export const AssistantMessage = memo(function AssistantMessage({
           {streaming && <Cursor />}
           {!streaming && <AnswerDisclaimer />}
         </>
-      ) : (
+      ) : streaming ? (
         <ThinkingDots />
-      )}
+      ) : null}
     </div>
   )
 })

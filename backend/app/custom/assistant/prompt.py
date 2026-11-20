@@ -154,6 +154,25 @@ def _experts_block(experts: list[dict] | None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def experts_reminder(experts: list[dict] | None) -> str:
+    """贴在本轮 user 消息末尾的专家复述 —— system prompt 里那份会被历史冲淡。
+
+    复现过的失效: 会话前几轮都是通用口径时, 最后一轮 @ 了专家, 模型照着历史里
+    最近那份「行情/技术面/基本面/情景」格式续写, system prompt 里的专家正文
+    形同不存在。system prompt 离生成点太远, 而就近的少数几条消息权重最高 ——
+    所以把「以谁的身份作答」放进这一条 user 消息里。
+    """
+    if not experts:
+        return ""
+    names = [str(item.get("title") or item.get("name")) for item in experts]
+    return (
+        "\n\n[本轮引用专家: " + "、".join(names) + "] "
+        "以上框架已随系统提示给出。这一条就是你的回答方式 —— 用该专家的判断流程、"
+        "语言与取舍标准重新组织答案, 不要沿用前几轮的通用分析格式 (行情表/技术面/"
+        "基本面/情景推演那套)。专家框架与通用口径冲突时, 以专家为准。"
+    )
+
+
 def build_system_prompt(
     context: dict | None,
     skills: list[dict] | None = None,

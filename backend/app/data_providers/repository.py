@@ -488,6 +488,11 @@ class KlineRepository:
         self._live_agg_cache_date: date | None = None
         self._live_agg_check_date: date | None = None          # 上次跨日校验时的 today (快路径节流)
         self._instruments_cache: pl.DataFrame | None = None
+        # 名称映射缓存 (symbol -> name), 全量结果缓存在这里, 随维表刷新失效。
+        # 漏初始化会让 get_name_map() 直接 AttributeError —— 助手取数工具因此整条
+        # 报错, 模型拿不到真数据就只能编 (复现: 600337 的财务表取数失败, 正文
+        # 写出了编造的毛利率/ROE)。__init__ 必须给 None, 不能只在 clear_cache 里给。
+        self._name_map_cache: dict[str, str] | None = None
         self._name_history_cache: pl.DataFrame | None = None
         self._name_history_mtime_ns: int | None = None
         self._historical_shares_cache: pl.DataFrame | None = None
