@@ -14,8 +14,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -985,6 +985,51 @@ def _bundle_service():
     from app.services import strategy_bundle
 
     return strategy_bundle
+
+
+@router.get("/{strategy_id}/qmt")
+def export_qmt_script(
+    strategy_id: str,
+    request: Request,
+    amount: float = Query(10000, gt=0, le=10_000_000),
+    max_positions: int = Query(5, ge=1, le=200),
+    entry_fill: str = Query("open_t+1"),
+    universe: str = Query("沪深A股"),
+    account_id: str = Query("", max_length=32),
+    live_trade: bool = Query(False),
+):
+    """把矩阵策略翻译成可直接拷进 QMT 运行的单文件脚本（GBK 编码）。"""
+    from app.services import qmt_export
+
+    if entry_fill not in ("open_t+1", "close_t"):
+        raise HTTPException(status_code=400, detail="entry_fill 只支持 open_t+1 / close_t")
+    if universe not in ("沪深A股", "沪深京A股", "沪深300", "中证500", "中证1000"):
+        raise HTTPException(status_code=400, detail=f"不支持的股票池: {universe}")
+    engine = _get_engine(request)
+    _get_public_strategy(engine, strategy_id)
+    try:
+        data, filename = qmt_export.build_qmt_script(
+            engine=engine,
+            data_dir=_data_dir(request),
+            strategy_id=strategy_id,
+            config={
+                "amount": amount,
+                "max_positions": max_positions,
+                "entry_fill": entry_fill,
+                "universe": universe,
+                "account_id": account_id,
+                "live_trade": live_trade,
+                "trade_time": "%Y%m%d093200" if entry_fill == "open_t+1"
+                else "%Y%m%d145500",
+            },
+        )
+    except qmt_export.QmtExportError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return Response(
+        content=data,
+        media_type="text/plain; charset=gbk",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{strategy_id}/bundle")

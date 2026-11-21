@@ -116,5 +116,12 @@ ignore = [
     "RUF003",  # Comment contains ambiguous unicode character
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# qmt_shim / qmt_export 产出的源码要在 QMT 内嵌的 Python 3.6 里跑:
+#   UP031 `%` 格式是刻意保留 (f-string/str.format 在这条链路上不引入新风险但 `%` 已验证)
+#   UP004 `class X(object)` 是 3.6 下的标准写法
+"app/services/qmt_shim.py" = ["UP031", "UP004"]
+"app/services/qmt_export.py" = ["UP031"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

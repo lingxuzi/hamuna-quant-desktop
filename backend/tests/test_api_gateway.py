@@ -72,6 +72,8 @@ def test_required_scope_mapping():
     assert f("GET", "/api/monitor-rules") is None                # V1 最小面外
     # 前缀混淆不误伤: /api/paperback 不得命中 /api/paper
     assert f("GET", "/api/paperback") is None
+    # QMT 导出继承 /api/strategies 前缀规则, 不需单独加 _RULES 条目
+    assert f("GET", "/api/strategies/ma_golden_cross/qmt") == "read:analysis"
 
 
 # ── 网关端到端 (真实中间件链) ──────────────────────────────

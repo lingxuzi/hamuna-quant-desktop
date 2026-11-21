@@ -4661,6 +4661,25 @@ export const api = {
   strategyGet: (id: string) =>
     request<StrategyDetail>(`/api/strategies/${id}`),
 
+  /** 把矩阵策略导出成可直接拷进 QMT 运行的单文件脚本 (GBK)。 */
+  strategyQmtExport: (strategyId: string, params: {
+    amount: number; maxPositions: number; entryFill: 'open_t+1' | 'close_t'
+    universe: string; accountId: string; liveTrade: boolean
+  }) => {
+    const qs = new URLSearchParams({
+      amount: String(params.amount),
+      max_positions: String(params.maxPositions),
+      entry_fill: params.entryFill,
+      universe: params.universe,
+      account_id: params.accountId,
+      live_trade: String(params.liveTrade),
+    })
+    return request<Blob>(
+      `/api/strategies/${encodeURIComponent(strategyId)}/qmt?${qs}`,
+      { responseType: 'blob', quiet: true, timeoutMs: COMPUTE_REQUEST_TIMEOUT_MS },
+    )
+  },
+
   /** 发布 research_only 的 AI 草稿策略(翻转为公开) */
   strategyPublish: (strategyId: string) =>
     request<{ ok: boolean; strategy_id: string }>(`/api/strategies/${encodeURIComponent(strategyId)}/publish`, { method: 'POST' }),

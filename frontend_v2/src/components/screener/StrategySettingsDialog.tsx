@@ -16,6 +16,7 @@ import { ConditionEditor } from '@/components/signals/ConditionEditor'
 import { Modal } from '@/components/Modal'
 import { ScoringEditor } from '@/components/ScoringEditor'
 import { StrategyExportButton } from './StrategyExportButton'
+import { QmtExportButton } from './QmtExportButton'
 import { INPUT_MD } from '@/components/controls'
 import { cn } from '@/lib/cn'
 
@@ -564,6 +565,13 @@ export function StrategySettingsDialog({ strategyId, onClose, onSaved, onAiModif
               <span className="text-[10px] text-muted/40 font-mono">{strategyId}</span>
             </div>
             <div className="flex items-center gap-2">
+              {detail && (
+                <QmtExportButton strategyId={strategyId}
+                  disabled={dirtyAny || saving || resetting || detail.execution_backend !== 'matrix_native'}
+                  disabledHint={detail.execution_backend !== 'matrix_native'
+                    ? '仅矩阵策略支持导出 QMT 脚本'
+                    : '请先保存修改，再导出'} />
+              )}
               {detail && (
                 <StrategyExportButton strategyId={strategyId} disabled={dirtyAny || saving || resetting}
                   disabledHint="请先保存修改，再导出策略包" className="h-[28px] w-[28px] border border-border/60 bg-surface" />
