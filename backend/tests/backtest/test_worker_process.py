@@ -531,6 +531,96 @@ def test_worker_reports_memory_evidence_when_child_killed(monkeypatch, tmp_path)
     assert "回测内存上限" in message
 
 
+def _fake_worker_process(*, alive: bool = True, exitcode: int | None = None):
+    """最小子进程替身: 只实现 run_worker_task 会碰到的四个方法。"""
+
+    class FakeQueue:
+        def get(self, timeout):
+            raise queue.Empty
+
+        def close(self):
+            pass
+
+        def join_thread(self):
+            pass
+
+    class FakeEvent:
+        def set(self):
+            pass
+
+    class FakeProcess:
+        def __init__(self):
+            self.alive = alive
+            self.exitcode = exitcode
+            self.terminated = False
+
+        def start(self):
+            pass
+
+        def is_alive(self):
+            return self.alive and not self.terminated
+
+        def join(self, timeout=None):
+            pass
+
+        def terminate(self):
+            self.terminated = True
+            self.exitcode = -15
+
+    process = FakeProcess()
+    context = SimpleNamespace(
+        Queue=FakeQueue,
+        Event=FakeEvent,
+        Process=lambda **_kwargs: process,
+    )
+    return process, context
+
+
+def test_worker_swap_counts_toward_rss_limit(monkeypatch, tmp_path):
+    """回归: 只看 RSS 会漏判 —— 内存紧张时 worker 被换页, RSS 缩水、上限永不触发。
+
+    任务实际占用 5.5GiB 却只有 1GiB 常驻, 若按 RSS 判就一路在 swap 里空转。
+    """
+    process, context = _fake_worker_process()
+    monkeypatch.setattr(worker_module.mp, "get_context", lambda _method: context)
+    monkeypatch.setattr(worker_module, "_effective_rss_limit_bytes", lambda: 4 * 1024**3)
+    monkeypatch.setattr(worker_module, "_process_rss_bytes", lambda _pid: 1 * 1024**3)
+    monkeypatch.setattr(worker_module, "_process_swap_bytes", lambda _pid: 4.5 * 1024**3)
+    monkeypatch.setattr(
+        worker_module, "_system_memory", lambda: (8 * 1024**3, 16 * 1024**3)
+    )
+
+    with pytest.raises(BacktestWorkerError) as excinfo:
+        run_worker_task({"kind": "mining", "data_dir": str(tmp_path), "config": {}})
+
+    message = str(excinfo.value)
+    assert process.terminated is True
+    assert "5.5GiB" in message
+    assert "常驻 1.0GiB + 换出到 swap 4.5GiB" in message
+
+
+def test_worker_death_message_reports_swapped_bytes(monkeypatch, tmp_path):
+    """被内核杀掉时, 取证要把换出到 swap 的部分一并报出来。"""
+    _process, context = _fake_worker_process(alive=False, exitcode=-9)
+    monkeypatch.setattr(worker_module.mp, "get_context", lambda _method: context)
+    monkeypatch.setattr(worker_module, "_process_rss_bytes", lambda _pid: 1 * 1024**3)
+    monkeypatch.setattr(worker_module, "_process_swap_bytes", lambda _pid: 2 * 1024**3)
+    counters = iter([0, 1])
+    monkeypatch.setattr(
+        worker_module, "_cgroup_oom_kill_count", lambda: next(counters, 1)
+    )
+    monkeypatch.setattr(
+        worker_module, "_system_memory", lambda: (1 * 1024**3, 16 * 1024**3)
+    )
+
+    with pytest.raises(BacktestWorkerError) as excinfo:
+        run_worker_task({"kind": "mining", "data_dir": str(tmp_path), "config": {}})
+
+    message = str(excinfo.value)
+    assert "3.0GiB" in message
+    assert "常驻 1.0GiB + 换出 2.0GiB" in message
+
+
 def test_worker_aborts_before_kernel_oom_when_system_memory_low(monkeypatch, tmp_path):
     """整机内存将尽时主动中止: 别等内核随机挑一个进程杀掉 (exitcode=-9 无解释)。"""
 

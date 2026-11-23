@@ -449,7 +449,7 @@ export function SettingsSystemPanel() {
         <div className="rowset">
           <BatchSymbolsRow
             label="回测内存上限"
-            desc="默认 6 · 0 = 不限制"
+            desc="常驻+swap 计入 · 默认 6 · 0 = 不限制"
             min={BACKTEST_RSS_LIMIT_GIB_MIN}
             max={BACKTEST_RSS_LIMIT_GIB_MAX}
             value={prefs?.backtest_worker_rss_limit_gib ?? 6}

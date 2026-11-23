@@ -70,6 +70,25 @@ def _process_rss_bytes(pid: int | None) -> int:
         return 0
 
 
+def _process_swap_bytes(pid: int | None) -> int:
+    """进程被换出到 swap 的字节数 —— 这部分 RSS 看不到。
+
+    只看 RSS 会漏判: 内存紧张时内核对 worker 换页, RSS 随之缩水, 6GiB 上限永远
+    撞不到, 任务在 swap 里反复抖动却既不报错也不中止, 表现为"回测卡住"。
+    所以超限判断用 RSS+swap 的真实占用 (仍不用 VMS —— polars/numpy 的虚拟内存
+    映射远大于实际占用, 用它会大量误杀)。
+
+    memory_full_info() 走 /proc/<pid>/smaps_rollup, 比 memory_info() 贵一个数量级,
+    因此只用在 2 秒一次的父进程检测上; 0.05 秒的峰值采样线程仍只读 RSS。
+    """
+    if pid is None:
+        return 0
+    try:
+        return int(getattr(psutil.Process(pid).memory_full_info(), "swap", 0))
+    except psutil.Error:
+        return 0
+
+
 # ── 子进程死亡的现场取证 ─────────────────────────────────────────
 # 子进程被内核 OOM killer 杀掉时 exitcode = -9 (SIGKILL), 应用自己看不到原因,
 # 用户只拿到一句 "exited without result" —— 排查全靠猜。这里在失败现场取证
@@ -113,6 +132,7 @@ def _worker_death_message(
     *,
     exitcode: int | None,
     last_rss_bytes: int,
+    last_swap_bytes: int,
     oom_killed: bool,
     available_bytes: int,
     total_bytes: int,
@@ -131,8 +151,14 @@ def _worker_death_message(
     else:
         head = f"回测子进程异常退出 (退出码 {exitcode}), 没有交回结果"
 
+    footprint = last_rss_bytes + last_swap_bytes
     facts = [
-        f"被杀时进程占用 {_gib(last_rss_bytes)}",
+        (
+            f"被杀时进程占用 {_gib(footprint)}"
+            f" (常驻 {_gib(last_rss_bytes)} + 换出 {_gib(last_swap_bytes)})"
+            if last_swap_bytes > 0
+            else f"被杀时进程占用 {_gib(footprint)}"
+        ),
         f"系统可用内存 {_gib(available_bytes)} / 共 {_gib(total_bytes)}",
     ]
     if exitcode == -9:
@@ -469,6 +495,7 @@ def run_worker_task(
     cancel_started: float | None = None
     last_rss_check = 0.0
     last_rss_bytes = 0
+    last_swap_bytes = 0
 
     try:
         while result is None and failure is None:
@@ -487,18 +514,31 @@ def run_worker_task(
             if now - last_rss_check >= _RSS_CHECK_INTERVAL_S:
                 last_rss_check = now
                 # getattr: 测试替身进程可能没有 pid 属性, 缺失时按 0 处理 (不触发)
-                rss = _process_rss_bytes(getattr(process, "pid", None))
+                pid = getattr(process, "pid", None)
+                rss = _process_rss_bytes(pid)
+                swap = _process_swap_bytes(pid)
+                # 真实占用 = 常驻 + 已换出。内存紧张时内核会把 worker 换到 swap,
+                # 只看 rss 会一直撞不到上限, 任务在换页抖动里空转。
+                footprint = rss + swap
                 last_rss_bytes = rss
-                if rss_limit_bytes > 0 and rss > rss_limit_bytes:
+                last_swap_bytes = swap
+                if rss_limit_bytes > 0 and footprint > rss_limit_bytes:
                     logger.error(
-                        "backtest worker rss %.2f GiB exceeds limit %.2f GiB, terminating",
-                        rss / 1024**3, rss_limit_bytes / 1024**3,
+                        "backtest worker footprint %.2f GiB (rss %.2f + swap %.2f) "
+                        "exceeds limit %.2f GiB, terminating",
+                        footprint / 1024**3, rss / 1024**3, swap / 1024**3,
+                        rss_limit_bytes / 1024**3,
                     )
                     process.terminate()
                     process.join(timeout=5.0)
+                    swap_note = (
+                        f", 常驻 {rss / 1024**3:.1f}GiB + 换出到 swap {swap / 1024**3:.1f}GiB"
+                        if swap > 0
+                        else ""
+                    )
                     raise BacktestWorkerError(
                         f"回测任务内存超过上限 {rss_limit_bytes / 1024**3:.1f}GiB"
-                        f" (当前 {rss / 1024**3:.1f}GiB), 已中止。"
+                        f" (当前占用 {footprint / 1024**3:.1f}GiB{swap_note}), 已中止。"
                         "可在 设置 → 系统设置 → 性能与内存 调高「回测内存上限」"
                         "(0 = 不限制), 或缩小回测时间范围/标的数量。"
                         "(环境变量 TICK_WORKER_RSS_LIMIT_BYTES 优先于界面设置)"
@@ -509,11 +549,12 @@ def run_worker_task(
                 available_bytes, total_bytes = _system_memory()
                 if (
                     available_bytes < _system_memory_floor_bytes(total_bytes)
-                    and rss >= _WORKER_MEMORY_FOOTPRINT_BYTES
+                    and footprint >= _WORKER_MEMORY_FOOTPRINT_BYTES
                 ):
                     logger.error(
-                        "system memory low: available %.2f GiB of %.2f GiB, worker rss %.2f GiB, terminating",
-                        available_bytes / 1024**3, total_bytes / 1024**3, rss / 1024**3,
+                        "system memory low: available %.2f GiB of %.2f GiB, worker footprint %.2f GiB, terminating",
+                        available_bytes / 1024**3, total_bytes / 1024**3,
+                        footprint / 1024**3,
                     )
                     process.terminate()
                     process.join(timeout=5.0)
@@ -584,6 +625,7 @@ def run_worker_task(
             message = _worker_death_message(
                 exitcode=exitcode,
                 last_rss_bytes=last_rss_bytes,
+                last_swap_bytes=last_swap_bytes,
                 oom_killed=oom_killed,
                 available_bytes=available_bytes,
                 total_bytes=total_bytes,
