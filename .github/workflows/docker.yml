@@ -6,7 +6,7 @@ name: Build and Push Docker Image
 #   - 手动:         网页 Actions → Run workflow
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     tags: ['v*']
   workflow_dispatch:
 

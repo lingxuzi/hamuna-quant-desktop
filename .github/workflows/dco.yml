@@ -5,7 +5,7 @@ name: DCO
 # (维护者自己的提交在本地用 git commit -s 签署)。
 on:
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 permissions:
   contents: read
