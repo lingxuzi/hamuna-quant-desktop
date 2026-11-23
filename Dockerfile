@@ -90,15 +90,13 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
 # Backend code
 # 注意:Docker 里 WORKDIR=/app, 而 config.py 的 _PROJECT_ROOT 是按开发布局
 # (<root>/backend/app/) 推导的, 容器内会错算到 /。这里用环境变量显式指定
-# 三个关键路径, 确保 static / tiers / data 都指向容器内正确位置。
+# static / data 两个关键路径, 确保它们指向容器内正确位置。
 COPY backend/app ./app
-COPY tiers.yaml /app/tiers.yaml
 # 版本号运行时兜底 (issue #513): 容器里 backend/app 被 COPY 到 /app/app,
 # _load_version() 的 parents[2] 因此落在 "/", 版本文件必须放 /frontend_v2/package.json
 # 才读得到 —— 放 /app/ 下读不到, 会静默回退 _FALLBACK_VERSION 显示旧版本。
 COPY frontend_v2/package.json /frontend_v2/package.json
 ENV STATIC_DIR=/app/static \
-    TIERS_YAML=/app/tiers.yaml \
     DATA_DIR=/app/data \
     TICKFLOW_ENV_FILE=/app/.env
 

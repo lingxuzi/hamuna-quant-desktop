@@ -9,10 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from seeded_env import SEEDED_DATA_DIR
 
 from app.services import qmt_lint
 
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# 内置策略在运行时住在 data/strategies/custom (由 app/strategy/seeds 复制而来),
+# 而 data/ 不进 Git —— 干净环境里没有它们, 这里用已种入种子的临时目录。
+_DATA_DIR = SEEDED_DATA_DIR
 
 
 def _engine():

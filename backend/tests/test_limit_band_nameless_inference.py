@@ -23,6 +23,11 @@ import pytest
 from app.indicators.pipeline import compute_all, compute_limit_signals
 
 
+@pytest.fixture(autouse=True)
+def _seeded_signals(seeded_data_dir) -> None:
+    """内置涨跌停信号 (signal_limit_*) 运行时住在 data/ 里, 干净环境 (CI) 没有 —— 种进临时目录。"""
+
+
 def _days(symbol: str, closes: list[float], start: date = date(2024, 1, 2)) -> pl.DataFrame:
     """按收盘价序列造连续交易日: 收=高=低 (封板形态), 首日作基准。"""
     n = len(closes)

@@ -25,6 +25,11 @@ from app.price_limits import is_risk_warning_name
 from app.services import instrument_sync as isync
 
 
+@pytest.fixture(autouse=True)
+def _seeded_signals(seeded_data_dir) -> None:
+    """内置涨跌停信号 (signal_limit_*) 运行时住在 data/ 里, 干净环境 (CI) 没有 —— 种进临时目录。"""
+
+
 def _two_day(
     symbol: str,
     prev_close: float,
