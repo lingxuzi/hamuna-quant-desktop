@@ -657,6 +657,75 @@ def build_matrix_score(market, universe, scoring, order_by, descending,
     return fallback.copy()
 
 
+# ── 声明式信号（复刻 app/strategy/custom_signals.build_expressions） ──
+# polars_expr 策略的入场/出场由 ENTRY_SIGNALS/EXIT_SIGNALS 声明, 信号本身是
+# ``{left, op, right, leftDays, rightDays}`` 条件表 —— 不需要 polars 就能求值。
+# 这样 QMT 侧不翻译策略代码, 只重算同一批已注册信号, 口径与仓库一致。
+
+def _symbol_shift(values, days):
+    """等价 ``pl.col(x).shift(n).over("symbol")``。
+
+    必须走「有效观测」口径: 仓库面板里停牌日没有行, polars 的 shift 因此跨过
+    停牌直接取上一个交易日; QMT 矩阵是矩形对齐, 停牌日是 NaN 占位, 按行号
+    平移会取到 NaN。valid_shift 正是按有效观测推进。
+    """
+    days = int(days)
+    if days <= 0:
+        return values
+    return valid_shift(values, days, np.isfinite(values))
+
+
+def _compare(left, op, right):
+    """比较并按仓库语义把非有限值判为 False (polars null → fill_null(False))。"""
+    with np.errstate(invalid="ignore"):
+        if op == ">":
+            result = left > right
+        elif op == ">=":
+            result = left >= right
+        elif op == "<":
+            result = left < right
+        elif op == "<=":
+            result = left <= right
+        elif op == "==":
+            result = left == right
+        elif op == "!=":
+            result = left != right
+        else:
+            raise ValueError("unsupported signal operator: %s" % op)
+    result = np.asarray(result, dtype=bool) & np.isfinite(left)
+    if isinstance(right, np.ndarray):
+        result &= np.isfinite(right)
+    return result
+
+
+def signal_column(market, definition):
+    """单条信号定义 → (T, N) 布尔矩阵; 多条件 AND 串联。"""
+    combined = None
+    for condition in definition["conditions"]:
+        left = _symbol_shift(
+            matrix_feature(market, condition["left"]),
+            condition.get("leftDays") or 0)
+        kind, value = condition["right"]
+        if kind == "field":
+            right = _symbol_shift(
+                matrix_feature(market, value), condition.get("rightDays") or 0)
+        else:
+            right = np.float32(value)
+        term = _compare(left, condition["op"], right)
+        combined = term if combined is None else (combined & term)
+    if combined is None:
+        return np.zeros(market.shape, dtype=bool)
+    return combined
+
+
+def declared_signal_mask(market, definitions):
+    """多个信号定义 OR 合并 (与 backtest._build_signal_mask 同语义)。"""
+    out = np.zeros(market.shape, dtype=bool)
+    for definition in definitions:
+        out |= signal_column(market, definition)
+    return out
+
+
 # ── 兼容别名（策略里有 ``import ... as shift`` 这类写法） ──
 shift = valid_shift
 ewm_adjust_false = valid_ewm_adjust_false

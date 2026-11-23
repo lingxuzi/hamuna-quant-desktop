@@ -265,7 +265,9 @@ def _strategy_entrypoint_error(code: str, meta: dict | None = None) -> str | Non
         if "filter_history" not in entry_names or "filter" in entry_names:
             return _HISTORY_ENTRYPOINT_ERROR
         return None
-    return None if has_polars_entrypoint else _POLARS_ENTRYPOINT_ERROR
+    if not has_polars_entrypoint:
+        return _POLARS_ENTRYPOINT_ERROR
+    return None
 
 
 class AIStrategyGenerator:

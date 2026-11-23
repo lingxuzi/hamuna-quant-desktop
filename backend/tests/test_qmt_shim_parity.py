@@ -293,3 +293,95 @@ def test_matrix_score_low_direction_matches_repository() -> None:
         shim, universe, scoring, None, True, fallback=fallback,
         directions={"annual_vol_20d": "low"})
     np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5, equal_nan=True)
+
+
+# ── 声明式信号：shim 求值 vs 仓库 polars 表达式 ────────────────────
+_SIGNAL_CASES = {
+    "ma_golden_5_20": [
+        {"left": "ma5", "op": ">", "right": "field:ma20", "leftDays": 0, "rightDays": 0},
+        {"left": "ma5", "op": "<=", "right": "field:ma20", "leftDays": 1, "rightDays": 1},
+    ],
+    "ma_golden_5_60": [
+        {"left": "ma5", "op": ">", "right": "field:ma60", "leftDays": 0, "rightDays": 0},
+        {"left": "ma5", "op": "<=", "right": "field:ma60", "leftDays": 1, "rightDays": 1},
+    ],
+    "vol_surge": [
+        {"left": "vol_ratio_5d", "op": ">=", "right": "2", "leftDays": 0, "rightDays": 0},
+    ],
+    "vol2_below": [
+        {"left": "vol_ratio_5d", "op": "<", "right": "field:vol_ma10", "leftDays": 0, "rightDays": 0},
+    ],
+    "close_above_ma5_prev": [
+        {"left": "close", "op": ">", "right": "field:ma5", "leftDays": 0, "rightDays": 1},
+    ],
+    "gap_up": [
+        {"left": "open", "op": ">", "right": "field:close", "leftDays": 0, "rightDays": 2},
+    ],
+}
+
+
+@pytest.mark.parametrize("signal_id", sorted(_SIGNAL_CASES))
+def test_declared_signal_matches_polars_expression(signal_id: str) -> None:
+    """导出到 QMT 的信号求值必须与仓库 polars 信号列逐格一致。
+
+    这是 ``polars_expr`` 策略能导出的前提: QMT 没有 polars, 信号只能由 shim
+    用纯 numpy 重算; 一旦两条路径对「停牌日 shift」「空值比较」的处理不同,
+    导出的策略就会静默换一套口径。
+    """
+    from app.indicators.pipeline import compute_indicators
+    from app.strategy import custom_signals
+
+    panel = compute_indicators(_panel())
+    definition = {
+        "id": signal_id,
+        "name": signal_id,
+        "kind": "both",
+        "timeframe": "daily",
+        "enabled": True,
+        "conditions": _SIGNAL_CASES[signal_id],
+        "column": "signal_" + signal_id,
+    }
+    exprs = custom_signals.build_expressions([definition])
+    expected_frame = custom_signals.inject(
+        custom_signals.materialize_factor_columns(panel, exprs), exprs)
+    expected = expected_frame.select(
+        pl.col("signal_" + signal_id).fill_null(False).cast(pl.Boolean)
+    ).to_series()
+
+    _real, shim = _build()
+    actual_matrix = qmt_shim.declared_signal_mask(
+        shim, qmt_export_signal_defs(definition))
+
+    # polars 面板没有停牌行, 逐 (symbol, date) 对齐比较
+    date_index = {stamp: row for row, stamp in enumerate(shim.trading_dates)}
+    symbol_index = {code: column for column, code in enumerate(shim.symbols)}
+    mismatched = 0
+    compared = 0
+    for symbol, trade_date, want in zip(
+            expected_frame["symbol"], expected_frame["date"], expected,
+            strict=True):
+        row = date_index[int(str(trade_date).replace("-", "")[:8])]
+        column = symbol_index[symbol]
+        compared += 1
+        if bool(actual_matrix[row, column]) != bool(want):
+            mismatched += 1
+    # 比较行数必须够多, 否则「零行比较」会伪装成通过
+    assert compared > 100, compared
+    assert mismatched == 0, f"{signal_id}: {mismatched} 行与 polars 不一致"
+
+
+def qmt_export_signal_defs(definition: dict) -> list[dict]:
+    """仓库信号定义 → shim 侧的 (kind, value) 已解析形态。"""
+    from app.strategy import custom_signals
+
+    conditions = []
+    for cond in definition["conditions"]:
+        kind, value = custom_signals._parse_right(cond["right"])
+        conditions.append({
+            "left": cond["left"],
+            "op": cond["op"],
+            "right": (kind, value),
+            "leftDays": int(cond.get("leftDays") or 0),
+            "rightDays": int(cond.get("rightDays") or 0),
+        })
+    return [{"id": definition["id"], "conditions": conditions}]

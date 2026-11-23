@@ -20,8 +20,13 @@ from app.strategy.scoring import VIRTUAL_SCORING_DEPENDENCIES
 logger = logging.getLogger(__name__)
 
 # 信号列前缀: 内置种子 signal_* / 用户自定义 csg_* / 盘中 csgi_*。
-# 自定义信号是用户数据, 静态不可知 → 按前缀放行, 运行期由引擎校验缺列。
-_SIGNAL_PREFIXES = ("signal_", "csg_", "csgi_")
+# csg_/csgi_ 是用户数据, 静态不可知 → 按前缀放行 (运行期由引擎校验缺列)。
+_SIGNAL_PREFIXES = ("csg_", "csgi_")
+
+# signal_ 前缀曾整体放行, 导致模型编造 signal_ma_golden_5_60 这类不存在的列
+# 也能过校验; filter() 里那条件永远是 False, 策略静默退化成「买全市场」
+# (回测照跑不报错)。现改为查已注册信号表, 不存在就报错让模型重写。
+_BUILTIN_SIGNAL_PREFIX = "signal_"
 
 # polars_expr 的 filter() 只拿到「当日一行一标的」快照: 跨日算子取不到值,
 # 而回测路径喂整段面板 → 两条路径口径不一致。此类算子一律禁用。
@@ -39,6 +44,21 @@ _ROLLING_OPS = frozenset({
 _MINUTE_COLUMNS = frozenset({
     "symbol", "datetime", "open", "high", "low", "close", "volume", "amount",
 })
+
+
+def _registered_signal_columns() -> frozenset[str]:
+    """当前真实注册的信号列名 (内置种子 + 用户自定义)。
+
+    注册表未就绪时返回空集 → 所有 signal_* 都被判为不存在。这是有意的
+    fail-closed: 宁可让生成期报错重写, 也不放行一个运行期才炸的拼写。
+    """
+    try:
+        from app.indicators.pipeline import _get_custom_signal_exprs
+
+        return frozenset(_get_custom_signal_exprs())
+    except Exception as exc:  # noqa: BLE001 — 注册表不可用时按空集处理
+        logger.debug("column_guard: 信号注册表不可用: %s", exc)
+        return frozenset()
 
 
 def _allowed_columns(backend: str, meta: dict) -> frozenset[str]:
@@ -196,12 +216,14 @@ def check_strategy_source(code: str, backend: str, meta: dict | None = None) -> 
     # 文件里写了 alias 也不代表这一列存在, 不能按「策略自造列」放行。
     local = set() if backend == "polars_expr" else _local_columns(tree)
     allowed = _allowed_columns(backend, meta)
+    registered_signals = _registered_signal_columns()
     missing = sorted(
         name
         for name in referenced
         if name not in allowed
         and not name.startswith(_SIGNAL_PREFIXES)
         and name not in local
+        and not (name.startswith(_BUILTIN_SIGNAL_PREFIX) and name in registered_signals)
     )
     if missing:
         detail = "引用了不存在的列: " + ", ".join(missing)
@@ -210,6 +232,20 @@ def check_strategy_source(code: str, backend: str, meta: dict | None = None) -> 
         else:
             detail += " (enriched 只内置 ma5/10/20/30/60; 其它均线需在 filter_history 内自行计算)"
         problems.append(detail)
+
+    # signal_* 单独给提示: 拼错信号名是最常见的「静默买全市场」来源 ——
+    # filter() 里 pl.col("signal_typo") 运行期才报缺列, 曾整段回测结果失真。
+    bad_signals = sorted(
+        name for name in referenced
+        if name.startswith(_BUILTIN_SIGNAL_PREFIX) and name not in registered_signals
+    )
+    if bad_signals:
+        available = ", ".join(sorted(registered_signals)[:6]) or "无"
+        problems.append(
+            "引用了未注册的信号列: " + ", ".join(bad_signals)
+            + f"; 可用信号如 {available}…"
+            "; 需要新的信号条件请在 filter_history() 里自己算, 不要直接引用不存在的 signal_ 列"
+        )
 
     if backend == "polars_expr":
         ops = sorted(_window_ops(tree))

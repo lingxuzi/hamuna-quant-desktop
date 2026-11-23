@@ -1,9 +1,18 @@
-"""把矩阵策略翻译成可直接拷进 QMT（迅投）运行的单文件脚本。
+"""把策略翻译成可直接拷进 QMT（迅投）运行的单文件脚本。
 
-思路：不翻译策略逻辑，而是把策略的运行环境搬进 QMT —— 内联 ``qmt_shim``
-（纯 numpy 复刻 ``app/backtest/matrix.py`` 的算子），再把策略文件 AST 剥掉
-类型注解后原样粘贴。策略代码一个字不改，口径因此不会漂移（由
-``tests/test_qmt_shim_parity.py`` 与 ``tests/test_qmt_export.py`` 保证）。
+两种来源，同一套驱动层：
+
+- ``matrix_native``：内联 ``qmt_shim``（纯 numpy 复刻 ``app/backtest/matrix.py``
+  的算子），再把策略文件 AST 剥掉类型注解后原样粘贴 —— 不翻译逻辑，策略
+  代码一个字不改。
+- ``polars_expr``：polars 在 QMT 不存在，但 ``ENTRY_SIGNALS``/``EXIT_SIGNALS``
+  是声明式条件表（``{left, op, right, leftDays, rightDays}``），可以由 shim 用
+  纯 numpy 重算。导出时只搬这份声明，**不搬 filter()**。因此要求 filter()
+  不引入信号之外的额外收窄，否则导出的策略会比回测宽松 —— 见
+  ``_filter_covered_by_signals``。
+
+口径不漂移由 ``tests/test_qmt_shim_parity.py`` 与 ``tests/test_qmt_export.py``
+保证。
 """
 from __future__ import annotations
 
@@ -15,7 +24,6 @@ from app.services import qmt_shim
 # 目标环境是 QMT 内嵌的 Python 3.6：没有 dataclass、没有下标式类型注解。
 _UNSUPPORTED_BACKENDS = {
     "factor_rank": "截面因子排名策略依赖仓库的因子库与排名管线，QMT 侧无对应数据",
-    "polars_expr": "polars 表达式策略依赖 polars，QMT 环境没有该库",
     "python_history_legacy": "旧式 filter_history 策略依赖仓库的指标管线，无矩阵等价物",
     "composite": "叠加策略引用其他策略，请分别导出各子策略",
     "minute_filter": "分钟形态策略依赖当日分钟 K 分区，请用仓库内回测",
@@ -51,18 +59,36 @@ def _strip_module(source: str) -> str:
     return ast.unparse(tree)
 
 
+class _AnnotationStripper(ast.NodeTransformer):
+    """剥掉类型注解。AnnAssign 换成 Assign —— ast.unparse 的 visit_AnnAssign
+    无条件遍历 node.annotation, 置 None 会 AttributeError(None._fields)。
+    无值的纯注解 ``x: int`` 对 QMT 无意义, 换成 ``x = None`` 保持语句完整。
+    """
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+        node.returns = None
+        for arg in _all_args(node.args):
+            arg.annotation = None
+        self.generic_visit(node)
+        return node
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+        return self.visit_FunctionDef(node)  # type: ignore[arg-type]
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST:
+        converted = ast.Assign(
+            targets=[self.visit(node.target)],
+            value=(
+                self.visit(node.value) if node.value is not None
+                else ast.Constant(None)
+            ),
+            type_comment=None,
+        )
+        return ast.copy_location(converted, node)
+
+
 def _strip_node(node: ast.AST) -> ast.AST:
-    for child in ast.walk(node):
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            child.returns = None
-            for arg in _all_args(child.args):
-                arg.annotation = None
-        elif isinstance(child, ast.AnnAssign):
-            if child.value is None:
-                continue
-            # ``x: int = 1`` → ``x = 1``
-            child.annotation = None
-    return node
+    return _AnnotationStripper().visit(node)
 
 
 def _all_args(arguments: ast.arguments):
@@ -74,6 +100,120 @@ def _all_args(arguments: ast.arguments):
         yield arg
     if arguments.kwarg is not None:
         yield arguments.kwarg
+
+
+# ── polars_expr：把声明式信号搬到 QMT ───────────────────────────
+def _effective_signal_columns(default: list[str], overrides: dict, key: str) -> list[str]:
+    """用户覆盖优先 (与 backtest._effective_signals 同口径), 归一成列名。"""
+    value = overrides.get(key)
+    names = [str(v) for v in value if v] if isinstance(value, list) else list(default or [])
+    return [
+        n if n.startswith(("signal_", "csg_")) else "signal_" + n
+        for n in names
+    ]
+
+
+def _signal_definitions(data_dir: Path, columns: list[str]) -> list[dict]:
+    """把 signal_* 列名解析成仓库里的信号定义（含条件表）。"""
+    from app.strategy import custom_signals
+
+    by_column = {
+        custom_signals.resolve_column(sig): sig
+        for sig in custom_signals.load_all(data_dir)
+    }
+    missing = [c for c in columns if c not in by_column]
+    if missing:
+        raise QmtExportError(
+            "找不到信号定义: %s; 导出需要信号以 {id, conditions} 形式存在 "
+            "user_data/custom_signals/ 下" % ", ".join(missing)
+        )
+    # 只留求值需要的最小字段 —— 名字是中文, 塞进 GBK 脚本无意义。
+    # 右值在仓库侧是 "field:ma60" / "20" 这类字符串, 这里解析成
+    # ('field', 'ma60') / ('const', 20.0), QMT 侧不必再带一份解析器。
+    parsed: list[dict] = []
+    for column in columns:
+        sig = by_column[column]
+        conditions = []
+        for cond in sig["conditions"]:
+            left = cond["left"]
+            if left in custom_signals._string_ext_fields():
+                raise QmtExportError(
+                    "信号 %s 引用了字符串扩展字段 %s, QMT 侧没有该数据"
+                    % (sig["id"], left)
+                )
+            kind, value = custom_signals._parse_right(cond["right"])
+            conditions.append({
+                "left": left,
+                "op": cond["op"],
+                "right": (kind, value),
+                "leftDays": int(cond.get("leftDays") or 0),
+                "rightDays": int(cond.get("rightDays") or 0),
+            })
+        parsed.append({"id": sig["id"], "conditions": conditions})
+    return parsed
+
+
+def _filter_equivalence_error(strategy, params: dict, entry_columns: list[str]) -> str | None:
+    """证明策略的 ``filter()`` 等价于「声明入场信号的 OR」，否则返回错误。
+
+    导出会丢掉 filter()（QMT 没有 polars），只按信号声明下买单。若 filter()
+    还夹带了信号之外的收窄（例如再要求 close > ma20），导出后买得比回测多 ——
+    静默失真。这里穷举真值表证明等价，而不是凭肉眼看代码。
+
+    调用 filter() 时必须给一个「信号列齐全」的帧: 真实运行期信号列都在，
+    只喂空帧会让策略走 `if 列不存在: return pl.lit(True)` 的兜底分支，
+    恰好掩盖掉导出后放宽的问题。
+    """
+    if strategy.filter_fn is None:
+        return None
+    import polars as pl
+
+    from app.strategy import custom_signals
+
+    columns = sorted(set(entry_columns))
+    if not columns:
+        return (
+            "polars_expr 策略的入场全靠 filter() 表达式，而 QMT 导出只重算"
+            " ENTRY_SIGNALS 声明的信号; 请把入场条件写成已注册信号并列入 "
+            "ENTRY_SIGNALS，或改用 matrix_native 后端"
+        )
+    if len(columns) > 8:
+        return "ENTRY_SIGNALS 超过 8 个信号，导出真值表校验成本过高"
+
+    other = sorted(custom_signals.allowed_fields())
+    rows = 1 << len(columns)
+    frame_data: dict[str, list] = {c: [False] * rows for c in columns}
+    for index in range(rows):
+        for bit, column in enumerate(columns):
+            frame_data[column][index] = bool(index >> bit & 1)
+    for name in other:
+        if name not in frame_data:
+            frame_data[name] = [None] * rows
+    frame = pl.DataFrame(frame_data, strict=False)
+
+    try:
+        expr = strategy.filter_fn(frame, params)
+    except Exception as exc:  # noqa: BLE001 — 求值失败即无法证明
+        return "filter() 在导出校验时无法求值: %s" % exc
+    if expr is None:
+        return None
+    roots = set(expr.meta.root_names())
+    extra = sorted(roots - set(columns))
+    if extra:
+        return (
+            "filter() 还引用了信号之外的列: " + ", ".join(extra)
+            + "; 这些列在 QMT 侧无定义, 导出会丢掉该条件导致买得比回测多"
+        )
+    actual = frame.select(expr.fill_null(False).cast(pl.Boolean).alias("_f"))["_f"]
+    expected = frame.select(
+        pl.any_horizontal([pl.col(c) for c in columns]).alias("_e")
+    )["_e"]
+    if not actual.equals(expected):
+        return (
+            "filter() 的筛选结果与 ENTRY_SIGNALS 的 OR 不一致: 导出只按信号下单, "
+            "会与回测结果不同。请让 filter() 只返回声明信号的组合"
+        )
+    return None
 
 
 # ── 驱动层模板 ───────────────────────────────────────────────────
@@ -252,33 +392,58 @@ def _limit_streaks(raw_close, limits_up):
 
 
 def _consecutive_limit_ups(market, pre_close, raw_close, limits):
-    """与 indicators.pipeline 同口径：不复权收盘 >= 涨停价即封板。"""
+    """与 indicators.pipeline 同口径：不复权收盘 >= 涨停价即封板。
+
+    顺带把涨停/跌停价与连跌数落进 fields —— 信号条件表里直接引用这几个列,
+    不落的话 polars 路径能算的信号在 QMT 侧会缺列。
+    """
     limits_up = limit_price(pre_close, limits, up=True)
     limits_down = limit_price(pre_close, limits, up=False)
+    # 与 indicators.pipeline 的判定价口径一致: 上轨 -0.005 / 下轨 +0.005 容差,
+    # 信号条件里是直接拿 raw_close 和这两列比的。
+    market.fields["limit_up_price"] = (limits_up - np.float32(0.005)).astype(
+        np.float32)
+    market.fields["limit_down_price"] = (limits_down + np.float32(0.005)).astype(
+        np.float32)
     locked, streak = _limit_streaks(raw_close, limits_up)
     market.limit_up_locked = locked
     market.limit_down_locked = (
         np.isfinite(raw_close) & np.isfinite(limits_down) & (raw_close > 0)
         & (raw_close <= limits_down + np.float32(0.005)))
+    market.fields["consecutive_limit_downs"] = _limit_streaks(
+        raw_close, limits_down)[1]
     return streak
 
 
 # ── 信号 ──────────────────────────────────────────────────────────
 def _signals(market):
-    params = dict(PARAMS)
-    signals = MATRIX_STRATEGY.compute_signals(market, params)
+    """入场/出场/打分。
+
+    两条来源共用同一套口径: 矩阵策略自带 compute_signals; 表达式策略没有
+    可执行的 filter(), 入场/出场完全由 ENTRY_SIGNALS/EXIT_SIGNALS 的声明
+    重算 (导出期已证明 filter() 与声明等价)。
+    """
+    if HAS_MATRIX_STRATEGY:
+        signals = MATRIX_STRATEGY.compute_signals(market, dict(PARAMS))
+        entry_mask, exit_mask = signals.entry.astype(bool), signals.exit.astype(bool)
+        fallback = signals.score
+    else:
+        entry_mask = declared_signal_mask(market, SIGNAL_DEFS_ENTRY)
+        exit_mask = declared_signal_mask(market, SIGNAL_DEFS_EXIT)
+        fallback = np.zeros(market.shape, dtype=np.float32)
+
     basic = dict(BASIC_FILTER or {})
     if not basic.get("enabled", True):
         basic = {}
     mask = build_basic_filter_mask(market, basic) if basic else None
     if mask is None:
         mask = np.ones(market.shape, dtype=bool)
-    entry = (signals.entry.astype(bool) & mask).astype(np.uint8)
+    entry = (entry_mask & mask).astype(np.uint8)
     score = build_matrix_score(
         market, entry.astype(bool), SCORING, ORDER_BY, DESCENDING,
-        fallback=signals.score, directions=SCORING_DIRECTIONS,
+        fallback=fallback, directions=SCORING_DIRECTIONS,
     )
-    return entry, signals.exit.astype(bool), score
+    return entry, exit_mask, score
 
 
 # ── 下单 ──────────────────────────────────────────────────────────
@@ -535,13 +700,16 @@ def _header(strategy, strategy_id: str, meta: dict) -> str:
         "2. basic_filter 的 exclude_new_days 未生效（仓库在 polars 层过滤，本文件无该口径）",
         "3. ST 判定用 export 时的当期简称，历史 ST 期间会被按板块带宽处理",
         "4. CONFIG['live_trade'] 默认为 False，只打印信号不下单",
-        '"""',
-        "",
     ]
+    if strategy.matrix_strategy is None:
+        # 表达式策略没有可执行的 filter(), 入场/出场由 ENTRY/EXIT_SIGNALS 重算
+        lines.insert(-1, "5. 表达式策略的 filter() 不随导出运行，买卖点只按 "
+                         "ENTRY_SIGNALS/EXIT_SIGNALS 重算（导出期已校验两者等价）")
+    lines += ['"""', ""]
     return "\n".join(lines)
 
 
-def _constants(strategy, config: dict, params: dict) -> str:
+def _constants(strategy, config: dict, params: dict, *, signals=None) -> str:
     meta = strategy.meta
     from app.strategy.scoring import effective_scoring, effective_scoring_directions
 
@@ -552,6 +720,7 @@ def _constants(strategy, config: dict, params: dict) -> str:
     if overrides.get("basic_filter"):
         basic_filter.update(overrides["basic_filter"])
 
+    entry_defs, exit_defs = signals or ([], [])
     # 用 repr（Python 字面量）而非 json.dumps —— json 的 true/false/null 在
     # QMT 的 Python 里是未定义名，`PARAMS = {"a": true}` 会 NameError。
     blocks = [
@@ -568,6 +737,11 @@ def _constants(strategy, config: dict, params: dict) -> str:
         "MAX_HOLD_DAYS = %r" % (strategy.max_hold_days
                                 if strategy.max_hold_days is not None else None),
         "WARMUP_BARS = %d" % int(config["warmup_bars"]),
+        # 声明式信号（polars_expr 用）; 矩阵策略留空, 驱动层据此选分支:
+        # 表达式策略的 body 里没有 MATRIX_STRATEGY, 分支体不求值所以不会 NameError
+        "SIGNAL_DEFS_ENTRY = %r" % (_literal(entry_defs),),
+        "SIGNAL_DEFS_EXIT = %r" % (_literal(exit_defs),),
+        "HAS_MATRIX_STRATEGY = %r" % (signals is None),
     ]
     return "\n".join(blocks)
 
@@ -601,6 +775,8 @@ def _supported(strategy) -> None:
     backend = strategy.execution_backend
     if backend == "matrix_native" and strategy.matrix_strategy is not None:
         return
+    if backend == "polars_expr" and getattr(strategy, "filter_history_fn", None) is None:
+        return  # 声明式信号直通, 见 _filter_equivalence_error
     if backend in _UNSUPPORTED_BACKENDS:
         raise QmtExportError(
             "%s 策略暂不支持导出为 QMT 脚本：%s"
@@ -651,10 +827,23 @@ def build_qmt_script(
         from app.strategy.scoring import effective_scoring, scoring_warmup_bars
 
         scoring = effective_scoring(strategy.meta.get("scoring"), overrides)
-        config["warmup_bars"] = max(
-            60,
-            int(strategy.matrix_strategy.required_warmup_bars(params)),
-            scoring_warmup_bars(scoring),
+        declared = (
+            int(strategy.matrix_strategy.required_warmup_bars(params))
+            if strategy.matrix_strategy is not None
+            else int(strategy.lookback_days or 1)
+        )
+        config["warmup_bars"] = max(60, declared, scoring_warmup_bars(scoring))
+
+    declared_signals: tuple[list[dict], list[dict]] | None = None
+    if strategy.matrix_strategy is None:
+        entry_columns = _effective_signal_columns(strategy.entry_signals, overrides, "entry_signals")
+        exit_columns = _effective_signal_columns(strategy.exit_signals, overrides, "exit_signals")
+        error = _filter_equivalence_error(strategy, params, entry_columns)
+        if error:
+            raise QmtExportError("%s 无法导出: %s" % (strategy_id, error))
+        declared_signals = (
+            _signal_definitions(data_dir, entry_columns),
+            _signal_definitions(data_dir, exit_columns),
         )
 
     body = _strip_module(path.read_text(encoding="utf-8"))
@@ -664,7 +853,8 @@ def build_qmt_script(
         "import time",
         "import numpy as np",
         "",
-        _constants(strategy, dict(config, _overrides=overrides), params),
+        _constants(strategy, dict(config, _overrides=overrides), params,
+                   signals=declared_signals),
         "",
         "# ── Shim 层：纯 numpy 复刻仓库矩阵算子（勿改） ──",
         _shim_source(),

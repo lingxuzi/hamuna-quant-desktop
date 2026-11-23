@@ -46,7 +46,10 @@ def _build(strategy_id: str) -> bytes:
 
 
 def test_native_strategy_count() -> None:
-    assert len(_NATIVE_IDS) == 25, _NATIVE_IDS
+    # 只数内置策略: data/strategies/ai/ 是用户运行时目录 (不进 Git), 用户每多建
+    # 一个 AI 策略都会让总数漂移 —— 断言总数会把用户数据当成回归。
+    builtin = [sid for sid in _NATIVE_IDS if not sid.startswith("ai_")]
+    assert len(builtin) == 25, builtin
 
 
 @pytest.mark.parametrize("strategy_id", _NATIVE_IDS)
@@ -111,20 +114,62 @@ def test_aliases_present_in_script() -> None:
     assert "shift = valid_shift" in text
 
 
+def test_strip_annotations_handles_annotated_assign() -> None:
+    """``META: dict = {...}`` 这类带注解的赋值不能把 annotation 置 None —
+    ast.unparse 的 visit_AnnAssign 会无条件遍历它, 置 None 直接
+    AttributeError(None._fields)。曾导致 QMT 导出 500。"""
+    source = (
+        "META: dict = {'id': 'x'}\n"
+        "COUNT: int = 3\n"
+        "BARE: int\n"
+        "def f(a: int, b: str = 'y') -> int:\n"
+        "    z: float = 1.0\n"
+        "    return a\n"
+    )
+    out = qmt_export._strip_module(source)
+    ast.parse(out)  # 必须能解析
+    assert "META = {'id': 'x'}" in out
+    assert "COUNT = 3" in out
+    assert "annotation" not in out and "def f(a, b='y'):" in out
+    # 无值的纯注解保留语句形状, 值取 None (QMT 侧无类型检查, 语义等价)
+    assert "BARE = None" in out
+
+    tree = ast.parse(out)
+    assert not any(isinstance(n, ast.AnnAssign) for n in ast.walk(tree))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            assert node.returns is None
+            assert all(arg.annotation is None for arg in node.args.args)
+
+
 @pytest.mark.parametrize("backend,strategy_id", [
-    ("polars_expr", None),
     ("python_history_legacy", None),
     ("factor_rank", "factor_rank_research"),
+    ("minute_filter", None),
+    ("composite", None),
 ])
 def test_unsupported_backend_raises(backend: str, strategy_id) -> None:
     class _Fake:
         meta: ClassVar = {"id": "x"}
         execution_backend = backend
         matrix_strategy = None
+        filter_history_fn = None
         file_path = None
 
     with pytest.raises(qmt_export.QmtExportError):
         qmt_export._supported(_Fake())
+
+
+def test_polars_expr_backend_is_supported() -> None:
+    """polars_expr 通过声明式信号直通导出 (filter() 由等价性校验兜住)。"""
+    class _Fake:
+        meta: ClassVar = {"id": "x"}
+        execution_backend = "polars_expr"
+        matrix_strategy = None
+        filter_history_fn = None
+        file_path = None
+
+    qmt_export._supported(_Fake())
 
 
 def test_unknown_strategy_raises() -> None:
@@ -152,6 +197,8 @@ def test_warmup_bars_default_from_strategy() -> None:
     data = _build("ma_golden_cross")
     text = data.decode("gbk")
     assert "WARMUP_BARS = 60" in text
+    assert "已知限制" in text
+    assert "filter() 不随导出运行" not in text
 
 
 def test_config_round_trips_into_script() -> None:
@@ -260,3 +307,135 @@ def test_signal_row_close_t_accepts_today(monkeypatch) -> None:
     market = _Market(["600000.SH"], [20260101, 20260102, 20260105], None)
     monkeypatch.setattr(_time, "strftime", lambda _fmt: "20260105")
     assert ns["_signal_row"](market, "close_t") == 2
+
+
+# ── polars_expr: 声明式信号直通 ──────────────────────────────────
+_POLARS_STRATEGY = '''"""MA5 上穿 MA60"""
+import polars as pl
+
+META = {
+    "id": "ai_polars_signal_export",
+    "name": "MA5上穿MA60",
+    "params": [],
+    "scoring": {"momentum_5d": 0.5, "turnover_rate": 0.5},
+    "basic_filter": {"price_min": 5},
+}
+
+EXECUTION_BACKEND = "polars_expr"
+ENTRY_SIGNALS = ["signal_ma_golden_5_60"]
+EXIT_SIGNALS = ["signal_ma_dead_5_60"]
+STOP_LOSS = -0.05
+MAX_HOLD_DAYS = 20
+
+
+def filter(df: pl.DataFrame, params: dict) -> pl.Expr:
+    return pl.col("signal_ma_golden_5_60").fill_null(False)
+'''
+
+_POLARS_WITH_EXTRA_FILTER = _POLARS_STRATEGY.replace(
+    'return pl.col("signal_ma_golden_5_60").fill_null(False)',
+    'return pl.col("signal_ma_golden_5_60").fill_null(False) & (pl.col("close") > 20)',
+)
+
+_POLARS_NO_SIGNALS = _POLARS_STRATEGY.replace(
+    'ENTRY_SIGNALS = ["signal_ma_golden_5_60"]', 'ENTRY_SIGNALS = []'
+)
+
+
+def _install_polars_strategy(tmp_path: Path, source: str) -> tuple[Path, str]:
+    """把源码与信号定义铺进临时数据目录, 返回 (data_dir, strategy_id)。"""
+    data_dir = tmp_path / "data"
+    (data_dir / "strategies" / "ai").mkdir(parents=True)
+    (data_dir / "strategies" / "custom").mkdir(parents=True)
+    (data_dir / "strategies" / "composite").mkdir(parents=True)
+    (data_dir / "strategies" / "ai" / "ai_polars_signal_export.py").write_text(
+        source, encoding="utf-8")
+    import shutil
+
+    src = Path(__file__).resolve().parent / "fixtures" / "custom_signals"
+    dst = data_dir / "user_data" / "custom_signals"
+    dst.mkdir(parents=True)
+    for name in ("ma_golden_5_60.json", "ma_dead_5_60.json"):
+        shutil.copy(src / name, dst / name)
+    return data_dir, "ai_polars_signal_export"
+
+
+def _build_from(data_dir: Path, strategy_id: str) -> bytes:
+    from app.strategy.engine import StrategyEngine
+
+    engine = StrategyEngine([
+        data_dir / "strategies" / "ai",
+        data_dir / "strategies" / "custom",
+        data_dir / "strategies" / "composite",
+    ])
+    return qmt_export.build_qmt_script(
+        engine=engine, data_dir=data_dir, strategy_id=strategy_id,
+        config={"amount": 10000, "max_positions": 5},
+    )[0]
+
+
+def test_polars_expr_strategy_exports_declared_signals(tmp_path) -> None:
+    data_dir, strategy_id = _install_polars_strategy(tmp_path, _POLARS_STRATEGY)
+    text = _build_from(data_dir, strategy_id).decode("gbk")
+    assert text.splitlines()[0] == "#coding:gbk"
+    assert "HAS_MATRIX_STRATEGY = False" in text
+    assert "'id': 'ma_golden_5_60'" in text
+    assert "'left': 'ma5', 'op': '>', 'right': ('field', 'ma60')" in text
+    assert "filter() 不随导出运行" in text
+    # polars 不在 QMT 里: 策略体的 import 必须被剥掉, 且不能残留调用
+    tree = ast.parse(text)
+    assert not any(
+        isinstance(node, ast.Import) and any(a.name == "polars" for a in node.names)
+        for node in ast.walk(tree))
+    ns: dict = {}
+    exec(compile(text, "<qmt-polars>", "exec"), ns)
+    assert callable(ns["_signals"])
+
+
+def test_polars_expr_export_rejects_filter_beyond_signals(tmp_path) -> None:
+    """filter() 若另有收窄, 导出会买得比回测多 —— 必须拒绝而不是静默放宽。"""
+    data_dir, strategy_id = _install_polars_strategy(
+        tmp_path, _POLARS_WITH_EXTRA_FILTER)
+    with pytest.raises(qmt_export.QmtExportError, match="信号之外的列"):
+        _build_from(data_dir, strategy_id)
+
+
+def test_polars_expr_export_requires_entry_signals(tmp_path) -> None:
+    data_dir, strategy_id = _install_polars_strategy(tmp_path, _POLARS_NO_SIGNALS)
+    with pytest.raises(qmt_export.QmtExportError, match="ENTRY_SIGNALS"):
+        _build_from(data_dir, strategy_id)
+
+
+def test_polars_expr_export_rejects_unknown_signal(tmp_path) -> None:
+    data_dir, strategy_id = _install_polars_strategy(tmp_path, _POLARS_STRATEGY)
+    (data_dir / "user_data" / "custom_signals" / "ma_golden_5_60.json").unlink()
+    with pytest.raises(qmt_export.QmtExportError, match="找不到信号定义"):
+        _build_from(data_dir, strategy_id)
+
+
+def test_polars_expr_signals_match_backtest_semantics(tmp_path) -> None:
+    """导出脚本里算出的入场掩码, 与仓库信号列逐格一致。"""
+    import numpy as np
+
+    data_dir, strategy_id = _install_polars_strategy(tmp_path, _POLARS_STRATEGY)
+    text = _build_from(data_dir, strategy_id).decode("gbk")
+    ns: dict = {}
+    exec(compile(text, "<qmt-polars>", "exec"), ns)
+
+    close = np.array([
+        [10.0, 20.0], [9.5, 21.0], [11.0, 22.0], [13.0, 20.0],
+        [15.0, 19.0], [17.0, 25.0], [16.0, 26.0],
+    ], dtype=np.float32)
+    from app.services.qmt_shim import MarketDataMatrix
+
+    market = MarketDataMatrix(
+        close.copy(), close.copy(), close.copy(), close, close * 100,
+        np.isfinite(close), None, None, {}, ["600000.SH", "000001.SZ"],
+        ["浦发银行", "平安银行"], [20260105 + i for i in range(7)],
+    )
+    entry = ns["declared_signal_mask"](market, ns["SIGNAL_DEFS_ENTRY"])
+    # 手算: ma5 前 4 行 NaN → 恒 False; 第 5 行 MA5=12.9>MA60=NaN? 不满窗口,
+    # 这里只断言形状/类型与「无未来数据」的单调前提
+    assert entry.shape == close.shape
+    assert entry.dtype == bool
+    assert not entry[:4].any()

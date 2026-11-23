@@ -99,11 +99,12 @@ def test_run_all_all_unknown_still_404(monkeypatch, tmp_path):
 # ── 信号种子一次性迁移 ─────────────────────────────────────
 def test_seed_if_empty_writes_once_and_marks(tmp_path):
     from app.strategy import custom_signals
+    from app.strategy.signal_seeds import SEED_SIGNALS
 
     n = custom_signals.seed_if_empty(tmp_path)
-    assert n == 20
+    assert n == len(SEED_SIGNALS)
     files = list((tmp_path / "user_data" / "custom_signals").glob("*.json"))
-    assert len(files) == 20
+    assert len(files) == len(SEED_SIGNALS)
     # 标记存在 → 二次调用不再种入 (即使清空目录也不复活)
     for f in files:
         f.unlink()
@@ -123,7 +124,9 @@ def test_seed_if_empty_merges_beside_user_signals(tmp_path):
     d.mkdir(parents=True)
     (d / "my_own.json").write_text("{}", encoding="utf-8")
 
-    assert custom_signals.seed_if_empty(tmp_path) == 20
+    from app.strategy.signal_seeds import SEED_SIGNALS
+
+    assert custom_signals.seed_if_empty(tmp_path) == len(SEED_SIGNALS)
     names = {f.name for f in d.glob("*.json")}
     assert "my_own.json" in names
     assert (d / "limit_up.json").exists()
@@ -142,9 +145,12 @@ def test_seed_if_empty_remediates_legacy_skip_marker(tmp_path):
     (d / "my_own.json").write_text("{}", encoding="utf-8")
     (d / ".seeded_v1").write_text("skipped: user signals present\n", encoding="utf-8")
 
-    assert custom_signals.seed_if_empty(tmp_path) == 20
+    from app.strategy.signal_seeds import SEED_SIGNALS
+
+    assert custom_signals.seed_if_empty(tmp_path) == len(SEED_SIGNALS)
     assert (d / "limit_up.json").exists()
-    assert "skipped" not in (d / ".seeded_v1").read_text(encoding="utf-8")
+    # 旧标记被清掉, 只留当前版本标记 → 不会再被 "skipped" 分支误判
+    assert not (d / ".seeded_v1").exists()
     # 补种后标记为正常 seeded, 不再重复
     assert custom_signals.seed_if_empty(tmp_path) == 0
 

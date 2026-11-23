@@ -1,10 +1,15 @@
-"""去内置化迁移的默认信号种子 (一次性写入用户数据目录)。
+"""去内置化迁移的默认信号种子 (写入用户数据目录)。
 
-仅在 ``data/user_data/custom_signals`` 为空且从未种子化时写入一次
-(``.seeded_v1`` 标记防重); 写入后即为普通用户定义, 可编辑可删除。
+写入后即为普通用户定义, 可编辑可删除。标记版本决定何时再补种:
+新增种子要同时抬 ``SEED_VERSION``, 否则老用户的目录已带旧标记、
+新信号永远补不进去 (曾因此让升级用户拿不到内置涨跌停信号)。
 单一事实源: tests/fixtures/custom_signals 的 JSON 与此同内容。
 """
 from __future__ import annotations
+
+# 每加一条新种子就 +1: 标记 .seeded_v<N> 只写当前版本, 低版本标记会触发
+# 一次补种 (只补目录里缺失的 id, 不覆盖用户已有的任何定义)。
+SEED_VERSION = 2
 
 SEED_SIGNALS: list[dict] = [
     {'id': 'boll_breakdown_lower',
@@ -176,6 +181,22 @@ SEED_SIGNALS: list[dict] = [
      'conditions': [{'left': 'ma5', 'op': '>', 'right': 'field:ma20', 'leftDays': 0, 'rightDays': 0},
                     {'left': 'ma5', 'op': '<=', 'right': 'field:ma20', 'leftDays': 1, 'rightDays': 1}],
      'column': 'signal_ma_golden_5_20'},
+    {'id': 'ma_golden_5_60',
+     'name': 'MA5上穿MA60',
+     'kind': 'both',
+     'timeframe': 'daily',
+     'enabled': True,
+     'conditions': [{'left': 'ma5', 'op': '>', 'right': 'field:ma60', 'leftDays': 0, 'rightDays': 0},
+                    {'left': 'ma5', 'op': '<=', 'right': 'field:ma60', 'leftDays': 1, 'rightDays': 1}],
+     'column': 'signal_ma_golden_5_60'},
+    {'id': 'ma_dead_5_60',
+     'name': 'MA5下穿MA60',
+     'kind': 'both',
+     'timeframe': 'daily',
+     'enabled': True,
+     'conditions': [{'left': 'ma5', 'op': '<', 'right': 'field:ma60', 'leftDays': 0, 'rightDays': 0},
+                    {'left': 'ma5', 'op': '>=', 'right': 'field:ma60', 'leftDays': 1, 'rightDays': 1}],
+     'column': 'signal_ma_dead_5_60'},
     {'id': 'macd_dead',
      'name': 'MACD死叉',
      'kind': 'both',

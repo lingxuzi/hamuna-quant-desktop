@@ -11,8 +11,7 @@
 5. `META.scoring` 使用真实数值字段或 `ma20_bias`；分钟策略可用函数返回的数值列，非空时权重和为 1.0。
 6. `ENTRY_SIGNALS/EXIT_SIGNALS` 只选相关信号，无匹配项可为空。
 7. `RULES` 用中文列出至少 3 条核心逻辑。
-8. 优先 Polars 向量化，避免逐行循环；只用 polars 真实存在的方法（`rolling_mean/rolling_sum/
-   rolling_std/rolling_min/rolling_max/rolling_median/ewm_mean`，没有 `rolling_count`）。
+8. 优先 Polars 向量化；只用真实存在的方法（`rolling_mean/_sum/_std/_min/_max/_median`、`ewm_mean`；无 `rolling_count`）。
 9. `META` 须为顶层字面量字典（可用 `META: dict = {...}`），禁止改名或动态构造。
 10. 后端按规则自选：只有当日快照条件 → `polars_expr`；含上穿/下穿/金叉/死叉、
     连续 N 日、N 日新高、前高前低、最近 N 天内出现过等任何多日比较 → `python_history_legacy`。
@@ -183,7 +182,7 @@ def filter_minute_history(df: pl.DataFrame, params: dict) -> pl.DataFrame:
 - 运行数据可能含未完成分钟，实盘需按北京时间过滤当前分钟；回测只能使用触发时刻及以前的数据。
 - 日线指标不在分钟帧中。需要日线条件时声明 META.daily_history_bars（1..250），入口增加关键字参数 daily=None；由引擎注入日线窗口。
 - 分钟 scoring 可引用函数返回的数值列，权重仍须和为1；不要直接使用分钟帧没有的日线评分字段。
-- 编写分钟策略、单次执行与持续监控是不同入口。持续分钟策略提醒目前尚未接入监控中心，保存或运行成功不表示已开始自动监听。
+- 编写、单次执行与持续监控是不同入口：持续分钟提醒尚未接入监控中心，保存/运行成功不等于已开始监听。
 
 ## 日线常用字段
 
@@ -207,10 +206,11 @@ def filter_minute_history(df: pl.DataFrame, params: dict) -> pl.DataFrame:
 
 ## 常用信号列
 
-信号列是布尔值，使用时加 `.fill_null(False)`。
+信号列是布尔值，用 `.fill_null(False)`；名字只能用下列的 (及自定义 `csg_*`/`csgi_*`)，编造的名字运行时报错。
 
 - `signal_ma_golden_5_20`: MA5 上穿 MA20
 - `signal_ma_dead_5_20`: MA5 下穿 MA20
+- `signal_ma_golden_5_60` / `signal_ma_dead_5_60`: MA5 上穿/下穿 MA60
 - `signal_ma_golden_20_60`: MA20 上穿 MA60
 - `signal_macd_golden`: MACD 金叉
 - `signal_macd_dead`: MACD 死叉
@@ -226,12 +226,11 @@ def filter_minute_history(df: pl.DataFrame, params: dict) -> pl.DataFrame:
 - `signal_limit_down_recovery`: 跌停翘板
 - `signal_broken_limit_up`: 炸板
 
-信号名只能用上面列出的 (以及用户自定义的 `csg_*` / 盘中 `csgi_*`), 不要自己编 `signal_*`
-名字 —— 编出来的列运行时不存在, 策略直接报错。没有现成信号的交叉 (如 MA5 上穿 MA10)
-用 filter_history 自己算。
+没有现成信号的条件就在 filter_history 里算指标,
+别用「缺列回退 True」兜底 (会静默变成买全市场)。
 
-涨跌停策略优先使用稳定列 `consecutive_limit_ups >= 1`。
+涨跌停策略优先用 `consecutive_limit_ups >= 1`。
 
 ## 不可直接引用的数据
 
-以下数据不在 enriched DataFrame 中，策略代码不能直接引用：财务数据、扩展数据、概念/行业/人气排名/资金流向、盘中分时价、五档盘口。
+以下数据不在 enriched DataFrame 中，不能直接引用：财务数据、扩展数据、概念/行业/人气排名/资金流向、盘中分时价、五档盘口。

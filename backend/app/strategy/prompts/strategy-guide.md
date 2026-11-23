@@ -268,6 +268,8 @@ REQUIRED_FEATURES = {"ma20", "momentum_20d", "vol_ratio_5d"}
 |------|------|------|
 | signal_ma_golden_5_20 | 买入 | MA5 上穿 MA20 |
 | signal_ma_dead_5_20 | 卖出 | MA5 下穿 MA20 |
+| signal_ma_golden_5_60 | 买入 | MA5 上穿 MA60 |
+| signal_ma_dead_5_60 | 卖出 | MA5 下穿 MA60 |
 | signal_ma_golden_20_60 | 买入 | MA20 上穿 MA60 |
 | signal_macd_golden | 买入 | MACD 金叉 |
 | signal_macd_dead | 卖出 | MACD 死叉 |
