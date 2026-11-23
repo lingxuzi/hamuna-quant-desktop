@@ -406,15 +406,16 @@ def _resolve_needed(needed: set[str] | None) -> set[str]:
 
 
 def compute_indicators(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     needed: set[str] | None = None,
     *,
     assume_sorted: bool = False,
-) -> pl.DataFrame:
+) -> pl.DataFrame | pl.LazyFrame:
     """从 OHLCV 数据计算全套技术指标。
 
     输入必须包含: symbol, date, open, high, low, close, volume
-    返回添加了所有指标列的 DataFrame。
+    返回添加了所有指标列的帧 —— 类型跟随入参: DataFrame 进 DataFrame 出,
+    LazyFrame 进 LazyFrame 出 (延迟执行, 调用方可在 select 收窄后再 collect)。
 
     needed:
         None (默认) — 计算全部指标, 行为与历史逐位一致 (所有 gate 为真, 表达式/顺序不变)。
@@ -422,14 +423,24 @@ def compute_indicators(
                      输出保留输入列 + 所需指标列。被保留列的数值与全量计算逐位一致
                      (逐列 window/rolling 相互独立, 跳过其它列不影响保留列)。
     """
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return df
 
     import time as _time
     _t0 = _time.perf_counter()
 
     want = _resolve_needed(needed)
+    # 曾在此一次性 eager with_columns 逐趟复制全表: 全市场 365 天 × 77 因子的
+    # 筛选面板实测峰值 1.4GB (eager) vs 0.6GB (lazy)。eager 输入同样走 lazy 链,
+    # 结尾 collect 一次 —— 表达式树不变, 结果逐位一致。
+    lazy_input = isinstance(df, pl.LazyFrame)
+    columns = df.collect_schema().names()
+    # 盘中折算守卫要 max() 的只有 eager 输入; 留住原帧引用, 在 vol_ratio 处再判定。
+    eager_df = None if lazy_input else df
 
+    # eager 输入统一转 lazy 链, 避免每趟 with_columns 复制整表; 结尾再 collect。
+    if not lazy_input:
+        df = df.lazy()
     df = df if assume_sorted else df.sort(["symbol", "date"])
 
     # Pass 1: 均线 + EMA + MACD 基础 + BOLL 基础 + KDJ 基础 + ATR 基础 + 量价 + 极值
@@ -547,11 +558,15 @@ def compute_indicators(
 
         _vr = pl.col("volume") / pl.col("_vol_ma5_prev")
         elapsed = trading_minutes_elapsed()
-        if (
-            0 < elapsed < 240
-            and "date" in df.columns
-            and df["date"].max() == cn_today()
-        ):
+        # 盘中折算只在「今天的数据在帧里」时生效。LazyFrame 无法 max(), 且转 lazy
+        # 之后 df 不可索引 —— 用入口留住的 eager 帧判定; 延迟输入视为历史帧
+        # (上游实时路径传递的都是 eager DataFrame, 行为不变)。
+        today_in_frame = (
+            eager_df is not None
+            and "date" in columns
+            and eager_df["date"].max() == cn_today()
+        )
+        if 0 < elapsed < 240 and today_in_frame:
             _vr = (
                 pl.when(pl.col("date") == cn_today())
                 .then(pl.col("volume") * (240.0 / elapsed) / pl.col("_vol_ma5_prev"))
@@ -626,8 +641,15 @@ def compute_indicators(
                   "_rsi_avg_gain_6", "_rsi_avg_loss_6",
                   "_rsi_avg_gain_14", "_rsi_avg_loss_14",
                   "_rsi_avg_gain_24", "_rsi_avg_loss_24"]
-    df = df.drop([c for c in _temp_cols if c in df.columns])
+    # 临时列的判断不能只用入口列快照: 本函数新增的 _boll_std/_tr/... 只在管线里出现,
+    # 入口 columns 里没有, 用它会漏删 (实测输出多出 11 列)。这里取管线的真实输出 schema。
+    produced = df.collect_schema().names()
+    df = df.drop([c for c in _temp_cols if c in produced])
 
+    if lazy_input:
+        return df
+
+    df = df.collect()
     _elapsed = (_time.perf_counter() - _t0) * 1000
     import logging as _logging
     _logging.getLogger(__name__).debug("compute_indicators: %.1fms, %d rows", _elapsed, len(df))
