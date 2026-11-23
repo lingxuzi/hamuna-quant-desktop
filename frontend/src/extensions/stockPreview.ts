@@ -17,7 +17,7 @@ export interface StockPreviewUi {
 
 function hostUi(): StockPreviewUi | undefined {
   return typeof window === 'undefined' ? undefined
-    : (window as unknown as { __TSP_EXT__?: { ui?: StockPreviewUi } }).__TSP_EXT__?.ui
+    : (window as unknown as { __HQUANT_EXT__?: { ui?: StockPreviewUi } }).__HQUANT_EXT__?.ui
 }
 
 /** 始终调用宿主，源码被独立编译为页面包后也不会复制一套无宿主的弹窗状态。 */

@@ -283,9 +283,14 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
     if (!open) { setLoaded(false); return }
     const d = draftStore.get(null)
     const draftCodeId = d ? parseMetaField(d.code ?? '', 'id') : ''
+    // 草稿是否已完成: 公开列表里有它, 或本地记着这个 id 已经保存成功过。
+    // 后者是 AI 策略的唯一判据 —— research_only 不进 /api/strategies, 只看列表会永远判不出。
+    const savedDraftId = mode === 'create' ? storage.strategyDraftSaved.get('') : ''
+    const draftIdentity = d?.strategyId || draftCodeId
     const completedDraft = mode === 'create' && !!d && (
       (!!d.strategyId && existingStrategyIds?.has(d.strategyId))
       || (!!draftCodeId && existingStrategyIds?.has(draftCodeId))
+      || (!!draftIdentity && draftIdentity === savedDraftId)
     )
     if (completedDraft) {
       draftStore.set(null)
@@ -330,9 +335,19 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
     if (loaded && !suppressPersistRef.current) persist()
   }, [loaded, persist])
 
+  // 用户主动放弃草稿 (「重新创建」): 连保存标记一起清, 下次重开才是真正的空状态
   const clearDraft = () => {
     draftStore.set(null)
+    if (mode === 'create') storage.strategyDraftSaved.set('')
     resetDraftState()
+  }
+
+  // 保存成功: 清草稿 + 记下 id —— 恢复逻辑靠这个标记认出「这份草稿已经存过了」。
+  // 单靠 clearDraft 不够: 清草稿没跑到的路径 (刷新/异常) 都会留下旧草稿并让它复活。
+  const markDraftSaved = (id: string) => {
+    draftStore.set(null)
+    resetDraftState()
+    if (mode === 'create') storage.strategyDraftSaved.set(id)
   }
 
   const handleClose = () => {
@@ -456,6 +471,17 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
     const draftCode = code
     if (!draftCode) return
     setSaving(true); setError('')
+    // 乐观清草稿: 保存含后端实跑, 可能耗时数秒。此间若刷新页面, 后续 JS 不再执行,
+    // clearDraft 永远跑不到 —— 旧草稿就会在下次重开时复活。所以先清, 失败再写回。
+    const draftBackup = {
+      name, description, direction, executionBackend, rules, code, step, strategyId, source,
+    }
+    const restoreDraftOnFailure = () => {
+      suppressPersistRef.current = false
+      draftStore.set(draftBackup as any)
+    }
+    suppressPersistRef.current = true
+    draftStore.set(null)
     try {
       // 迭代模式: 后端已把草稿落盘到 data/strategies/ai/
       if (iterateDraftId) {
@@ -473,7 +499,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
           researchOnly = savedResult.research_only ?? true
         }
         suppressPersistRef.current = true
-        clearDraft()
+        markDraftSaved(iterateDraftId)
         const genRules = parseRules(draftCode)
         const finalRules = (genRules || rules).trim()
         if (finalRules) { const saved = storage.strategyRules.get({}); saved[iterateDraftId] = finalRules; storage.strategyRules.set(saved) }
@@ -494,13 +520,16 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
         description: description.trim(),
       })
       suppressPersistRef.current = true
-      clearDraft()
+      markDraftSaved(id)
       const genRules = parseRules(draftCode)
       const finalRules = (genRules || rules).trim()
       if (finalRules) { const saved = storage.strategyRules.get({}); saved[id] = finalRules; storage.strategyRules.set(saved) }
       await onSavedId?.(id, savedResult.research_only)
       setTimeout(() => onClose(), 1000)
-    } catch (e: any) { setError(String(e?.message ?? '保存失败')) }
+    } catch (e: any) {
+      setError(String(e?.message ?? '保存失败'))
+      restoreDraftOnFailure()
+    }
     setSaving(false)
   }
 
@@ -558,7 +587,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <div className="flex items-center gap-2 text-[11px]">
                 <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                 <span className="text-amber-400/80">步骤 1 描述策略规则 → 步骤 2 预览代码 → 保存</span>
-                <a href="https://github.com/shy3130/tick-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
+                <a href="https://gitee.com/opush_1/hamuna-quant-platform/blob/master/backend/app/strategy/prompts/strategy-guide.md"
                    target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1 text-accent/70 hover:text-accent transition-colors">
                   <FileText className="h-[12px] w-[12px]" />策略开发指南
@@ -568,7 +597,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
               <div className="flex items-center gap-2 text-[11px]">
                 <Terminal className="h-3.5 w-3.5 text-accent shrink-0" />
                 <span className="text-muted">适合有 Python 基础的开发者，手动编写策略文件进行深度定制和二次开发</span>
-                <a href="https://github.com/shy3130/tick-stock-panel/blob/main/backend/app/strategy/prompts/strategy-guide.md"
+                <a href="https://gitee.com/opush_1/hamuna-quant-platform/blob/master/backend/app/strategy/prompts/strategy-guide.md"
                    target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1 text-accent/70 hover:text-accent transition-colors">
                   <FileText className="h-[12px] w-[12px]" />策略开发指南

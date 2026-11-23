@@ -24,7 +24,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove(); closeStockPreview()
-  delete (window as unknown as { __TSP_EXT__?: unknown }).__TSP_EXT__
+  delete (window as unknown as { __HQUANT_EXT__?: unknown }).__HQUANT_EXT__
 })
 
 it('reuses one host dialog for source calls, preserves list navigation and supports both close entry points', async () => {

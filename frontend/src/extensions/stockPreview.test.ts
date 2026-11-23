@@ -4,11 +4,11 @@ import {
 } from './stockPreview'
 import { getStockPreviewRequest, navigateStockPreview, stockPreviewUi, subscribeStockPreview } from '@/lib/stockPreviewStore'
 
-beforeEach(() => { vi.stubGlobal('window', { __TSP_EXT__: { ui: stockPreviewUi } }) })
+beforeEach(() => { vi.stubGlobal('window', { __HQUANT_EXT__: { ui: stockPreviewUi } }) })
 afterEach(() => { stockPreviewUi.closeStockPreview(); vi.unstubAllGlobals() })
 
 it('returns false on an older host and remains safe before browser bootstrap', () => {
-  vi.stubGlobal('window', { __TSP_EXT__: { api: {} } })
+  vi.stubGlobal('window', { __HQUANT_EXT__: { api: {} } })
   expect(openStockPreview({ symbol: '159558.SZ' })).toBe(false)
   expect(() => closeStockPreview()).not.toThrow()
   vi.stubGlobal('window', undefined)

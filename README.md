@@ -1,7 +1,7 @@
 <div align="center">
 <a id="top"></a>
 
-# <picture><source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark-title.svg"><img src="brand/logo-title.svg" width="30" alt="TSP Logo"></picture> TSP · A股智能量化工作台
+# <picture><source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark-title.svg"><img src="brand/logo-title.svg" width="30" alt="H-Quant Logo"></picture> H-Quant · A股智能量化工作台
 
 <br/>
 
@@ -11,18 +11,7 @@
 [![Node 20+](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 
-[![Build: Docker CI](https://github.com/shy3130/tick-stock-panel/actions/workflows/docker.yml/badge.svg)](https://github.com/shy3130/tick-stock-panel/actions/workflows/docker.yml)
-[![Test: Backend + Frontend](https://github.com/shy3130/tick-stock-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/shy3130/tick-stock-panel/actions/workflows/ci.yml)
-[![GitHub stars](https://img.shields.io/github/stars/shy3130/tick-stock-panel?style=social)](https://github.com/shy3130/tick-stock-panel/stargazers)
 
-**自托管 · 零运维 · 核心能力全部开放成接口的 A 股量化工作台**
-
-[![官网](https://img.shields.io/badge/%E5%AE%98%E7%BD%91-tsp.shy313.com-8B5CF6?style=for-the-badge&labelColor=181717&logo=googlechrome&logoColor=white)](https://tsp.shy313.com/)
-
-`策略` · `回测` · `监控` · `因子挖掘` · `AI 助手` · `Polars` · `React`
-
-<a href="https://trendshift.io/repositories/64327?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-64327" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/64327" alt="shy3130%2Ftick-stock-panel | Trendshift" width="250" height="55"/></a>
-<a href="https://trendshift.io/repositories/64327?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-64327" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/64327/daily?language=TypeScript" alt="shy3130%2Ftick-stock-panel | Trendshift" width="250" height="55"/></a>
 
 <table>
 <tr><td align="center"><big><b>3.11+</b></big><br/><sub>Python 后端</sub></td>
@@ -33,43 +22,24 @@
 <td align="center"><big><b>1 容器</b></big><br/><sub>零外部数据库</sub></td></tr>
 </table>
 
-**[✨ 核心功能](#-核心功能)** · **[📸 界面预览](#-界面预览)** · **[🏛️ 架构](#%EF%B8%8F-架构)** · **[⚡ 性能](#-性能)** · **[🌐 开放能力](#-开放能力open-api--mcp)** · **[🚀 快速开始](#-快速开始)** · **[📚 完整文档](#-完整文档)** · **[💬 交流群](#%EF%B8%8F-支持与交流)**
+**[✨ 核心功能](#-核心功能)** · **[📸 界面预览](#-界面预览)** · **[🏛️ 架构](#%EF%B8%8F-架构)** · **[⚡ 性能](#-性能)** · **[🌐 开放能力](#-开放能力open-api--mcp)** · **[🚀 快速开始](#-快速开始)** · **[📚 完整文档](#-完整文档)** · 
 
 </div>
 
----
-
-<img src="docs/sponsors/sponsor-header.svg" width="240" alt="赞助支持 Sponsor">
-
-<div align="center">
-
-<a href="https://www.runninghub.ai/call-api?source=github&inviteCode=edt5wh7c" target="_blank" rel="noopener noreferrer">
-  <img src="docs/sponsors/runninghub-banner-v3.svg?v=3" alt="RunningHub API — 单一接口直连 400+ 主流大模型" width="100%">
-</a>
-
-<a href="https://www.runninghub.ai/call-api?source=github&inviteCode=edt5wh7c" target="_blank" rel="noopener noreferrer">
-  <img src="docs/sponsors/runninghub-intro-card.svg?v=4" alt="About RunningHub API — 产品介绍" width="100%">
-</a>
-
-**本项目由 [RunningHub](https://www.runninghub.ai/call-api?source=github&inviteCode=edt5wh7c) 提供支持** · 单一接口直连 400+ 主流大模型 · [DeepSeek v4.1 Flash 3-6 折](https://www.runninghub.ai/call-api?source=github&inviteCode=edt5wh7c) · 免费测试
-
-</div>
-
----
 
 > [!IMPORTANT]
 > ⚠️ 本项目谨作为本地量化提供解决思路与方案，**不作为投资软件或者看盘软件**。**明确不做**：不对标同花顺 / 通达信，不内置「AI 荐股 / 涨停预测」。数据源已插件化，可任意接入第三方数据源。仅供学习研究使用。
 
-📮 有任何项目问题可邮件联系 **shy3130@qq.com** · 觉得有用请点个 ⭐ Star
+> 📄 本项目基于 MIT 协议的上游项目二次开发 (`tick-stock-panel`), 遵循 MIT 协议分发并保留原版权声明, 详见 [LICENSE](./LICENSE)。
 
 ---
 
-<a id="why-tsp"></a>
-<a id="-为什么做-tsp"></a>
+<a id="why-hquant"></a>
+<a id="-为什么做-hquant"></a>
 
-## 💡 为什么做 TSP
+## 💡 为什么做 H-Quant
 
-| 用脚本/拼凑工具做量化,你大概率遇到过         | TSP 的解法                                                                                               |
+| 用脚本/拼凑工具做量化,你大概率遇到过         | H-Quant 的解法                                                                                               |
 | :------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
 | 数据源绑死,换一家要重写整套拉数代码          | **能力路由矩阵**:6 类数据集按源能力独立路由,随时换源,指标与回测口径不变                                  |
 | 策略、回测、监控各用一套工具,口径对不上      | 全站统一 **enriched 数据口径**:策略 → 回测 → 监控 → 复盘一条链                                           |
@@ -156,13 +126,13 @@
 
 ## 🏗️ 架构
 
-**TSP 的一切设计围绕一条主线:核心底座 + 扩展层。**
+**H-Quant 的一切设计围绕一条主线:核心底座 + 扩展层。**
 
 - **核心域(8 个)** 拥有数据与语义 —— 数据底座、能力路由、指标与执行、事件与开放通道。它们是自洽的最小系统,不依赖任何外围。
 - **扩展域(5 条通道)** 只消费核心契约 —— 数据源插件、扩展数据表、自定义策略/信号、页面扩展、后端 custom 模块。**可整体替换或移除而不伤核心**:删除目录即卸载、复制目录即导入。
 - 你看到的 19 个页面里,**11 个官方页面本身就是扩展**(单文件 `frontend_v2/src/custom/<ns>/extension.tsx`)—— 监控中心页面可以整个换掉,规则引擎与推送管道属核心照常运行。**连 AI 对话助手都是扩展域的参考实现。**
 
-> 一句话:核心是引擎,其余皆插件。下面这张图,先看懂虚线框与实线框的边界,就看懂了 TSP。
+> 一句话:核心是引擎,其余皆插件。下面这张图,先看懂虚线框与实线框的边界,就看懂了 H-Quant。
 
 ### 总览 · 网关居中的开放单体
 
@@ -170,7 +140,7 @@
 > **双通道并行**:面板走密码会话,外部走 Token 网关 —— 互不影响、互不挤占限流。核心域 8 个域是数据与语义的所有者;扩展域 5 条通道只消费契约,零核心改动。
 
 <div align="center">
-  <img src="./assets/architecture.svg" width="920" alt="TSP 架构总览 — 网关居中的开放单体: 消费端双通道接入, 核心域 8 域拥有数据与语义, 扩展域 5 通道只消费契约">
+  <img src="./assets/architecture.svg" width="920" alt="H-Quant 架构总览 — 网关居中的开放单体: 消费端双通道接入, 核心域 8 域拥有数据与语义, 扩展域 5 通道只消费契约">
 </div>
 
 ### 架构特点
@@ -264,9 +234,6 @@
 
 面板的核心能力不只长在页面上 —— **全部开放成受控接口**,外部程序与 AI 客户端平等消费:
 
-> 🌐 **开放平台门户已上线 → [tsp.shy313.com](https://tsp.shy313.com/)**
-> 浏览 TSP 全部功能 · 注册账户 · 邀请好友 · 创建 API Key · 在线调用开放接口,一个入口直达。
-
 <table>
   <tr>
     <td width="50%" align="center"><b>设置 → 开放接口 · Token 管理</b><br/><sub>明文只显示一次,六档 scope 按需授予</sub></td>
@@ -293,7 +260,7 @@
 
 ```bash
 # 十行内跑通第一个调用
-curl -H "Authorization: Bearer tsp_xxxx" \
+curl -H "Authorization: Bearer hq_xxxx" \
   "http://localhost:3018/api/kline/daily?symbol=600519.SH&limit=10"
 ```
 
@@ -355,15 +322,12 @@ curl -H "Authorization: Bearer tsp_xxxx" \
 ### 已装 Docker?一条命令跑起来 ⬇️
 
 ```bash
-docker run -d --name tsp \
-  -p 3018:3018 \
-  -v "${PWD}/data:/app/data" \
-  ghcr.io/shy3130/tick-stock-panel:latest
+git clone https://gitee.com/opush_1/hamuna-quant-platform.git h-quant
+cd h-quant
+docker compose up -d --build
 ```
 
-**打开 <http://localhost:3018> 即可使用** · 多架构镜像(linux/amd64 · arm64)由 CI 自动发布,本地无需 Python / Node
-
-**还没决定要不要部署?** 先逛逛 **[官网 tsp.shy313.com](https://tsp.shy313.com/)** —— 功能总览 · 账户注册 · API Key 管理
+**打开 <http://localhost:3018> 即可使用** · 本地构建镜像,无需在宿主机装 Python / Node
 
 </div>
 
@@ -371,7 +335,7 @@ docker run -d --name tsp \
 
 | 方式                                  | 适合谁                      | 前置要求                                                                             |
 | :------------------------------------ | :-------------------------- | :----------------------------------------------------------------------------------- |
-| **[A · GHCR 现成镜像](#install-image)**(即上方一条命令) | 多数用户，拿来即用 ⭐ 推荐 | Docker |
+| **[A · Docker 一键启动](#install-image)**(即上方一条命令) | 多数用户，拿来即用 ⭐ 推荐 | Docker |
 | **[B · Compose 本地构建](#install-compose)** | 跑自己改过的代码 / 全套挂载 | Docker |
 | **[C · 本机 AI 代部署](#install-ai)** | 完全不想碰命令行 | 任一本机 AI 编程助手 |
 | **[D · Dev 模式](#install-dev)** | 二次开发 | Python ≥ 3.11 · Node ≥ 20 · [uv](https://docs.astral.sh/uv/) · pnpm(`npm i -g pnpm`) |
@@ -379,15 +343,14 @@ docker run -d --name tsp \
 
 <a id="install-image"></a>
 
-### 方式 A:GHCR 现成镜像(免本地构建,多数用户推荐)
+### 方式 A:Docker 一键启动(多数用户推荐)
 
-本项目每次推送都由 GitHub Actions 自动构建多架构镜像并发布到 GHCR,拿来即用:
+克隆仓库后一条命令完成构建与启动,本机无需 Python / Node:
 
 - 需要配置时:从 [.env.example](./.env.example) 复制出 `.env`,命令里加 `--env-file .env`。
 - Linux `docker run` 部署:容器内要通过 `host.docker.internal` 访问宿主机服务(如自定义数据源)时,命令需加 `--add-host=host.docker.internal:host-gateway`;升级重建容器时务必保留 `-v ${PWD}/data:/app/data` 挂载并提前备份 `data/`,否则容器层数据会随旧容器静默丢失(详见 [docs/deployment.md](./docs/deployment.md))。
-- 跑自己改过的代码:fork 后到仓库 **Actions** 页启用 workflow(fork 默认禁用),构建出的 `ghcr.io/<你的用户名>/tick-stock-panel` 用法相同。
-- 想用 compose 编排(挂载 `.env`):参考 [docker-compose.yml](./docker-compose.yml),把 `build:` 段换成 `image: ghcr.io/shy3130/tick-stock-panel:latest`。
-- 现成镜像默认不含老 CPU 兼容内核(体积考虑),有此需求请用方式 B 自构建,详见 [docs/deployment.md](./docs/deployment.md)。
+- 想用 compose 编排(挂载 `.env`):直接改 [docker-compose.yml](./docker-compose.yml) 的 `env_file` / `volumes`。
+- 默认镜像不含老 CPU 兼容内核(体积考虑),有此需求按下文 `BACKEND_EXTRAS` 自构建,详见 [docs/deployment.md](./docs/deployment.md)。
 
 <a id="install-compose"></a>
 
@@ -429,8 +392,8 @@ CODEX_CLI_VERSION=0.144.3 docker compose up --build
 装一个本机 AI 编程助手(Trae / Codex / OpenCode / ZCode / WorkBuddy 等,任选其一),新建一个空文件夹用助手打开,把下面这段话原样发给它:
 
 ```text
-帮我部署开源项目 https://github.com/shy3130/tick-stock-panel 到本机:
-克隆到当前文件夹;有 Docker 优先拉 ghcr.io/shy3130/tick-stock-panel:latest 现成镜像,没有就走 Dev 模式;
+帮我部署开源项目 https://gitee.com/opush_1/hamuna-quant-platform 到本机:
+克隆到当前文件夹;优先用 docker compose 构建启动,没有 Docker 就走 Dev 模式;
 缺少的依赖(Docker / Python / Node)帮我一起装好;
 最后告诉我浏览器打开哪个地址、需要填哪些 Key。
 ```
@@ -465,20 +428,20 @@ Windows 启动器的可用参数:
 
 ### 方式 E:桌面客户端(Windows / macOS)
 
-从 [Releases](https://github.com/shy3130/tick-stock-panel/releases/latest) 下载对应安装包:Windows 双击 `TSP-Setup-x64-*.exe` 按向导安装即可;macOS 下载 `TSP-macos-arm64-*.dmg`。
+从发布页下载对应安装包:Windows 双击 `HQuant-Setup-x64-*.exe` 按向导安装即可;macOS 下载 `HQuant-macos-arm64-*.dmg`。
 
 <details>
 <summary><b>🍎 macOS 安装注意事项(点开查看)</b></summary>
 
 - **仅支持 Apple Silicon(M 系列芯片)**,暂无 Intel 版本。
-- **数据位置**:用户数据(API Key、AI 配置、自选、行情数据)存放在 `~/Library/Application Support/TSP`,**升级替换 TSP.app 不会丢失**。
-- **≤ v0.3.6 老用户升级须知**:旧版把数据存在 App 包内部(`TSP.app/Contents/MacOS/data`),直接用新 App 替换会把旧数据一起移入废纸篓。升级前请先备份该目录;若已替换,可从废纸篓把旧 `TSP.app` 拖出并取出 `Contents/MacOS/data`,恢复进新 App 同位置后启动一次,程序会自动把数据迁移到上述安全位置。
-- 打开 dmg 后,请先把 **TSP.app 拖入「应用程序(Applications)」再运行**;不要直接在 dmg 挂载窗口里双击运行 —— 挂载卷是只读的,会导致启动即退出。
-- 首次打开会被 macOS Gatekeeper 拦截(安装包暂未做开发者签名与公证):前往 **系统设置 → 隐私与安全性**,下滑到「已阻止使用 "TSP"」→ 点 **仍要打开**,再按提示确认一次。
-- 若提示 **「"TSP" 已损坏,无法打开」**,或完成上一步后仍一闪退出:打开「终端」执行下面的命令,然后再启动(`xattr` 为 macOS 自带命令,作用是移除下载文件上的隔离标记,不会改动系统设置):
+- **数据位置**:用户数据(API Key、AI 配置、自选、行情数据)存放在 `~/Library/Application Support/H-Quant`,**升级替换 H-Quant.app 不会丢失**。
+- **≤ v0.3.6 老用户升级须知**:旧版把数据存在 App 包内部(`.app 包内`),直接用新 App 替换会把旧数据一起移入废纸篓。升级前请先备份该目录;若已替换,可从废纸篓把旧 App 拖出并取出 `Contents/MacOS/data`,恢复进新 App 同位置后启动一次,程序会自动把数据迁移到上述安全位置。
+- 打开 dmg 后,请先把 **H-Quant.app 拖入「应用程序(Applications)」再运行**;不要直接在 dmg 挂载窗口里双击运行 —— 挂载卷是只读的,会导致启动即退出。
+- 首次打开会被 macOS Gatekeeper 拦截(安装包暂未做开发者签名与公证):前往 **系统设置 → 隐私与安全性**,下滑到「已阻止使用 "H-Quant"」→ 点 **仍要打开**,再按提示确认一次。
+- 若提示 **「"H-Quant" 已损坏,无法打开」**,或完成上一步后仍一闪退出:打开「终端」执行下面的命令,然后再启动(`xattr` 为 macOS 自带命令,作用是移除下载文件上的隔离标记,不会改动系统设置):
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/TSP.app
+xattr -dr com.apple.quarantine /Applications/H-Quant.app
 ```
 
 </details>
@@ -564,7 +527,7 @@ PORT=3018                      # 服务端口
 
 ## 🗺️ 路线图
 
-以下保留早期阶段与版本规划记录；最新已发布功能和版本状态请查看 [Releases](https://github.com/shy3130/tick-stock-panel/releases)。
+以下保留早期阶段与版本规划记录；最新已发布功能和版本状态请查看发布页。
 
 | Phase                 | 内容                                                                                                                               | 状态          |
 | :-------------------- | :--------------------------------------------------------------------------------------------------------------------------------- | :------------ |
@@ -621,37 +584,6 @@ PORT=3018                      # 服务端口
 | [外部数据源插件安装](./docs/external-data-source-packages.md) | ZIP 安装、Key 配置、版本维护和开发模板 |
 | [二次开发指南](./docs/secondary-development.md) | 代码二次开发、前端插槽、后端策略接口与 AI 开发模板 |
 | [页面 SDK](./docs/page-sdk.md) | 页面插件开发指南:产物契约、能力桥 ctx、打包与上传、安全边界 |
-
----
-
-<a id="community"></a>
-<a id="️-支持与交流"></a>
-<a id="-支持与交流"></a>
-
-## ❤️ 支持与交流
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-
-<sub>感谢支持 TSP，助力项目持续完善 ❤️</sub>
-
-<br/>
-
-<img src="./assets/support/wechat-appreciation.jpg" alt="微信赞赏码 · 感谢道友支持 愿一路长红" height="240" />
-
-</td>
-<td align="center" width="50%">
-
-<sub>欢迎加入交流群,一起讨论交流</sub>
-
-<br/>
-
-<img src="./community-qr-code.jpg" alt="交流群二维码" height="240" />
-
-</td>
-  </tr>
-</table>
 
 ---
 

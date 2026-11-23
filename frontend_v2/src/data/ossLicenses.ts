@@ -17,9 +17,11 @@
  *     (在 backend/ 目录执行)
  */
 
+// MIT 协议要求保留原版权声明: H-Quant 是本项目的衍生发行版,
+// 上游署名不可删除, 只能在其后追加自身来源。
 export const PROJECT_COPYRIGHT = 'Copyright (c) 2026 tick-stock-panel contributors'
 export const PROJECT_LICENSE_NAME = 'MIT'
-export const PROJECT_REPO_URL = 'https://github.com/shy3130/tick-stock-panel'
+export const PROJECT_REPO_URL = 'https://gitee.com/opush_1/hamuna-quant-platform'
 
 export const PROJECT_LICENSE_TEXT = `MIT License
 

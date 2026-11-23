@@ -97,12 +97,35 @@ def test_success_reports_hit_count(fake_service):
     assert result["as_of"] == "2026-01-05"
 
 
-def test_matrix_backend_is_skipped(fake_service):
-    engine = _FakeEngine(backend="matrix_native")
+def test_matrix_backend_runs_and_reports_hits(fake_service):
+    """矩阵策略不再跳过实跑: 轴序写错时跑得通但 0 命中, 必须真跑才发现。"""
+    engine = _FakeEngine(backend="matrix_native", rows=[{"symbol": "600001.SH"}])
     result = smoke_strategy(engine, object(), "x")
     assert result["ok"] is True
-    assert result["skipped"] == "matrix_native"
-    assert engine.ran == []
+    assert result["skipped"] is None
+    assert engine.ran == ["x"]
+
+
+def test_matrix_zero_hits_over_window_is_blocked(fake_service, monkeypatch):
+    """当日 0 命中且整窗无信号 → 判定策略失效 (轴序写错的典型症状)。"""
+    import app.strategy.smoke as smoke_module
+
+    engine = _FakeEngine(backend="matrix_native")
+    monkeypatch.setattr(smoke_module, "_window_entry_count", lambda *a, **k: 0)
+    result = smoke_strategy(engine, object(), "x")
+    assert result["ok"] is False
+    assert result["issues"][0]["code"] == "no_hits"
+    assert "shape[0]" in result["issues"][0]["message"]
+
+
+def test_matrix_zero_hits_today_but_window_has_signals_passes(fake_service, monkeypatch):
+    """今天恰好没有符合的股票是正常行情, 不能误伤。"""
+    import app.strategy.smoke as smoke_module
+
+    engine = _FakeEngine(backend="matrix_native")
+    monkeypatch.setattr(smoke_module, "_window_entry_count", lambda *a, **k: 42)
+    result = smoke_strategy(engine, object(), "x")
+    assert result["ok"] is True
 
 
 def test_missing_repo_is_skipped(fake_service):

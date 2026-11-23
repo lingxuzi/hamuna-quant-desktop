@@ -173,7 +173,7 @@ def export_config(data_dir: Path, config_id: str) -> tuple[bytes, str]:
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
         archive.writestr(f"ext_data/{config_id}/config.json", content)
-    return output.getvalue(), f"tsp-ext-data-{config_id}.zip"
+    return output.getvalue(), f"hquant-ext-data-{config_id}.zip"
 
 
 def _read_config(data: bytes) -> tuple[dict, list[str]]:

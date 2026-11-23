@@ -319,7 +319,7 @@ def _prepare(app: FastAPI, context: ExtensionContext, store: ExtensionPackageSto
     registry = app.state.extension_registry.mutable_copy()
     if extension_id in registry.extension_ids():
         raise ValueError("扩展 ID 与主程序已有扩展冲突")
-    namespace = "_tsp_extension_" + _hash(str(store._version_dir(extension_id, version).resolve()).encode() + _contents_hash(files).encode())[:24]
+    namespace = "_hquant_extension_" + _hash(str(store._version_dir(extension_id, version).resolve()).encode() + _contents_hash(files).encode())[:24]
     if namespace not in sys.modules:
         package = types.ModuleType(namespace)
         package.__path__ = [str(store._version_dir(extension_id, version))]

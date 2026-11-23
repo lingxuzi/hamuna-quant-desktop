@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ctx } from './tsp'
+import { ctx } from './hquant'
 
 function HelloPage() {
   const [count, setCount] = useState(0)

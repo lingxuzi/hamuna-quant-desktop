@@ -21,7 +21,7 @@ from app.services import api_gateway, api_tokens
 # ── 域模块 ────────────────────────────────────────────────
 def test_create_verify_revoke_roundtrip(tmp_path: Path):
     record, plaintext = api_tokens.create_token(tmp_path, "测试", ["read:market"])
-    assert plaintext.startswith("tsp_") and len(plaintext) > 40
+    assert plaintext.startswith("hq_") and len(plaintext) > 40
     assert record["scopes"] == ["read:market"] and record["revoked"] is False
     # 明文不落盘
     raw = (tmp_path / "user_data" / "api_tokens.json").read_text(encoding="utf-8")
@@ -155,7 +155,7 @@ def test_gateway_401_403_200_matrix(client: TestClient, tmp_path: Path):
     hdr = {"Authorization": f"Bearer {market_token}"}
 
     # 401: 伪造 Token
-    r = client.get("/api/kline/daily", headers={"Authorization": "Bearer tsp_deadbeef"})
+    r = client.get("/api/kline/daily", headers={"Authorization": "Bearer hq_deadbeef"})
     assert r.status_code == 401
     # 403: scope 不足 (read:market 调 ext)
     assert client.get("/api/ext-data/x/rows", headers=hdr).status_code == 403
@@ -199,7 +199,7 @@ def test_gateway_ticket_any_token(client: TestClient, tmp_path: Path):
     r = client.post("/api/events/ticket", headers={"Authorization": f"Bearer {tok}"})
     assert r.status_code == 200
     # 无效 Token → 401
-    assert client.post("/api/events/ticket", headers={"Authorization": "Bearer tsp_bad"}).status_code == 401
+    assert client.post("/api/events/ticket", headers={"Authorization": "Bearer hq_bad"}).status_code == 401
 
 
 def test_gateway_rate_limit_429(client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -269,7 +269,7 @@ def test_token_gate_public_ip_403_before_token_check(
     hdr = {"Authorization": f"Bearer {tok}"}
 
     r1 = client.get("/api/kline/daily", headers=hdr)
-    r2 = client.get("/api/kline/daily", headers={"Authorization": "Bearer tsp_deadbeef"})
+    r2 = client.get("/api/kline/daily", headers={"Authorization": "Bearer hq_deadbeef"})
     assert r1.status_code == r2.status_code == 403
     assert "API_TOKEN_LOCAL_ONLY" in r1.json()["detail"]
     assert "API_TOKEN_LOCAL_ONLY" in r2.json()["detail"]
@@ -291,5 +291,5 @@ def test_token_gate_env_off_allows_public(
     r = client.get("/api/kline/daily", headers={"Authorization": f"Bearer {tok}"})
     assert r.status_code == 200
     # scope/限流链路照常工作: 无效 Token 仍 401
-    bad = client.get("/api/kline/daily", headers={"Authorization": "Bearer tsp_bad"})
+    bad = client.get("/api/kline/daily", headers={"Authorization": "Bearer hq_bad"})
     assert bad.status_code == 401

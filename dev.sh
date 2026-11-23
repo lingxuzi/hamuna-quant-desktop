@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tickflow-stock-panel — 一键启动前后端
+# H-Quant — 一键启动前后端
 #
 # 用法:
 #   ./dev.sh                          # 默认 backend:3018  frontend(v2):3012
@@ -249,7 +249,7 @@ prefix_sed() {
 
 echo
 echo -e "${BLUE}╭──────────────────────────────────────────────╮${NC}"
-echo -e "${BLUE}│${NC}  ${GREEN}tickflow-stock-panel${NC}                        ${BLUE}│${NC}"
+echo -e "${BLUE}│${NC}  ${GREEN}H-Quant${NC}                        ${BLUE}│${NC}"
 echo -e "${BLUE}│${NC}                                              ${BLUE}│${NC}"
 echo -e "${BLUE}│${NC}  backend   ${YELLOW}http://$DISPLAY_HOST:$BACKEND_PORT${NC}          ${BLUE}│${NC}"
 echo -e "${BLUE}│${NC}  frontend  ${YELLOW}http://$DISPLAY_HOST:$FRONTEND_PORT${NC}          ${BLUE}│${NC}"

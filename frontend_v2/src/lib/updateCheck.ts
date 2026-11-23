@@ -1,21 +1,28 @@
 /**
  * 应用更新检查 — 单例 store (useSyncExternalStore)。
  *
- * 侧栏左下角版本号徽标共用这一状态与网络请求 (徽标点击直接打开 Release 页下载)。
- * 静默检查结果按天缓存 localStorage (GitHub 未认证 API 限额 60 次/时):
- * 同一版本 24h 内只发一次真实请求; 手动检查 (force) 绕过缓存立即刷新。
- * 检查失败不落缓存, 下次启动仍会重试, 但单次会话只静默检查一次。
- * 使用期间每小时静默复检一次 (silent+force): 新版本发布后最长 1 小时亮 NEW;
- * 复检失败不打掉已亮的 found 状态。
+ * 侧栏左下角版本号徽标共用这一状态与网络请求 (徽标点击直接打开下载页)。
+ * 静默检查结果按天缓存 localStorage: 同一版本 24h 内只发一次真实请求;
+ * 手动检查 (force) 绕过缓存立即刷新。检查失败不落缓存, 下次启动仍会重试,
+ * 但单次会话只静默检查一次。使用期间每小时静默复检 (silent+force):
+ * 新版本发布后最长 1 小时亮 NEW; 复检失败不打掉已亮的 found 状态。
+ *
+ * 更新源 = Cloudflare R2 上的 latest.json (发布流水线 release.yml 生成)。
+ * 不直连 GitHub/Gitee API: 仓库在 Gitee 且私有, GitHub 只是构建机,
+ * 客户端都读不到; R2 固定 URL 是唯一对外更新契约 (可换 CDN 而不动客户端)。
  */
 import { useEffect, useSyncExternalStore } from 'react'
 import { useVersion } from '@/lib/useSharedQueries'
 
-// 检查更新的目标仓库 (Release 清单来源) — 仓库曾用旧名,
-// 用当前名可少依赖一次 GitHub 的改名重定向
-const UPDATE_REPO = 'shy3130/tick-stock-panel'
-/** Release 清单页 — 更新信息缺失时的兜底跳转目标 */
-export const RELEASES_URL = `https://github.com/${UPDATE_REPO}/releases/latest`
+/**
+ * 更新清单地址。构建时由 VITE_UPDATE_MANIFEST_URL 注入 (R2 公开桶 / 自定义域);
+ * 未注入 (空, 或流水线变量缺失时拼出的相对路径 `/latest.json`) → 整体停用,
+ * 不发出任何网络请求, 也不猜默认地址。
+ */
+const manifestRaw = (import.meta.env.VITE_UPDATE_MANIFEST_URL ?? '').trim()
+const MANIFEST_URL = /^https?:\/\//i.test(manifestRaw) ? manifestRaw : ''
+/** 下载页 — 清单缺失 notes_url 时的兜底跳转目标 */
+export const RELEASES_URL = (import.meta.env.VITE_DOWNLOAD_PAGE_URL ?? '').trim()
 const CACHE_KEY = 'update_check_cache'
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -100,32 +107,14 @@ function writeCache(blob: CacheBlob): void {
   }
 }
 
-// 优先 api.github.com (官方带 CORS, 浏览器可直连; 未认证限额 60 次/时);
-// latest.json 清单 (release.yml 产物) 作兜底 — API 限流或字段变动时仍可取到版本号。
+/** 拉取 R2 上的 latest.json (release.yml 的 manifest job 生成并上传)。 */
 async function fetchLatest(): Promise<UpdateInfo> {
-  let latest = ''
-  let url = RELEASES_URL
-  const r = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-    cache: 'no-store',
-  })
-  if (r.ok) {
-    const rel = await r.json()
-    latest = String(rel.tag_name ?? '')
-    url = rel.html_url || url
-  }
-  if (!latest) {
-    const m = await fetch(
-      `https://github.com/${UPDATE_REPO}/releases/latest/download/latest.json`,
-      { cache: 'no-store' },
-    )
-    if (m.ok) {
-      const manifest = await m.json()
-      latest = String(manifest.tag ?? '')
-      url = manifest.notes_url || url
-    }
-  }
+  const r = await fetch(MANIFEST_URL, { cache: 'no-store' })
+  if (!r.ok) throw new Error(`manifest http ${r.status}`)
+  const manifest = await r.json()
+  const latest = String(manifest.version ?? manifest.tag ?? '').trim()
   if (!latest) throw new Error('no release info')
-  return { latest, url }
+  return { latest, url: String(manifest.notes_url ?? '') || RELEASES_URL }
 }
 
 let inFlight = false
@@ -135,7 +124,8 @@ export async function checkForUpdate(
   opts: { force?: boolean; silent?: boolean } = {},
 ): Promise<void> {
   const cur = current.trim()
-  if (!cur || inFlight) return
+  // 未配置清单地址 = 该构建不提供在线更新检查, 静默停用
+  if (!cur || !MANIFEST_URL || inFlight) return
   if (!opts.force) {
     const c = readCache()
     if (c && c.current === cur && Date.now() - c.checkedAt < CACHE_TTL_MS) {

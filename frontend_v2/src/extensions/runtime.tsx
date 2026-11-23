@@ -24,7 +24,7 @@ import { loadFrontendExtensions } from './registry'
 import type { FrontendExtension, FrontendExtensionModule } from './types'
 import type { StockPreviewUi } from './stockPreview'
 
-/** mount 挂载上下文: 宿主能力桥(window.__TSP_EXT__ 安装) + 页面卸载通知 */
+/** mount 挂载上下文: 宿主能力桥(window.__HQUANT_EXT__ 安装) + 页面卸载通知 */
 export interface PagePackCtx {
   api: unknown
   QK: unknown
@@ -88,7 +88,7 @@ function createMountComponent(mount: PagePackRoute['mount']): ComponentType {
     useEffect(() => {
       const el = ref.current
       if (!el) return
-      const bridge = (window as unknown as { __TSP_EXT__?: PagePackCtx }).__TSP_EXT__
+      const bridge = (window as unknown as { __HQUANT_EXT__?: PagePackCtx }).__HQUANT_EXT__
       if (!bridge) return
       return mount(el, bridge)
     }, [])
@@ -191,5 +191,5 @@ export async function loadRuntimePageExtensions(opts: LoadRuntimeOptions = {}): 
  * 安装在 main.tsx 引导早期, 生命周期与页面一致。
  */
 export function installTspExtBridge(bridge: PagePackCtx): void {
-  ;(window as unknown as { __TSP_EXT__?: PagePackCtx }).__TSP_EXT__ = bridge
+  ;(window as unknown as { __HQUANT_EXT__?: PagePackCtx }).__HQUANT_EXT__ = bridge
 }

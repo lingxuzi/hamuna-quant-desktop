@@ -10,7 +10,7 @@
 
 构建 (在项目根目录):
   cd frontend_v2 && pnpm build                  # 先构建前端到 frontend_v2/dist
-  pyinstaller packaging/tsp.spec                # 产物在 dist/TSP/
+  pyinstaller packaging/hquant.spec                # 产物在 dist/HQuant/
 """
 import sys
 from importlib.util import find_spec
@@ -191,7 +191,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="TSP",
+    name="HQuant",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -213,7 +213,7 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="TSP",
+    name="HQuant",
 )
 
 # ── macOS: 封装成 .app 包 ────────────────────────────────────────────
@@ -234,13 +234,13 @@ if _IS_MACOS:
 
     app = BUNDLE(
         coll,
-        name="TSP.app",
+        name="HQuant.app",
         icon=APP_ICON,
         bundle_identifier="com.tickflow.stockpanel",
         version=APP_VERSION,   # → CFBundleShortVersionString / CFBundleVersion
         info_plist={
             "CFBundleName": "Tick Stock Panel",
-            "CFBundleDisplayName": "TSP",
+            "CFBundleDisplayName": "HQuant",
             "CFBundleVersion": APP_VERSION,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "10.13",

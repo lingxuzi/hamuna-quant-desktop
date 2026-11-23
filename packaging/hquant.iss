@@ -1,13 +1,13 @@
 ; ===========================================================================
-; Tick Stock Panel — Inno Setup 安装包脚本
+; H-Quant — Inno Setup 安装包脚本
 ; ===========================================================================
-; 用途: 把 PyInstaller 产出的 dist/TSP/ 文件夹封装成
+; 用途: 把 PyInstaller 产出的 dist/HQuant/ 文件夹封装成
 ;       单个 Setup.exe 安装程序 (双击→安装向导→快捷方式→可卸载)。
 ;
 ; 构建 (本地):
-;   1. 先跑 PyInstaller: cd backend && uv run pyinstaller ../packaging/tsp.spec
-;   2. 再跑 Inno Setup:   ISCC.exe packaging\tsp.iss
-;   3. 产物: packaging\Output\TSP-Setup-x.x.x.exe
+;   1. 先跑 PyInstaller: cd backend && uv run pyinstaller ../packaging/hquant.spec
+;   2. 再跑 Inno Setup:   ISCC.exe packaging\hquant.iss
+;   3. 产物: packaging\Output\HQuant-Setup-x.x.x.exe
 ;
 ; 设计决策:
 ;   - 装到用户目录 {localappdata}\Programs\ (不弹 UAC, 不需管理员)
@@ -18,10 +18,10 @@
 ;   - 卸载入口 (控制面板可见)
 ; ===========================================================================
 
-#define MyAppName          "TSP"
-#define MyAppNameEN       "Tick Stock Panel"
-#define MyAppExeName      "TSP.exe"
-#define MyAppPublisher    "TSP"
+#define MyAppName          "H-Quant"
+#define MyAppNameEN       "H-Quant"
+#define MyAppExeName      "HQuant.exe"
+#define MyAppPublisher    "H-Quant"
 
 ; 版本号: 从 frontend_v2/package.json 读取, 与 Release tag 保持一致
 ; 手动指定更可靠 (CI 传入 /DMyAppVersion)
@@ -40,11 +40,11 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 ; 默认装到 D 盘 (非系统盘), 用户可在向导中改任意位置
 ; 若 D 盘不存在, [Code] 段 InitializeWizard 会自动回退到用户目录
-DefaultDirName=D:\TSP
+DefaultDirName=D:\H-Quant
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=Output
-OutputBaseFilename=TSP-Setup-{#MyAppVersion}
+OutputBaseFilename=HQuant-Setup-{#MyAppVersion}
 
 ; 关键: 不需要管理员权限, 永不弹 UAC
 ; 装到 D 盘普通目录 (非 Program Files) 不需要管理员权限
@@ -82,9 +82,18 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; 把 PyInstaller 产出的整个文件夹搬进安装目录
 ; Source 路径相对于 .iss 文件所在目录
-Source: "..\backend\dist\TSP\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\backend\dist\HQuant\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; .NET 按 EXE 文件名读取同目录配置，不能放进 PyInstaller 的 _internal。
-Source: "TSP.exe.config"; DestDir: "{app}"; Flags: ignoreversion
+Source: "HQuant.exe.config"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; 旧版程序文件残留清理 (升级原地安装, 旧文件不会被新包覆盖删除):
+;   - TSP.exe / TSP.exe.config: 改名前的可执行文件与 .NET 配置, 不删会并存两个入口
+;   - _internal: PyInstaller onedir 运行时目录, 新版删掉的模块/扩展会在此残留并被
+;     pkgutil.iter_modules 重新发现。用户数据在 {app}\data, 不受影响。
+Type: files; Name: "{app}\TSP.exe"
+Type: files; Name: "{app}\TSP.exe.config"
+Type: filesandordirs; Name: "{app}\_internal"
 
 [Icons]
 ; 开始菜单
@@ -149,13 +158,13 @@ begin
   // D 盘存在 → 用 D 盘; 否则回退用户目录 (无需管理员权限)
   if not DirExists('D:\') then
   begin
-    DefaultDir := ExpandConstant('{localappdata}\Programs\TSP');
+    DefaultDir := ExpandConstant('{localappdata}\Programs\H-Quant');
     WizardForm.DirEdit.Text := DefaultDir;
   end;
 end;
 
 // ── 安装完成后: 通知外壳刷新图标缓存 ─────────────────────────────
-// 覆盖安装时 exe 路径不变 (如 D:\TSP\TSP.exe), 资源管理器会一直显示缓存的旧图标
+// 覆盖安装时 exe 路径不变 (如 D:\H-Quant\HQuant.exe), 资源管理器会一直显示缓存的旧图标
 // (首个版本为透明底)。用 SHCNE_ASSOCCHANGED 强制外壳重建图标缓存, 装完快捷方式
 // 立即显示当前 exe 内嵌图标, 无需用户重启资源管理器。
 // 此前用 ie4uinit -show 实现同一目的, 但 ie4uinit.exe 是 IE 组件, 在移除 IE 的

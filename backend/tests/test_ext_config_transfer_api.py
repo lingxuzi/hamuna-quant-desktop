@@ -35,7 +35,7 @@ def test_export_preview_and_import_keep_contract_and_refresh_consumers(client):
     http, refreshed = client
     result = http.get("/api/ext-data/auction/config/export")
     assert result.status_code == 200 and result.headers["content-type"] == "application/zip"
-    assert "tsp-ext-data-auction.zip" in result.headers["content-disposition"]
+    assert "hquant-ext-data-auction.zip" in result.headers["content-disposition"]
     files = {"file": ("auction.zip", result.content)}
     preview = http.post("/api/ext-data/config/inspect", files=files)
     assert preview.status_code == 200 and preview.json()["requires_key"]

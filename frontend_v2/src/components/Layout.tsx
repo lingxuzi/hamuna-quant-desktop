@@ -990,18 +990,22 @@ export function Layout() {
               版本
               <b className="inline-flex items-center gap-1.5">
                 {version || '—'}
-                {hasUpdate && (
-                  <a
-                    href={update.info?.url ?? RELEASES_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center text-amber-400 transition-transform hover:scale-110 animate-breath"
-                    title={`发现新版本 ${update.info?.latest ?? ''}，点击前往下载`}
-                    aria-label="前往下载新版本"
-                  >
-                    <Download className="h-[11px] w-[11px]" />
-                  </a>
-                )}
+                {hasUpdate && (() => {
+                  // 清单没给 notes_url 且未配置下载页时只提示不可点, 避免 href="" 空跳转
+                  const href = update.info?.url || RELEASES_URL
+                  const cls = 'inline-flex items-center text-amber-400 transition-transform hover:scale-110 animate-breath'
+                  const title = `发现新版本 ${update.info?.latest ?? ''}，点击前往下载`
+                  return href ? (
+                    <a href={href} target="_blank" rel="noreferrer" className={cls}
+                       title={title} aria-label="前往下载新版本">
+                      <Download className="h-[11px] w-[11px]" />
+                    </a>
+                  ) : (
+                    <span className={cls} title={title} aria-label="有新版本可更新">
+                      <Download className="h-[11px] w-[11px]" />
+                    </span>
+                  )
+                })()}
               </b>
             </span>
           </div>

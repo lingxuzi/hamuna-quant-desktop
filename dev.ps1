@@ -1,4 +1,4 @@
-# tickflow-stock-panel - one-shot launcher for backend + frontend (Windows / PowerShell)
+# H-Quant - one-shot launcher for backend + frontend (Windows / PowerShell)
 #
 # Usage:
 #   .\dev.ps1
@@ -229,7 +229,7 @@ if (-not (Test-Path (Join-Path $FrontendDir 'node_modules'))) {
 # ===== 4. Banner (ASCII so it renders on any codepage) =====
 Write-Host ''
 Write-Host '+----------------------------------------------+' -ForegroundColor Blue
-Write-Host '|  tickflow-stock-panel                        |' -ForegroundColor Blue
+Write-Host '|  H-Quant                        |' -ForegroundColor Blue
 Write-Host '|                                              |' -ForegroundColor Blue
 Write-Host "|  backend   http://${DisplayHost}:$BackendPort"  -ForegroundColor Blue
 Write-Host "|  frontend  http://${DisplayHost}:$FrontendPort" -ForegroundColor Blue

@@ -21,13 +21,14 @@ _LOCK_SCHEMA_VERSION = 1
 
 # 旧格式 (b"0") / 内容损坏时定位持有者的白名单线索: 只认本产品的进程形态,
 # 避免把"恰好打开过锁文件"的无关进程 (杀毒扫描/编辑器) 当成持有者。
-_APP_NAME_HINTS = ("python", "tsp", "tickflow")
+_APP_NAME_HINTS = ("python", "hquant", "tsp", "tickflow")
 _APP_CMDLINE_HINTS = (
     "uvicorn",
     "app.main",
     "app.desktop",
     "desktop.py",
     "tick-stock-panel",
+    "hquant",
     "tickflow",
     "panel",
 )

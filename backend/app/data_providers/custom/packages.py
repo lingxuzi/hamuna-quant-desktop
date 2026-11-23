@@ -178,7 +178,7 @@ def import_module(doc: dict, module: str):
     # Root-specific namespace keeps different installations and tests independent.
     contents = b"".join(file.read_bytes() for file in sorted(path.rglob("*.py")))
     digest = hashlib.sha256(str(path.resolve()).encode() + contents).hexdigest()[:20]
-    namespace = f"_tsp_provider_{digest}"
+    namespace = f"_hquant_provider_{digest}"
     if namespace not in sys.modules:
         package = types.ModuleType(namespace)
         package.__path__ = [str(path)]

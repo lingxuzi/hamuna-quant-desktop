@@ -86,7 +86,7 @@ export function Auth() {
         {/* Logo */}
         <div className="mb-6 flex flex-col items-center gap-2">
           <Logo className="h-9 w-9 text-accent" />
-          <h1 className="font-serif text-[20px] font-semibold tracking-[0.12em] text-foreground">Tick Stock Panel</h1>
+          <h1 className="font-serif text-[20px] font-semibold tracking-[0.12em] text-foreground">H-Quant</h1>
           <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted">QUANT WORKBENCH</span>
         </div>
 

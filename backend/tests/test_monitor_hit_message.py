@@ -16,7 +16,7 @@ from tests.signal_seeds import materialize_data_root
 
 # 信号列已定义驱动: 标签 (signal_* → 中文名) 从种子定义目录解析,
 # 不依赖运行目录的用户数据。
-_SEED_ROOT = materialize_data_root(Path(tempfile.mkdtemp(prefix="tsp_sig_seeds_")))
+_SEED_ROOT = materialize_data_root(Path(tempfile.mkdtemp(prefix="hquant_sig_seeds_")))
 
 
 def _engine() -> MonitorRuleEngine:

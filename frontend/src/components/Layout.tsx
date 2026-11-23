@@ -398,7 +398,7 @@ export function Layout() {
   const { data: settingsState } = useSettings()
   const { data: matrix } = useCapabilityMatrix()
   const { data: versionData } = useVersion()
-  // 更新检查 (单例 store): 启动静默查一次 GitHub Releases, 供左下角版本号徽标
+  // 更新检查 (单例 store): 启动静默查一次发布清单, 供左下角版本号徽标
   const update = useUpdateCheck()
   const hasUpdate = update.status === 'found'
   const { data: prefs } = usePreferences()

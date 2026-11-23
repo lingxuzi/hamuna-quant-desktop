@@ -1,7 +1,7 @@
-"""tsp.spec 打包不变量 — 运行时动态发现的模块必须随冻结产物发布 (issue #459)。
+"""hquant.spec 打包不变量 — 运行时动态发现的模块必须随冻结产物发布 (issue #459)。
 
 app/extensions/loader.py 用 importlib.import_module + pkgutil.iter_modules 在
-运行时发现 app/custom/*, 两条链路对 PyInstaller 静态分析都不可见; tsp.spec
+运行时发现 app/custom/*, 两条链路对 PyInstaller 静态分析都不可见; hquant.spec
 未声明时冻结产物里扩展静默消失(桌面版 AI 对话助手 405, 且无任何日志)。
 锁定双声明契约: 
   - hiddenimports(collect_submodules) 进 PYZ —— 保 import_module 可导入; 
@@ -14,7 +14,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SPEC_TEXT = (REPO_ROOT / "packaging" / "tsp.spec").read_text(encoding="utf-8")
+SPEC_TEXT = (REPO_ROOT / "packaging" / "hquant.spec").read_text(encoding="utf-8")
 # 只断言代码行, 避免被注释里的字样误判为已声明
 SPEC_CODE = "\n".join(
     line for line in SPEC_TEXT.splitlines() if not line.lstrip().startswith("#")
@@ -41,7 +41,7 @@ def test_spec_declares_builtin_plugin_easytdx():
 
 def test_installer_launches_desktop_only_once():
     """重复 postinstall 条目会同时拉起两个桌面后端。"""
-    text = (REPO_ROOT / "packaging" / "tsp.iss").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "packaging" / "hquant.iss").read_text(encoding="utf-8")
     section = text.split("[Run]", 1)[1].split("[UninstallRun]", 1)[0]
     launches = [
         line for line in section.splitlines()
@@ -52,7 +52,7 @@ def test_installer_launches_desktop_only_once():
 
 def test_installer_deploys_dotnet_config_beside_executable():
     """.NET 只读取 EXE 同目录的配置，放进 _internal 无法解除组件来源限制。"""
-    installer = REPO_ROOT / "packaging" / "tsp.iss"
+    installer = REPO_ROOT / "packaging" / "hquant.iss"
     text = installer.read_text(encoding="utf-8")
     exe_name = re.search(r'#define MyAppExeName\s+"([^"]+)"', text)
     assert exe_name is not None

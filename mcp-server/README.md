@@ -1,4 +1,4 @@
-# tick-stock-panel MCP 服务器
+# H-Quant MCP 服务器
 
 把面板的开放接口包装成 **MCP (Model Context Protocol)** 工具, 让 Claude / ZCode / Cursor 等 AI 客户端直接查询行情、市场环境、策略与告警, 触发回测。
 
@@ -11,7 +11,7 @@ AI 客户端 ⇄ MCP stdio (本服务器) ⇄ HTTP + Bearer Token ⇄ 面板开�
 ## 准备
 
 1. 面板 → **设置 → 开放接口** → 新建 Token, 勾选所需 scope
-2. 记下 `tsp_` 开头的明文 (只显示一次)
+2. 记下 `hq_` 开头的明文 (只显示一次)
 
 ## 配置到 MCP 客户端
 
@@ -20,28 +20,28 @@ AI 客户端 ⇄ MCP stdio (本服务器) ⇄ HTTP + Bearer Token ⇄ 面板开�
 ```json
 {
   "mcpServers": {
-    "tick-stock-panel": {
+    "H-Quant": {
       "command": "uv",
-      "args": ["--directory", "E:/tick-stock-panel/mcp-server", "run", "tsp-mcp-server"],
+      "args": ["--directory", "E:/H-Quant/mcp-server", "run", "hquant-mcp-server"],
       "env": {
-        "TSP_BASE": "http://127.0.0.1:3018",
-        "TSP_TOKEN": "tsp_xxxx",
-        "TSP_SCOPES": "read:market,read:ext,read:analysis"
+        "HQ_BASE": "http://127.0.0.1:3018",
+        "HQ_TOKEN": "hq_xxxx",
+        "HQ_SCOPES": "read:market,read:ext,read:analysis"
       }
     }
   }
 }
 ```
 
-- `TSP_BASE`: 面板地址 (默认 `http://127.0.0.1:3018`)
-- `TSP_TOKEN`: API Token
-- `TSP_SCOPES`: 逗号分隔, 决定暴露哪些工具 (默认只读三档)。**真正的权限裁决在面板网关** — 声明了没授权的 scope, 调用会得到 403, AI 能看到错误并停止
+- `HQ_BASE`: 面板地址 (默认 `http://127.0.0.1:3018`)
+- `HQ_TOKEN`: API Token
+- `HQ_SCOPES`: 逗号分隔, 决定暴露哪些工具 (默认只读三档)。**真正的权限裁决在面板网关** — 声明了没授权的 scope, 调用会得到 403, AI 能看到错误并停止
 
 手动验证:
 
 ```bash
 cd mcp-server
-TSP_TOKEN=tsp_xxx uv run tsp-mcp-server   # stdio JSON-RPC, 供客户端拉起
+HQ_TOKEN=hq_xxx uv run hquant-mcp-server   # stdio JSON-RPC, 供客户端拉起
 ```
 
 ## 工具清单 (按 scope)

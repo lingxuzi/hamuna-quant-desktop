@@ -1,10 +1,10 @@
-"""tick-stock-panel MCP 服务器 — 开放接口的 AI 工具桥。
+"""H-Quant MCP 服务器 — 开放接口的 AI 工具桥。
 
 架构 (docs/features.md → 开放接口):
   AI 客户端 (Claude/ZCode/Cursor…) ↔ MCP stdio (JSON-RPC) ↔ 本服务器
   ↔ HTTP + Bearer Token ↔ 面板开放网关 (scope 校验 + 限流)
 
-工具按 TSP_SCOPES 声明暴露 (逗号分隔, 默认 read:market,read:ext,read:analysis);
+工具按 HQ_SCOPES 声明暴露 (逗号分隔, 默认 read:market,read:ext,read:analysis);
 声明只是"展示哪些工具", 真正的权限裁决在面板网关 — 声明错了只会得到 403。
 """
 from __future__ import annotations
@@ -15,14 +15,14 @@ import os
 import httpx
 from mcp.server.mcpserver import MCPServer
 
-BASE = os.environ.get("TSP_BASE", "http://127.0.0.1:3018").rstrip("/")
-TOKEN = os.environ.get("TSP_TOKEN", "")
+BASE = os.environ.get("HQ_BASE", "http://127.0.0.1:3018").rstrip("/")
+TOKEN = os.environ.get("HQ_TOKEN", "")
 SCOPES = {s.strip() for s in os.environ.get(
-    "TSP_SCOPES", "read:market,read:ext,read:analysis",
+    "HQ_SCOPES", "read:market,read:ext,read:analysis",
 ).split(",") if s.strip()}
 
 mcp = MCPServer(
-    "tick-stock-panel",
+    "h-quant",
     instructions=(
         "A股行情、策略回测与监控面板。标的代码格式 600519.SH / 000001.SZ / 510300.SH;"
         "指数如 000001.SH(上证)。涉及交易/写数据的工具需面板侧授予相应权限。"
@@ -39,7 +39,7 @@ _client = httpx.Client(
 def _call(method: str, path: str, **kw) -> str:
     """调面板开放接口; 非 2xx 返回可读错误 (LLM 能据此纠正参数)。"""
     if not TOKEN:
-        return "错误: 未设置 TSP_TOKEN (面板 → 设置 → 开放接口 → 新建 Token)"
+        return "错误: 未设置 HQ_TOKEN (面板 → 设置 → 开放接口 → 新建 Token)"
     try:
         r = _client.request(method, path, **kw)
         r.raise_for_status()
@@ -154,7 +154,7 @@ if _has("run:backtest"):
 
 def main() -> None:
     if not TOKEN:
-        raise SystemExit("未设置 TSP_TOKEN 环境变量 — 面板 → 设置 → 开放接口 → 新建 Token")
+        raise SystemExit("未设置 HQ_TOKEN 环境变量 — 面板 → 设置 → 开放接口 → 新建 Token")
     mcp.run()  # stdio 传输, 由 MCP 客户端拉起
 
 

@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn'
 import { downloadResourceBundle, resourceClosure, resourceKey, toggleResourceSelection } from '@/lib/resourceTransfer'
 
 type Mode = 'import' | 'export'
-const ZIP_NAMES = { strategy: 'tsp-strategies.zip', signal: 'tsp-signals.zip', factor: 'tsp-factors.zip' }
+const ZIP_NAMES = { strategy: 'hquant-strategies.zip', signal: 'hquant-signals.zip', factor: 'hquant-factors.zip' }
 const KIND_LABEL: Record<ResourceTransferEntry['kind'], string> = { strategy: '策略', signal: '信号', factor: '因子', settings: '调参', code: '辅助模块' }
 const BUTTON = 'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-btn border border-border bg-surface px-3 text-xs font-medium text-secondary transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40'
 const PRIMARY = cn(BUTTON, 'border-accent bg-accent text-white hover:bg-accent/90 hover:text-white')

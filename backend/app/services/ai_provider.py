@@ -1028,7 +1028,7 @@ async def _run_codex_cli(
 ) -> str:
     prompt = _codex_prompt(messages, max_tokens=max_tokens)
     _sweep_stale_codex_run_dirs()
-    run_path = Path(tempfile.mkdtemp(prefix="tickflow-codex-run-"))
+    run_path = Path(tempfile.mkdtemp(prefix="hquant-codex-run-"))
     try:
         codex_home_path = run_path / "codex-home"
         workspace_path = run_path / "workspace"
@@ -1203,11 +1203,12 @@ _stale_sweep_done = False
 
 
 def _sweep_stale_codex_run_dirs(*, max_age_s: float = 3600.0, force: bool = False) -> None:
-    """清理历史进程遗留的 tickflow-codex-run-* 临时目录 (每进程一次)。
+    """清理历史进程遗留的 hquant-codex-run-* 临时目录 (每进程一次)。
 
     进程退出/请求取消可能中断 finally 清理, 留下空目录壳长期累积 (实测
     每次失败调用都可能漏一个)。新任务开跑前扫一遍 tempdir; 只动超过
     max_age_s 的同前缀目录, 不碰并发进程的活动目录。
+    同时清扫改名前的 tickflow-codex-run-* 前缀 (老版本遗留的壳)。
     """
     global _stale_sweep_done
     if _stale_sweep_done and not force:
@@ -1215,19 +1216,20 @@ def _sweep_stale_codex_run_dirs(*, max_age_s: float = 3600.0, force: bool = Fals
     _stale_sweep_done = True
     try:
         cutoff = time.time() - max_age_s
-        for path in Path(tempfile.gettempdir()).glob("tickflow-codex-run-*"):
-            try:
-                if path.is_dir() and path.stat().st_mtime < cutoff:
-                    _remove_tree_best_effort(path)
-            except OSError:
-                continue
+        for pattern in ("hquant-codex-run-*", "tickflow-codex-run-*"):
+            for path in Path(tempfile.gettempdir()).glob(pattern):
+                try:
+                    if path.is_dir() and path.stat().st_mtime < cutoff:
+                        _remove_tree_best_effort(path)
+                except OSError:
+                    continue
     except OSError:
         pass
 
 
 def _codex_prompt(messages: Sequence[Message], *, max_tokens: int | None) -> str:
     parts = [
-        "You are Tick Stock Panel's local AI provider.",
+        "You are H-Quant's local AI provider.",
         "This is a text-generation task. The working directory is intentionally empty.",
         "Use only the user-provided prompt content below; do not inspect or modify local files.",
         "Return only the final requested content; do not include execution logs.",

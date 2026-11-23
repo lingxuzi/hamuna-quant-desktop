@@ -20,10 +20,52 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # 这些后端的实跑需要别的数据域, 保存期不实跑:
-# - matrix_native: 走 market 协议, 特征名由 matrix_feature 兜底任意 ma{N}, 不引用 pl.col
 # - composite: 依赖子策略, 子策略各自有闸
 # - minute_filter: 依赖分钟 K 分区, 缺失时不该阻断日线策略的保存
-_SKIP_BACKENDS = frozenset({"matrix_native", "composite", "minute_filter"})
+# matrix_native 不再跳过: 它的轴序是 (交易日 × 标的), 与直觉相反, 模型常写成
+# (标的 × 交易日) —— 代码能跑通但 0 命中, 静态校验和空跑都看不出来 (实测)。
+# 走 enriched 历史窗口实跑一次即可发现, 成本只多建一份矩阵。
+_SKIP_BACKENDS = frozenset({"composite", "minute_filter"})
+
+
+def _window_entry_count(engine, strategy, context) -> int:
+    """整个历史窗口内的矩阵入场信号数 (不限当日, 不截断 limit)。
+
+    区分「今天恰好没有符合的股票」和「策略永远筛不出东西」—— 后者才是轴序写错
+    的特征。与实盘同口径 (含基础过滤), fail-open: 判定本身出错时按「有信号」放行。
+    """
+    try:
+        import numpy as np
+
+        from app.backtest.matrix import MatrixPipelineConfig, MatrixStrategyPipeline
+        from app.backtest.strategy import _basic_filter_for_asset
+
+        history = getattr(context, "history", None)
+        if history is None or history.is_empty():
+            return 1
+        params = engine.resolve_params(strategy, None, None)
+        market = engine.build_shared_matrix(
+            context, [(str(strategy.meta["id"]), strategy)], {}, {}
+        )
+        if market is None:
+            return 1
+        signals = MatrixStrategyPipeline().run(
+            strategy.matrix_strategy,
+            market,
+            params,
+            MatrixPipelineConfig(
+                basic_filter=_basic_filter_for_asset(
+                    dict(strategy.basic_filter or {}), context.asset_type
+                ),
+                scoring={},
+                order_by=None,
+                descending=True,
+            ),
+        )
+        return int(np.count_nonzero(signals.entry))
+    except Exception:  # noqa: BLE001 — 辅助判定失败不应变成阻断理由
+        logger.info("smoke: 窗口信号统计失败, 跳过 0 命中判定", exc_info=True)
+        return 1
 
 
 def _load_error_message(engine, strategy_id: str, exc: Exception) -> str:
@@ -101,11 +143,33 @@ def smoke_strategy(
         }
 
     rows = getattr(result, "rows", None) or []
+    hits = len(rows)
+    # 矩阵策略的「跑得通但筛不出」是真实故障, 不是空数据: 轴序写成
+    # (标的 × 交易日) 时 numpy 广播照常执行、entry 全 False, 静态校验和 run
+    # 都不报错 (实测 0 命中)。当日 0 命中本身可能只是行情清淡, 所以再看整个
+    # 窗口的入场信号: 全部为 0 才判定策略失效, 避免误伤正常策略。
+    if hits == 0 and s.execution_backend == "matrix_native" and _window_entry_count(
+        engine, s, ctx
+    ) == 0:
+        return {
+            "ok": False,
+            "issues": [{
+                "code": "no_hits",
+                "message": (
+                    "矩阵策略在最近交易日的整个历史窗口内 0 命中。矩阵轴序是 "
+                    "(交易日 × 标的): market.shape[0] 是交易日数, shape[1] 是标的数; "
+                    "常见原因是按 (标的 × 交易日) 计算, 或入场条件被基础过滤全部排除"
+                ),
+            }],
+            "skipped": None,
+            "hits": 0,
+            "as_of": as_of.isoformat(),
+        }
     return {
         "ok": True,
         "issues": [],
         "skipped": None,
-        "hits": len(rows),
+        "hits": hits,
         "as_of": as_of.isoformat(),
     }
 

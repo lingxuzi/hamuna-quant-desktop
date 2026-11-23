@@ -1,6 +1,6 @@
 """MCP 服务器冒烟测试 — 子进程拉起, 走完整 JSON-RPC: 握手/工具清单/实际调用。
 
-用法: TSP_TOKEN=tsp_xxx [TSP_BASE=...] python smoke_test.py
+用法: HQ_TOKEN=hq_xxx [HQ_BASE=...] python smoke_test.py
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def main() -> None:
     proc = subprocess.Popen(
-        [sys.executable, "-m", "tsp_mcp_server.server"],
+        [sys.executable, "-m", "hquant_mcp_server.server"],
         cwd=os.path.join(BASE_DIR, "src"),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

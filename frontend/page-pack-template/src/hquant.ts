@@ -1,7 +1,7 @@
 /**
- * tsp.ts — 宿主能力桥读取。
+ * hquant.ts — 宿主能力桥读取。
  *
- * window.__TSP_EXT__ 由宿主 main.tsx 在引导时安装; 页面插件经 mount(el, ctx)
+ * window.__HQUANT_EXT__ 由宿主 main.tsx 在引导时安装; 页面插件经 mount(el, ctx)
  * 收到的 ctx 即本对象。api 为宿主完整 API 封装(同源 fetch, 自带登录态),
  * QK 为集中查询键, cn 为样式合并工具, format 为格式化工具集。
  *
@@ -26,4 +26,4 @@ type Bridge = {
   }
 }
 
-export const ctx = (window as unknown as { __TSP_EXT__: Bridge }).__TSP_EXT__
+export const ctx = (window as unknown as { __HQUANT_EXT__: Bridge }).__HQUANT_EXT__

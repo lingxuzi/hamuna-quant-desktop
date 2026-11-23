@@ -6,6 +6,12 @@ vi.mock('@/lib/useSharedQueries', () => ({
   useVersion: () => ({ data: undefined }),
 }))
 
+// 更新源是 Cloudflare R2 上的 latest.json (构建时由 VITE_UPDATE_MANIFEST_URL 注入)。
+// import.meta.env 在模块加载时求值, 必须 hoist 到 import 之前 (vi.hoisted)。
+vi.hoisted(() => {
+  vi.stubEnv('VITE_UPDATE_MANIFEST_URL', 'https://cdn.example.com/latest.json')
+})
+
 import { checkForUpdate, compareVersion, getUpdateState } from './updateCheck'
 
 const CACHE_KEY = 'update_check_cache'
@@ -19,18 +25,12 @@ function readCacheRaw(): string | null {
   return localStorage.getItem(CACHE_KEY)
 }
 
-/** 模拟 GitHub Releases API 响应 (tag_name 可空以触发 latest.json 兜底) */
-function mockFetchReleases(tagName: string) {
-  return vi.fn(async (url: unknown) => {
-    const u = String(url)
-    if (u.includes('api.github.com')) {
-      return { ok: true, json: async () => ({ tag_name: tagName, html_url: 'https://github.com/r/rel/1' }) }
-    }
-    if (u.includes('latest.json')) {
-      return { ok: true, json: async () => ({ tag: tagName, notes_url: 'https://github.com/r/rel/1' }) }
-    }
-    return { ok: false, json: async () => ({}) }
-  })
+/** 模拟 R2 上的 latest.json 响应 */
+function mockFetchManifest(version: string) {
+  return vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ version, tag: `v${version}`, notes_url: 'https://example.com/notes' }),
+  }))
 }
 
 beforeEach(() => {
@@ -78,7 +78,7 @@ describe('checkForUpdate', () => {
       current: '0.3.2', latest: '0.3.3', url: 'u',
       found: true, checkedAt: Date.now() - DAY - 1000,
     })
-    vi.stubGlobal('fetch', mockFetchReleases('0.9.0'))
+    vi.stubGlobal('fetch', mockFetchManifest('0.9.0'))
 
     await checkForUpdate('0.3.2')
 
@@ -89,7 +89,7 @@ describe('checkForUpdate', () => {
   })
 
   it('当前版本已是最新时状态为 latest', async () => {
-    vi.stubGlobal('fetch', mockFetchReleases('v0.3.2'))
+    vi.stubGlobal('fetch', mockFetchManifest('v0.3.2'))
 
     await checkForUpdate('0.3.2')
 
@@ -101,7 +101,7 @@ describe('checkForUpdate', () => {
       current: '0.3.1', latest: '0.3.2', url: 'u',
       found: true, checkedAt: Date.now(),
     })
-    const fetchMock = mockFetchReleases('0.3.2')
+    const fetchMock = mockFetchManifest('0.3.2')
     vi.stubGlobal('fetch', fetchMock)
 
     await checkForUpdate('0.3.2') // 本地版本已升级, 与缓存的 current 不一致
@@ -115,7 +115,7 @@ describe('checkForUpdate', () => {
       current: '0.3.2', latest: '0.9.9', url: 'u',
       found: true, checkedAt: Date.now(),
     })
-    const fetchMock = mockFetchReleases('0.3.2')
+    const fetchMock = mockFetchManifest('0.3.2')
     vi.stubGlobal('fetch', fetchMock)
 
     await checkForUpdate('0.3.2', { force: true })
@@ -124,7 +124,7 @@ describe('checkForUpdate', () => {
     expect(getUpdateState().status).toBe('latest')
   })
 
-  it('API 失败时状态 error 且不落缓存 (下次启动重试)', async () => {
+  it('清单请求失败时状态 error 且不落缓存 (下次启动重试)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })))
 
     await checkForUpdate('0.3.2')
@@ -133,24 +133,17 @@ describe('checkForUpdate', () => {
     expect(readCacheRaw()).toBeNull()
   })
 
-  it('GitHub API 字段为空时回退 latest.json 清单', async () => {
-    const fetchMock = vi.fn(async (url: unknown) => {
-      const u = String(url)
-      if (u.includes('api.github.com')) {
-        return { ok: true, json: async () => ({}) } // tag_name 缺失
-      }
-      if (u.includes('latest.json')) {
-        return { ok: true, json: async () => ({ tag: '1.0.0', notes_url: 'https://github.com/r/notes' }) }
-      }
-      return { ok: false, json: async () => ({}) }
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('清单只带 tag 不带 version 时取 tag', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ tag: '1.0.0', notes_url: 'https://example.com/notes' }),
+    })))
 
     await checkForUpdate('0.3.2')
 
     expect(getUpdateState().status).toBe('found')
     expect(getUpdateState().info?.latest).toBe('1.0.0')
-    expect(getUpdateState().info?.url).toBe('https://github.com/r/notes')
+    expect(getUpdateState().info?.url).toBe('https://example.com/notes')
   })
 
   it('版本未知时空操作 (不请求不落缓存)', async () => {
@@ -161,5 +154,26 @@ describe('checkForUpdate', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(getUpdateState().status).not.toBe('checking')
+  })
+})
+// 流水线变量缺失时 release.yml 的 format('{0}/latest.json', '') 会拼出相对路径
+// "/latest.json" —— 这种值必须当作未配置, 否则每次静默检查都打到同源静态目录 404。
+describe('MANIFEST_URL 注入校验', () => {
+  it('相对路径视为未配置, 整体停用', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_UPDATE_MANIFEST_URL', '/latest.json')
+    try {
+      const mod = await import('./updateCheck')
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      await mod.checkForUpdate('0.3.2', { force: true })
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(mod.getUpdateState().status).toBe('idle')
+    } finally {
+      vi.stubEnv('VITE_UPDATE_MANIFEST_URL', 'https://cdn.example.com/latest.json')
+      vi.resetModules()
+    }
   })
 })

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  RefreshCw, Lock, Loader2, X, Search, CheckCircle2, Hourglass, Download, Lightbulb, ExternalLink,
+  RefreshCw, Lock, Loader2, X, Search, CheckCircle2, Hourglass, Download, Lightbulb,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Toolbar } from '@/components/Toolbar'
@@ -109,17 +109,8 @@ export function Financials() {
               关于数据源
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-secondary">
-              财务数据可由内置源或第三方数据源提供，可在数据源页为「财务数据」能力单独选择来源。若你有好用的财务数据源，欢迎在 Issues 里推荐。
+              财务数据可由内置源或第三方数据源提供，可在数据源页为「财务数据」能力单独选择来源。若你有好用的财务数据源, 可在「设置 → 数据源」里接入自定义源。
             </p>
-            <a
-              href="https://github.com/shy3130/tick-stock-panel/issues"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
-            >
-              去 Issues 推荐
-              <ExternalLink className="h-[12px] w-[12px]" />
-            </a>
           </div>
         </div>
       </>

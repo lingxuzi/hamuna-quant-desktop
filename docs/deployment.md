@@ -6,27 +6,25 @@
 
 ---
 
-## 方式 A:GHCR 现成镜像(免本地构建,多数用户推荐)
+## 方式 A:Docker 一键启动(多数用户推荐)
 
-GitHub Actions 每次推送都会自动构建多架构镜像(linux/amd64 · arm64)并发布到 GHCR,直接拉取运行,本地无需 Python / Node,也不用现场 build:
+克隆仓库后一条命令完成构建与启动,本地无需 Python / Node:
 
 ```bash
-docker run -d --name tsp -p 3018:3018 -v ${PWD}/data:/app/data ghcr.io/shy3130/tick-stock-panel:latest
+git clone https://gitee.com/opush_1/hamuna-quant-platform.git && cd hamuna-quant-platform
+docker compose up -d --build
 # 打开 http://localhost:3018
 ```
 
 - 需要配置时:从 `.env.example` 复制出 `.env`,命令里加 `--env-file .env`。
 - 自定义数据源等服务跑在宿主机、容器内需通过 `host.docker.internal` 访问时,Linux 的 `docker run` 要在命令里加 `--add-host=host.docker.internal:host-gateway`(Docker Desktop 的 macOS/Windows 默认已可解析;方式 B 的 compose 已在 `extra_hosts` 配好),否则报 `Name or service not known`。
 - 镜像默认不含 `legacy-cpu` / `backtest` extras —— 老 CPU(无 AVX2)或需要 vectorbt 回测时,请用方式 B 通过 `BACKEND_EXTRAS` 自构建。
-- 跑自己改过的代码:fork 后到仓库 Actions 页启用 workflow(fork 默认禁用),构建出的 `ghcr.io/<你的用户名>/tick-stock-panel` 用法相同。
-- 想要 compose 全套挂载(`.env` / 数据卷):参考根目录 `docker-compose.yml`,把 `build:` 段换成 `image: ghcr.io/shy3130/tick-stock-panel:latest`。
+- 想要 compose 全套挂载(`.env` / 数据卷):直接改根目录 `docker-compose.yml` 的 `env_file` / `volumes`。
 
-更新到新版本:
+更新到新版本(数据在 `data/` 挂载卷,不受影响):
 
 ```bash
-docker pull ghcr.io/shy3130/tick-stock-panel:latest
-docker rm -f tsp
-# 重新执行上面的 docker run
+git pull && docker compose up -d --build
 ```
 
 ---
@@ -63,8 +61,8 @@ docker compose up --build -d
 由于刚开源近期更新频繁,推荐开发模式运行,可随时 `git pull` 同步最新代码。
 
 ```bash
-git clone https://github.com/shy3130/tick-stock-panel.git
-cd tick-stock-panel
+git clone https://gitee.com/opush_1/hamuna-quant-platform.git
+cd hamuna-quant-platform
 cp .env.example .env       # 按需填 TICKFLOW_API_KEY(留空 = None 模式)
 ./dev.sh                   # Windows: .\dev.ps1
 ```
@@ -119,7 +117,10 @@ vectorbt → numba 体积较大,作为可选 extras(`uv sync --extra backtest`)�
 git pull
 ```
 
-> 用方式 A 镜像直跑(无本地仓库)的用户:`docker pull ghcr.io/shy3130/tick-stock-panel:latest` 后删除旧容器重跑;compose 换 `image:` 的用户执行 `docker compose pull && docker compose up -d`。
+> 升级:拉取最新代码后重新构建并重启容器即可,`data/` 挂载卷不受影响。
+> ```bash
+> git pull && docker compose up -d --build
+> ```
 
 > ⚠️ **方式 A 重建容器时必须保留原有的 `-v ${PWD}/data:/app/data` 挂载参数。** 遗漏挂载后新数据会写进容器层,随旧容器删除而**静默丢失**;之后重新挂载,读到的会是宿主机目录里的旧副本,表现为「配置被重置回默认值」。升级前建议先备份 `data/` 目录。
 

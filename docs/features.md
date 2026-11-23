@@ -221,7 +221,7 @@
 | CSV / Excel 上传 | 页面直接上传文件 |
 | JSON 写入 | 程序化写入 |
 
-接入后自动 schema 发现 + 符号归一,页面可视化配置,最终并入 DuckDB 同台分析。HTTP 拉取的出站请求默认携带标识头 (`User-Agent: tsp/<版本>` 与 `X-TSP-Client: tick-stock-panel`),服务端可据此识别本项目来源;拉取配置里的自定义同名请求头优先。
+接入后自动 schema 发现 + 符号归一,页面可视化配置,最终并入 DuckDB 同台分析。HTTP 拉取的出站请求默认携带标识头 (`User-Agent: hquant/<版本>` 与 `X-HQuant-Client: h-quant`),服务端可据此识别本项目来源;拉取配置里的自定义同名请求头优先。
 
 ##### 时序表历史回补
 
@@ -301,7 +301,7 @@ APScheduler 默认 15:35 CST 自动:拉日 K → 重算 enriched 表 → 跑监�
 
 ### Token 管理
 
-**设置 → 开放接口**: 新建 Token(名称 + 权限勾选),明文 `tsp_` 前缀只显示一次;可随时吊销,吊销立即生效。服务端只存 SHA-256 哈希(`data/user_data/api_tokens.json`,权限 0600)。Token 通道默认**仅接受本机/内网调用**(公网 403,`API_TOKEN_LOCAL_ONLY=0` 显式放开,远程推荐 SSH 隧道)——开放接口面向本部署的二次开发与个人工具集成,不作为数据对外分发通道,详见 [configuration.md → 开放接口网络门禁](./configuration.md#开放接口网络门禁默认仅本机内网)。
+**设置 → 开放接口**: 新建 Token(名称 + 权限勾选),明文 `hq_` 前缀只显示一次;可随时吊销,吊销立即生效。服务端只存 SHA-256 哈希(`data/user_data/api_tokens.json`,权限 0600)。Token 通道默认**仅接受本机/内网调用**(公网 403,`API_TOKEN_LOCAL_ONLY=0` 显式放开,远程推荐 SSH 隧道)——开放接口面向本部署的二次开发与个人工具集成,不作为数据对外分发通道,详见 [configuration.md → 开放接口网络门禁](./configuration.md#开放接口网络门禁默认仅本机内网)。
 
 ### 六个权限(scope)
 
@@ -319,7 +319,7 @@ APScheduler 默认 15:35 CST 自动:拉日 K → 重算 enriched 表 → 跑监�
 ### 调用方式
 
 ```bash
-curl -H "Authorization: Bearer tsp_xxxx" \
+curl -H "Authorization: Bearer hq_xxxx" \
   "http://localhost:8398/api/kline/daily?symbol=600519.SH&start_date=2026-01-01"
 ```
 
@@ -334,7 +334,7 @@ EventSource 无法携带 Authorization 头,外部程序走**短期票据**两步
 
 ```bash
 # ① Bearer 换一次性票据 (60 秒, 任意 scope 的 Token 皆可)
-curl -X POST -H "Authorization: Bearer tsp_xxxx" http://localhost:8398/api/events/ticket
+curl -X POST -H "Authorization: Bearer hq_xxxx" http://localhost:8398/api/events/ticket
 # → {"ticket":"tse_xxx","expires_in":60,"stream":"/api/events?ticket=tse_xxx"}
 
 # ② 订阅事件流 (浏览器: new EventStream(stream); 脚本: 逐行读)

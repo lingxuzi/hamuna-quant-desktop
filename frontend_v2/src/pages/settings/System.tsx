@@ -558,7 +558,7 @@ export function SettingsSystemPanel() {
           {/* 版权署名 — 界面常驻, 避免仅存在于 LICENSE 文件时被整包删除 */}
           <div className="r">
             <div className="lab">
-              <b>© 2026 tick-stock-panel contributors</b>
+              <b>© 2026 tick-stock-panel contributors · H-Quant</b>
               <small>基于 MIT 协议开源 · 遵照协议分发时须保留版权与许可声明</small>
             </div>
             <div className="ctl">

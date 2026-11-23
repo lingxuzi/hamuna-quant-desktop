@@ -230,8 +230,10 @@ class DataStore:
              (旧版 data_dir = exe_dir.parent / "TickFlowStockPanel_Data", 新版改子目录)。
           2. macOS ≤0.3.6 的 .app 包内数据 (exe 同级 data/) —— 数据在包内时
              覆盖安装替换 App 会连数据一起进废纸篓; 修复后 data 移到
-             ~/Library/Application Support/TSP, 用户把包内数据找回/恢复进新包
+             ~/Library/Application Support/H-Quant, 用户把包内数据找回/恢复进新包
              (或从 dmg 直接运行过) 的场景由此接住并搬出。
+          3. macOS 改名前的 ~/Library/Application Support/TSP —— 产品名 TSP →
+             H-Quant 时数据目录同步改名, 老用户首次启动自动搬到新目录。
 
         策略 (仅打包桌面版触发, 开发/Docker 不受影响):
           1. 旧目录存在且新 data/ 还基本为空 → 整目录搬迁 (shutil.move, 跨盘符安全)。
@@ -251,6 +253,11 @@ class DataStore:
             ]
             if sys.platform == "darwin":
                 candidates.append(Path(sys.executable).resolve().parent / "data")
+                # 改名前的数据目录 (TSP → H-Quant), 排在包内数据之后:
+                # 包内数据是更早的遗留, 优先搬; 两者都只在 macOS 存在。
+                candidates.append(
+                    Path.home() / "Library" / "Application Support" / "TSP"
+                )
 
             for legacy_dir in candidates:
                 if not legacy_dir.exists():

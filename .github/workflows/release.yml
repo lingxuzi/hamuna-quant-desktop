@@ -60,7 +60,7 @@ jobs:
           #   2) 项目依赖 polars, 而 polars 自 1.33 起移除了 macOS x86_64 原生 wheel
           #      (改 py3-none-any), 在 arm64 runner 上经 Rosetta 无法产出可运行的 x64 包。
           #   runner 用 macos-26 (2026-02 GA, 免费, arm64 原生, SDK 更新)。
-          ALL='[{"os":"windows-latest","artifact":"TSP-Setup-x64.exe","platform":"windows"},{"os":"macos-26","artifact":"TSP-macos-arm64.dmg","platform":"macos","arch":"arm64"},{"os":"ubuntu-latest","artifact":"TSP-linux-x64.tar.gz","platform":"linux"}]'
+          ALL='[{"os":"windows-latest","artifact":"HQuant-Setup-x64.exe","platform":"windows"},{"os":"macos-26","artifact":"HQuant-macos-arm64.dmg","platform":"macos","arch":"arm64"},{"os":"ubuntu-latest","artifact":"HQuant-linux-x64.tar.gz","platform":"linux"}]'
           # 按 input 过滤平台 (macos → arm64 单项)
           python3 -c "
           import json, sys
@@ -69,10 +69,10 @@ jobs:
           ver = '${{ github.event.inputs.version }}'.lstrip('v')  # v0.3.3 → 0.3.3
           all_platforms = json.loads('''$ALL''')
           selected = [p for p in all_platforms if p['platform'] in requested]
-          # 产物文件名带版本号 (TSP-Setup-x64-0.3.3.exe): 用户下载后一眼可辨版本。
+          # 产物文件名带版本号 (HQuant-Setup-x64-0.3.3.exe): 用户下载后一眼可辨版本。
           # 按已知后缀插入版本号 — 不能用 rpartition('.') 拆扩展名:
-          # "TSP-linux-x64.tar.gz" 会拆成 stem=".tar" + ext="gz", 拼出
-          # "TSP-linux-x64.tar-0.3.9.gz", 与 latest.json 清单的通配格式不符。
+          # "HQuant-linux-x64.tar.gz" 会拆成 stem=".tar" + ext="gz", 拼出
+          # "HQuant-linux-x64.tar-0.3.9.gz", 与 latest.json 清单的通配格式不符。
           for p in selected:
               name = p['artifact']
               for suffix in ('.tar.gz', '.dmg', '.exe'):
@@ -117,6 +117,13 @@ jobs:
 
       - name: 构建前端
         working-directory: frontend_v2
+        # 更新清单地址在构建期注入 (Vite 只认 import.meta.env.VITE_*):
+        # 不注入的话 updateCheck.ts 里 MANIFEST_URL 为空 → 客户端「检查更新」永久停用。
+        # 与下方 R2 上传步骤同源 (同一个 vars.HQUANT_UPDATE_BASE_URL), 避免两处漂移;
+        # 变量未配置时拼出 "/latest.json", 前端会因非绝对 URL 判定为未配置而停用。
+        env:
+          VITE_UPDATE_MANIFEST_URL: ${{ format('{0}/latest.json', vars.HQUANT_UPDATE_BASE_URL) }}
+          VITE_DOWNLOAD_PAGE_URL: ${{ vars.HQUANT_DOWNLOAD_PAGE_URL }}
         run: |
           pnpm install --frozen-lockfile
           pnpm build
@@ -150,12 +157,12 @@ jobs:
 
       - name: 打包 (PyInstaller)
         # 在 backend 目录跑 (用该目录的 venv: pywebview/polars 等依赖)。
-        # 产物输出到 backend/dist/ (PyInstaller 默认路径), 与 packaging/tsp.iss
-        # 的 Source 路径 (..\backend\dist\TSP\*) 保持一致。
-        # SPECPATH 由 spec 文件位置决定 (packaging/tsp.spec → 项目根),
+        # 产物输出到 backend/dist/ (PyInstaller 默认路径), 与 packaging/hquant.iss
+        # 的 Source 路径 (..\backend\dist\HQuant\*) 保持一致。
+        # SPECPATH 由 spec 文件位置决定 (packaging/hquant.spec → 项目根),
         # 与 cwd 无关, 故 frontend_v2/dist 等相对路径仍正确。
         working-directory: backend
-        run: uv run pyinstaller ../packaging/tsp.spec --noconfirm
+        run: uv run pyinstaller ../packaging/hquant.spec --noconfirm
 
       - name: 生成升级保护清单
         # 二次开发升级对比基线: 对打包产出的 _internal 全量文件做 sha256。
@@ -168,13 +175,13 @@ jobs:
         shell: bash
         run: |
           APP_VER=$(node -p "require('./frontend_v2/package.json').version")
-          uv run --no-project python scripts/generate_manifest.py --root backend/dist/TSP/_internal --output backend/dist/TSP/_internal/app/upgrade_manifest.json --version "$APP_VER"
+          uv run --no-project python scripts/generate_manifest.py --root backend/dist/HQuant/_internal --output backend/dist/HQuant/_internal/app/upgrade_manifest.json --version "$APP_VER"
 
       - name: 检查 Polars 兼容内核 (仅 Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $runtimeRoot = 'backend/dist/TSP/_internal'
+          $runtimeRoot = 'backend/dist/HQuant/_internal'
           $required = @(
             '_polars_runtime_32/_polars_runtime.pyd',
             '_polars_runtime_compat/_polars_runtime.pyd'
@@ -197,9 +204,9 @@ jobs:
         run: |
           $ver = (Get-Content frontend_v2/package.json | ConvertFrom-Json).version
           echo "版本号: $ver"
-          ISCC.exe "/DMyAppVersion=$ver" packaging/tsp.iss
+          ISCC.exe "/DMyAppVersion=$ver" packaging/hquant.iss
           # 把生成的 Setup.exe 移到工作区根 (Release 上传用)
-          Move-Item packaging/Output/TSP-Setup-$ver.exe ${{ matrix.artifact }} -Force
+          Move-Item packaging/Output/HQuant-Setup-$ver.exe ${{ matrix.artifact }} -Force
         shell: pwsh
 
       - name: 生成 DMG (macOS)
@@ -214,23 +221,23 @@ jobs:
         run: |
           brew install create-dmg
           create-dmg \
-            --volname "Tick Stock Panel" \
+            --volname "H-Quant" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
-            --icon "TSP.app" 175 190 \
+            --icon "HQuant.app" 175 190 \
             --app-drop-link 425 190 \
-            --hide-extension "TSP.app" \
+            --hide-extension "HQuant.app" \
             --skip-jenkins \
             --no-internet-enable \
             "${{ matrix.artifact }}" \
-            backend/dist/TSP.app
+            backend/dist/HQuant.app
 
       - name: 压缩产物 (Linux)
         if: matrix.platform == 'linux'
         run: |
           cd backend/dist
-          tar -czf ../../${{ matrix.artifact }} TSP
+          tar -czf ../../${{ matrix.artifact }} HQuant
 
       - name: 上传产物为构建产物 (备查)
         uses: actions/upload-artifact@v4
@@ -253,18 +260,18 @@ jobs:
 
             | 平台 | 文件 | 下载 |
             | :--- | :--- | :--- |
-            | **Windows x64** | `TSP-Setup-x64-${{ needs.prepare.outputs.ver }}.exe` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/TSP-Setup-x64-${{ needs.prepare.outputs.ver }}.exe) |
-            | **macOS (Apple Silicon / M 系列芯片)** | `TSP-macos-arm64-${{ needs.prepare.outputs.ver }}.dmg` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/TSP-macos-arm64-${{ needs.prepare.outputs.ver }}.dmg) |
-            | **Linux** | `TSP-linux-x64-${{ needs.prepare.outputs.ver }}.tar.gz` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/TSP-linux-x64-${{ needs.prepare.outputs.ver }}.tar.gz) |
+            | **Windows x64** | `HQuant-Setup-x64-${{ needs.prepare.outputs.ver }}.exe` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HQuant-Setup-x64-${{ needs.prepare.outputs.ver }}.exe) |
+            | **macOS (Apple Silicon / M 系列芯片)** | `HQuant-macos-arm64-${{ needs.prepare.outputs.ver }}.dmg` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HQuant-macos-arm64-${{ needs.prepare.outputs.ver }}.dmg) |
+            | **Linux** | `HQuant-linux-x64-${{ needs.prepare.outputs.ver }}.tar.gz` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HQuant-linux-x64-${{ needs.prepare.outputs.ver }}.tar.gz) |
 
             > 💡 点击「立即下载」直接获取, 无需滚动到底部附件区。
             > 🍎 **macOS 仅提供 Apple Silicon (M 系列芯片) 版本**: 点左上角  → "关于本机", 看"芯片"一项是否为 Apple; Intel 芯片 Mac 暂不支持 (上游 polars 已停止发布 Intel wheel)。
 
             ### 📋 使用说明
             - **Windows**: 下载后双击运行, 按安装向导操作(无需管理员权限), 自动创建桌面/开始菜单快捷方式
-            - **macOS**: 双击 dmg 打开, 将 TSP 拖入 Applications 文件夹; 首次启动需右键→打开(绕过 Gatekeeper)
+            - **macOS**: 双击 dmg 打开, 将 H-Quant 拖入 Applications 文件夹; 首次启动需右键→打开(绕过 Gatekeeper)
             - **Linux**: 解压后运行可执行文件
-            - 数据存储: Windows 在安装目录的 `data/` 子文件夹 (卸载重装不丢); macOS 在 `~/Library/Application Support/TSP` (替换 App 升级不丢)
+            - 数据存储: Windows 在安装目录的 `data/` 子文件夹 (卸载重装不丢); macOS 在 `~/Library/Application Support/H-Quant` (替换 App 升级不丢)
             - 内置 Polars 兼容内核, 新老 CPU (无 AVX2) 均可运行
             - 含纯 Polars 回测引擎; 不含 vectorbt 回测(为控制体积)
             - 系统通知: 设置 → 实时监控 → 系统通知
@@ -289,9 +296,9 @@ jobs:
           # 只拉已知的三个安装包 (latest.json 自身等其他资产不进清单);
           # 产物文件名带版本号, 故用通配匹配当前版本
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'TSP-Setup-x64-*.exe' \
-            --pattern 'TSP-macos-arm64-*.dmg' \
-            --pattern 'TSP-linux-x64-*.tar.gz' \
+            --pattern 'HQuant-Setup-x64-*.exe' \
+            --pattern 'HQuant-macos-arm64-*.dmg' \
+            --pattern 'HQuant-linux-x64-*.tar.gz' \
             --clobber || true
           cd ..
           RELEASE_JSON=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")
@@ -304,14 +311,14 @@ jobs:
           rel = json.loads(os.environ["RELEASE_JSON"])
 
           # version 去掉 v 前缀, 与 package.json 语义版本一致
-          # (产物文件名 TSP-Setup-x64-0.3.3.exe 用的就是不带 v 的版本)
+          # (产物文件名 HQuant-Setup-x64-0.3.3.exe 用的就是不带 v 的版本)
           version = tag[1:] if tag.startswith("v") else tag
 
           # 资产文件名 → 渠道名 (客户端按渠道取下载地址); 文件名带版本号, 按当前 tag 拼
           channels_cfg = {
-              f"TSP-Setup-x64-{version}.exe": "windows",
-              f"TSP-macos-arm64-{version}.dmg": "macos-arm64",
-              f"TSP-linux-x64-{version}.tar.gz": "linux-x64",
+              f"HQuant-Setup-x64-{version}.exe": "windows",
+              f"HQuant-macos-arm64-{version}.dmg": "macos-arm64",
+              f"HQuant-linux-x64-{version}.tar.gz": "linux-x64",
           }
           by_name = {a["name"]: a for a in rel.get("assets", [])}
 
@@ -345,3 +352,26 @@ jobs:
           EOF
           # --clobber: 同名资产覆盖 (重跑同一版本时更新清单而不是追加 _01 副本)
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: 发布更新清单到 Cloudflare R2
+        # 客户端「检查更新」只读 R2 上的固定 URL, 不碰 GitHub API:
+        #   - 仓库在 Gitee, GitHub 只是构建机; 客户端不能匿名读私有仓库的 Release
+        #   - GitHub 未认证 API 60 次/时, 国内网络也不稳
+        # R2 公开桶 (或自定义域) 上的 latest.json 是唯一对外更新契约。
+        # 未配置时 skip (不发版只构建的场景不应因缺配置而失败)。
+        # 注意: 条件必须直接读 vars/secrets, 不能读步骤自己的 env —— 步骤级 env
+        # 在 if 求值时尚未生效, 写成 env.X != '' 会恒为 false, 这一步将永远跳过。
+        if: ${{ vars.HQUANT_UPDATE_BASE_URL != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ vars.HQUANT_R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          # 清单刚由上一步上传到 Release, 这里取本地生成的那份 (同 job 同工作区)
+          test -f latest.json || { echo "::error::latest.json 未生成"; exit 1; }
+          aws s3 cp latest.json "s3://$R2_BUCKET/latest.json" \
+            --endpoint-url "$AWS_ENDPOINT_URL" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=300"

@@ -12,7 +12,7 @@ import { downloadResourceBundle, resourceClosure, resourceKey, toggleResourceSel
 import { BTN_MD, BTN_PRIMARY } from '@/components/controls'
 
 type Mode = 'import' | 'export'
-const ZIP_NAMES = { strategy: 'tsp-strategies.zip', signal: 'tsp-signals.zip', factor: 'tsp-factors.zip' }
+const ZIP_NAMES = { strategy: 'hquant-strategies.zip', signal: 'hquant-signals.zip', factor: 'hquant-factors.zip' }
 const KIND_LABEL: Record<ResourceTransferEntry['kind'], string> = { strategy: '策略', signal: '信号', factor: '因子', settings: '调参', code: '辅助模块' }
 const BUTTON = cn(BTN_MD, 'shrink-0 hover:border-accent/40 hover:text-accent')
 const PRIMARY = cn(BUTTON, BTN_PRIMARY)

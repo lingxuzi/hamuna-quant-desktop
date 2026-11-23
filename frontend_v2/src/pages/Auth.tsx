@@ -105,7 +105,7 @@ export function Auth() {
 
       <div className="auth">
         <div className="auth-card">
-          <div className="auth-brand">Tick Stock Panel</div>
+          <div className="auth-brand">H-Quant</div>
           <div className="auth-seal">凭</div>
           <h1>{isSetup ? '设置访问密码' : '登录访问'}</h1>
           <p>{isSetup ? '首次使用，请为面板设置访问密码' : '请输入访问密码以继续'}</p>
@@ -167,16 +167,7 @@ export function Auth() {
           <p className="auth-foot">
             {isSetup ? (
               <>
-                出于安全考虑, 首次设置密码需在服务器本机或内网访问时操作。公网环境下仅可登录。详细配置说明见
-                <a
-                  href="https://github.com/shy3130/tick-stock-panel/blob/main/docs/deploy-password.md"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-accent underline-offset-2 hover:underline"
-                >
-                  访问密码部署文档
-                </a>
-                。
+                出于安全考虑, 首次设置密码需在服务器本机或内网访问时操作。公网环境下仅可登录。部署说明见随程序分发的 deploy-password 文档。
               </>
             ) : (
               <>密码由首次访问时设置。连续输错 5 次将锁定 5 分钟。</>

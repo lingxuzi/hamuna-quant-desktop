@@ -12,12 +12,12 @@ interface Variant {
   glow: string                        // 强调色 (色块与发光线条)
 }
 
-// 同一个名字 "Tick Stock Panel" 在 4 种风格语言里的呈现
+// 同一个名字 "H-Quant" 在 4 种风格语言里的呈现
 // 强调色由侧栏色块与发光线条承载; 名字本身只改字体语言, 保持墨色以免在纸面上失读
 const VARIANTS: Variant[] = [
   {
     id: 'pulsar',
-    name: 'Tick Stock Panel',
+    name: 'H-Quant',
     tagline: 'A-SHARE · SIGNAL TERMINAL',
     hint: '脉冲星、雷达波纹 — 青绿强调色，字重黑体，中等字距',
     nameStyle: 'font-sans font-extrabold tracking-[0.10em]',
@@ -25,7 +25,7 @@ const VARIANTS: Variant[] = [
   },
   {
     id: 'vanta',
-    name: 'Tick Stock Panel',
+    name: 'H-Quant',
     tagline: 'MARKET · INTELLIGENCE',
     hint: 'Vantablack — 纯白单色，字重最重，字距最宽，单色高级感',
     nameStyle: 'font-sans font-black tracking-[0.18em]',
@@ -33,7 +33,7 @@ const VARIANTS: Variant[] = [
   },
   {
     id: 'helix',
-    name: 'Tick Stock Panel',
+    name: 'H-Quant',
     tagline: 'QUANT · TERMINAL',
     hint: 'DNA 螺旋 — 紫色强调，等宽字体，赛博朋克经典意象',
     nameStyle: 'font-mono font-bold tracking-[0.08em]',
@@ -41,7 +41,7 @@ const VARIANTS: Variant[] = [
   },
   {
     id: 'aurora',
-    name: 'Tick Stock Panel',
+    name: 'H-Quant',
     tagline: 'A-SHARE · DASHBOARD',
     hint: '极光 — 青色强调，细字优雅，适中字距，与涨跌语义色不冲突',
     nameStyle: 'font-sans font-light tracking-[0.12em]',

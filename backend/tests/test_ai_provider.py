@@ -933,8 +933,8 @@ async def test_probe_codex_cli_surfaces_auth_guidance(monkeypatch):
 # ── 陈旧运行目录清扫 (进程退出中断 finally 清理时的兜底) ────────────────
 
 def test_sweep_stale_codex_run_dirs_removes_only_stale(tmp_path, monkeypatch):
-    stale = tmp_path / "tickflow-codex-run-stale"
-    fresh = tmp_path / "tickflow-codex-run-fresh"
+    stale = tmp_path / "hquant-codex-run-stale"
+    fresh = tmp_path / "hquant-codex-run-fresh"
     unrelated = tmp_path / "unrelated-dir"
     for d in (stale, fresh, unrelated):
         d.mkdir()
@@ -952,7 +952,7 @@ def test_sweep_stale_codex_run_dirs_removes_only_stale(tmp_path, monkeypatch):
 
 def test_sweep_stale_codex_run_dirs_runs_once_per_process(tmp_path, monkeypatch):
     """非 force 调用受进程级开关保护 — 第二次不再扫描。"""
-    first = tmp_path / "tickflow-codex-run-first"
+    first = tmp_path / "hquant-codex-run-first"
     first.mkdir()
     old_ts = time.time() - 7200
     os.utime(first, (old_ts, old_ts))

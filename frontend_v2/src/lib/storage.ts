@@ -138,6 +138,10 @@ export const storage = {
   /** 策略创建草稿（新建专用） */
   strategyDraft: kv<{ name: string; description: string; direction: string; style?: string; rules: string; code: string; step: number; strategyId: string; source?: 'ai' | 'custom' } | null>('strategy-draft'),
 
+  /** 最近一次「创建策略」成功保存的 id。与公开列表无关 —— AI 策略是 research_only,
+   * 不进 /api/strategies, 靠它判断草稿是否已完成, 避免重开恢复旧内容。 */
+  strategyDraftSaved: kv<string>('strategy-draft-saved'),
+
   /** 新建策略默认基础过滤参数 (策略页「默认基础参数」设置; null=未自定义, 用内置默认) */
   defaultStrategyBasicFilter: kv<DefaultStrategyBasicFilter | null>('default-strategy-basic-filter'),
 

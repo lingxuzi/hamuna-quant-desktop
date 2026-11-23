@@ -313,7 +313,7 @@ export function Screener() {
   useEffect(() => {
     if (!legacyMigration) return
     const fingerprint = JSON.stringify(legacyMigration)
-    const key = 'tsp-legacy-migration-v1'
+    const key = 'hquant-legacy-migration-v1'
     try {
       if (localStorage.getItem(key) === fingerprint) return
       localStorage.setItem(key, fingerprint)

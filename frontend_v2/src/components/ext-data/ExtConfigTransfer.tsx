@@ -20,7 +20,7 @@ export function ExtConfigExportButton({ id, label }: { id: string; label: string
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `tsp-ext-data-${id}.zip`
+      anchor.download = `hquant-ext-data-${id}.zip`
       document.body.append(anchor)
       anchor.click()
       anchor.remove()

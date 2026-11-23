@@ -1,4 +1,4 @@
-"""Tick Stock Panel backend."""
+"""H-Quant backend."""
 
 import json
 import logging
@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 # 版本号唯一权威 = frontend_v2/package.json: 安装包 AppVersion (release.yml 读它传给
-# ISCC)、macOS 包元数据 (tsp.spec 读它)、页面版本徽标与更新检查 (本模块) 全部同源,
+# ISCC)、macOS 包元数据 (hquant.spec 读它)、页面版本徽标与更新检查 (本模块) 全部同源,
 # 改版本只改那一份文件。dev 模式读仓库文件; PyInstaller 冻结后读 _MEIPASS/package.json
-# (tsp.spec 的 datas 会收集)。读取失败回退硬编码值 —— 版本号绝不阻塞应用启动。
+# (hquant.spec 的 datas 会收集)。读取失败回退硬编码值 —— 版本号绝不阻塞应用启动。
 # 三处伴生标记 (VERSION / backend/pyproject.toml / _FALLBACK_VERSION) 由
 # scripts/sync_versions.py 从 package.json 派生, release/docker 流水线自动执行。
 _FALLBACK_VERSION = "0.3.31"
