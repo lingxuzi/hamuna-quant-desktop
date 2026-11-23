@@ -177,6 +177,76 @@ def required_trading_bars(
     )
 
 
+def trim_fold_count(
+    fold_count: int,
+    *,
+    profile: str,
+    max_proxy_trials: int,
+    beam_width: int,
+    phases_per_fold: int,
+    factor_count: int,
+) -> int:
+    """代理试验预算最多撑得住几个外层折 —— 唯一口径, 供实际裁剪与可用性预估共用。
+
+    不裁剪时外层折数随历史长度线性增长: 1156 根日线 → 15 个外层折, 每折 2 个选择
+    阶段, 96 次代理试验摊到每阶段只剩 3 次 —— 连候选池里 12 个因子都试不满。束搜索
+    按字母序消耗预算, 内层只会选中字母靠前的弱因子, 外层重训自然复现不出它,
+    于是每轮都"outer retraining did not reproduce selected candidate structure"、
+    候选数为 0, 市场感知拿不到冠军。
+
+    每阶段至少给束搜索 ``min(beam_width, 因子数)`` 次试算 (覆盖全部候选的单因子
+    试算), 反推能跑几个折; 下限按档位要求。
+    """
+    trials_per_fold = max(1, phases_per_fold * min(beam_width, factor_count))
+    affordable = max(1, max_proxy_trials // trials_per_fold)
+    # 档位下限只用来防止剪得过狠, 不能超过历史真实切得出的折数。
+    return min(fold_count, max(required_outer_folds(profile), affordable))
+
+
+def trim_outer_folds_to_budget(
+    nested_folds: Sequence[NestedFold],
+    *,
+    profile: str,
+    max_proxy_trials: int,
+    beam_width: int,
+    factor_count: int,
+) -> tuple[NestedFold, ...]:
+    """只保留代理预算撑得住的**最近**若干个外层折 —— 越近期数据越贴近当前市况。"""
+    if not nested_folds:
+        return ()
+    keep = trim_fold_count(
+        len(nested_folds),
+        profile=profile,
+        max_proxy_trials=max_proxy_trials,
+        beam_width=beam_width,
+        phases_per_fold=max(len(fold.inner) + 1 for fold in nested_folds),
+        factor_count=factor_count,
+    )
+    return tuple(nested_folds[-keep:])
+
+
+def nested_folds_for(
+    trading_labels: Sequence[Any],
+    config: NestedValidationConfig,
+    *,
+    profile: str,
+    budget: MiningBudget,
+    factor_count: int,
+) -> tuple[NestedFold, ...]:
+    """生成嵌套折并按代理预算裁剪 —— 全仓库唯一口径。
+
+    搜索 (MiningService.run)、试验额度预留、工件写入都吃这一份, 否则
+    ``result.folds`` 与重新生成的 ``nested`` 折数不一致, ``zip`` 会错配窗口。
+    """
+    return trim_outer_folds_to_budget(
+        generate_nested_folds(trading_labels, config),
+        profile=profile,
+        max_proxy_trials=budget.max_proxy_trials,
+        beam_width=budget.beam_width,
+        factor_count=factor_count,
+    )
+
+
 def nested_fold_count(
     trading_bars: int,
     config: NestedValidationConfig,
@@ -187,6 +257,14 @@ def nested_fold_count(
     if trading_bars < one_fold_bars:
         return 0
     return 1 + (trading_bars - one_fold_bars) // config.outer_step_bars
+
+
+def inner_fold_count(config: NestedValidationConfig) -> int:
+    """每个外层折里能切出多少个 inner 折 —— 折几何恒定, 与实际标签无关。"""
+    inner_bars = config.inner_train_bars + config.purge_bars + config.inner_test_bars
+    if config.outer_train_bars < inner_bars:
+        return 0
+    return 1 + (config.outer_train_bars - inner_bars) // config.inner_step_bars
 
 
 @dataclass(frozen=True)
@@ -862,7 +940,13 @@ class MiningService:
         labels = panel.select(
             pl.col(request.date_column).cast(pl.Utf8).str.slice(0, 10).unique().sort()
         ).to_series().to_list()
-        nested_folds = generate_nested_folds(labels, request.validation)
+        nested_folds = nested_folds_for(
+            labels,
+            request.validation,
+            profile=request.profile,
+            budget=request.budget,
+            factor_count=len(request.factor_names),
+        )
         if request.profile != "exploratory" and len(nested_folds) < 3:
             raise ValueError(
                 f"{request.profile} mining requires at least 3 outer folds; "

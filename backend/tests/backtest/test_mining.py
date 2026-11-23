@@ -21,10 +21,13 @@ from app.backtest.mining import (
     beam_search_factor_combinations,
     compute_rank_correlation,
     generate_nested_folds,
+    inner_fold_count,
     nested_fold_count,
     prune_correlated_factors,
     required_outer_folds,
     required_trading_bars,
+    trim_fold_count,
+    trim_outer_folds_to_budget,
     validation_config_for_profile,
 )
 
@@ -875,6 +878,133 @@ def test_benchmarks_run_even_when_factor_track_fails_on_a_fold():
     ]
     benchmark = fold.benchmark_evaluations[0][1]
     assert benchmark.error == "backtest exploded"
+
+
+def test_outer_folds_are_trimmed_so_every_phase_covers_the_candidate_pool():
+    """回归: 折数随历史线性增长会把每阶段的代理试验摊薄到试不满候选池。
+
+    1156 根日线 + exploratory 会生成 15 个外层折 = 30 个选择阶段, 96 次代理试验
+    每阶段只剩 3 次 —— 束搜索按字母序消耗预算, 强因子根本没被试到, 内层选出的
+    弱因子在外层重训复现不出来, 每轮都以 "did not reproduce" 收场、候选数为 0。
+    """
+    labels = [f"T{index:03d}" for index in range(120)]
+    config = NestedValidationConfig(
+        outer_train_bars=30,
+        outer_test_bars=10,
+        outer_step_bars=10,
+        inner_train_bars=15,
+        inner_test_bars=5,
+        inner_step_bars=5,
+        purge_bars=5,
+        embargo_bars=1,
+        min_train_bars=15,
+    )
+    folds = generate_nested_folds(labels, config)
+    assert len(folds) > 5
+
+    kept = trim_outer_folds_to_budget(
+        folds,
+        profile="exploratory",
+        max_proxy_trials=96,
+        beam_width=12,
+        factor_count=12,
+    )
+
+    phases = sum(len(fold.inner) + 1 for fold in kept)
+    assert 96 // phases >= 12, "每阶段必须能试满 12 个候选因子"
+    assert len(kept) < len(folds)
+    # 保留的是最近的折 (越贴近当前市况), 不是最早的
+    assert kept[-1] == folds[-1]
+    assert kept == folds[-len(kept):]
+
+
+def test_outer_fold_trimming_never_drops_below_profile_minimum():
+    labels = [f"T{index:03d}" for index in range(120)]
+    config = NestedValidationConfig(
+        outer_train_bars=30,
+        outer_test_bars=10,
+        outer_step_bars=10,
+        inner_train_bars=15,
+        inner_test_bars=5,
+        inner_step_bars=5,
+        purge_bars=5,
+        embargo_bars=1,
+        min_train_bars=15,
+    )
+    folds = generate_nested_folds(labels, config)
+
+    kept = trim_outer_folds_to_budget(
+        folds,
+        profile="balanced",
+        max_proxy_trials=1,
+        beam_width=16,
+        factor_count=48,
+    )
+
+    assert len(kept) == required_outer_folds("balanced")
+
+
+def test_mining_run_uses_the_same_trimmed_folds_budget_reverse_engineered():
+    """搜索与工件必须吃同一份折集合, 否则 zip(result.folds, nested) 错配窗口。"""
+    panel = _panel(days=60, assets=2)
+    validation = NestedValidationConfig(
+        outer_train_bars=20,
+        outer_test_bars=6,
+        outer_step_bars=6,
+        inner_train_bars=10,
+        inner_test_bars=3,
+        inner_step_bars=3,
+        purge_bars=2,
+        embargo_bars=1,
+        min_train_bars=10,
+    )
+    labels = sorted(str(value) for value in panel["date"].unique().to_list())
+    assert len(generate_nested_folds(labels, validation)) > 2
+
+    budget = MiningBudget(
+        max_combination_size=1, beam_width=2, max_proxy_trials=12, max_trials=16
+    )
+    request = MiningRequest(
+        factor_names=("good", "copy", "inverse", "noise"),
+        correlation_threshold=0.95,
+        budget=budget,
+        validation=validation,
+        profile="exploratory",
+    )
+    result = MiningService().run(panel, request, factor_metrics=_metrics())
+
+    expected = trim_outer_folds_to_budget(
+        generate_nested_folds(labels, validation),
+        profile="exploratory",
+        max_proxy_trials=budget.max_proxy_trials,
+        beam_width=budget.beam_width,
+        factor_count=len(request.factor_names),
+    )
+    assert len(result.folds) == len(expected)
+    assert [fold.outer_index for fold in result.folds] == [
+        fold.outer.outer_index for fold in expected
+    ]
+
+
+def test_inner_fold_count_matches_generated_folds():
+    """availability 用几何公式预估折数, 必须与真实生成结果逐档一致。"""
+    labels = [f"T{index:04d}" for index in range(1200)]
+    for profile in ("exploratory", "balanced", "strict"):
+        config = validation_config_for_profile(profile)
+        folds = generate_nested_folds(labels, config)
+        assert inner_fold_count(config) == len(folds[0].inner)
+        assert all(len(fold.inner) == inner_fold_count(config) for fold in folds)
+
+
+def test_fold_trimming_never_reports_more_folds_than_history_allows():
+    assert trim_fold_count(
+        2,
+        profile="strict",
+        max_proxy_trials=512,
+        beam_width=32,
+        phases_per_fold=4,
+        factor_count=48,
+    ) == 2
 
 
 def test_searchable_factors_are_capped_by_beam_width():

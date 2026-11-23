@@ -8,9 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from app.backtest.mining import (
+    MAX_MINING_FACTORS,
+    MiningBudget,
+    inner_fold_count,
     nested_fold_count,
     required_outer_folds,
     required_trading_bars,
+    trim_fold_count,
     validation_config_for_profile,
 )
 from app.data_providers.repository import enriched_dirname
@@ -118,12 +122,23 @@ def mining_availability(
         else None
     )
     trading_bars = len(scoped)
+    budget = getattr(MiningBudget, budget_profile)()
+    # 与运行口径一致: 历史切得出的折数还要过代理预算这一关, 只保留最近的若干折。
+    # 这里不知道用户最终选哪些因子, 按目录上限估 —— 只会偏保守, 不会多报。
+    outer_folds = trim_fold_count(
+        nested_fold_count(trading_bars, config),
+        profile=budget_profile,
+        max_proxy_trials=budget.max_proxy_trials,
+        beam_width=budget.beam_width,
+        phases_per_fold=inner_fold_count(config) + 1,
+        factor_count=MAX_MINING_FACTORS,
+    )
     return MiningAvailability(
         asset_type=asset_type,
         budget_profile=budget_profile,
         trading_bars=trading_bars,
         required_bars=required_bars,
-        outer_folds=nested_fold_count(trading_bars, config),
+        outer_folds=outer_folds,
         required_outer_folds=required_folds,
         eligible=trading_bars >= required_bars,
         available_start=all_dates[0] if all_dates else None,

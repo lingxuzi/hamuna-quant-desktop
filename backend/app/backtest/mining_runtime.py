@@ -42,6 +42,7 @@ from app.backtest.mining import (
     compute_candidate_signature,
     compute_rank_correlation,
     generate_nested_folds,
+    nested_folds_for,
     required_outer_folds,
     required_trading_bars,
     validation_config_for_profile,
@@ -897,19 +898,22 @@ def _decode_runtime_request(
             f"bars for {required_folds} {fold_label}; effective range "
             f"{start.isoformat()} to {end.isoformat()} has {len(scoped_dates)}"
         )
-    nested = generate_nested_folds(
-        [value.isoformat() for value in scoped_dates],
-        validation,
-    )
-    reserved_regime_trials = 3 * len(nested) if request.get("require_regime", True) else 0
-    real_trials = max(len(nested) + 1, budget.max_trials - reserved_regime_trials)
-    real_trials = min(real_trials, budget.max_trials)
     budget = replace(
         budget,
         max_combination_size=max_combination,
         beam_width=beam_width,
-        max_trials=real_trials,
     )
+    nested = nested_folds_for(
+        [value.isoformat() for value in scoped_dates],
+        validation,
+        profile=profile,
+        budget=budget,
+        factor_count=len(factor_names),
+    )
+    reserved_regime_trials = 3 * len(nested) if request.get("require_regime", True) else 0
+    real_trials = max(len(nested) + 1, budget.max_trials - reserved_regime_trials)
+    real_trials = min(real_trials, budget.max_trials)
+    budget = replace(budget, max_trials=real_trials)
     correlation_threshold = _bounded_float(
         request.get("correlation_threshold", 0.75),
         "correlation_threshold",
@@ -1039,7 +1043,13 @@ def _build_artifacts(
     evaluator: MatcherCandidateEvaluator,
     cancel_check: CancelCheck | None,
 ) -> tuple[dict[str, pl.DataFrame], dict[str, Any] | None]:
-    nested = generate_nested_folds(_date_labels(panel), request.mining_request.validation)
+    nested = nested_folds_for(
+        _date_labels(panel),
+        request.mining_request.validation,
+        profile=request.profile,
+        budget=request.mining_request.budget,
+        factor_count=len(request.factor_names),
+    )
     last_train = _panel_for_dates(panel, nested[-1].outer.train_labels)
     if "_target_date" in last_train.columns:
         last_train = last_train.filter(
@@ -1403,6 +1413,8 @@ def _validate_regime_availability(
     任何 ValueError (数据为空 / 覆盖不完整) 立即带指引消息终止运行。
     """
     labels = _date_labels(panel)
+    # 故意用未裁剪的全量折: 裁剪只保留最近的折, 全量折的测试窗并集是它的超集,
+    # 覆盖校验因此更严格也更早失败, 不会放过真缺口。
     nested = generate_nested_folds(labels, request.mining_request.validation)
     if not nested:
         return
