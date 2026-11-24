@@ -85,6 +85,78 @@ function isPresetKey(p: RangePreset, k: '1y' | '2y' | 'all'): boolean {
 }
 
 /** 上涨家数占比 (= up/(up+down))。后端 up_ratio 是 up/down 比值, 不能直接 ×100。 */
+const pctCls = (v?: number | null) =>
+  v == null ? '' : v > 0 ? 'text-bull' : v < 0 ? 'text-bear' : ''
+const fmtPct = (v?: number | null) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`)
+
+/**
+ * 美股夜盘 — 实时块, 与下方日级 regime 时序是两种刷新节奏。
+ *
+ * 刻意做成独立卡片 + 独立 queryKey 轮询: regime 是「日级离线批算」, 进
+ * SSE 刷新会破坏那套语义; 这里 60 秒一拉, 只读 /api/news/premarket。
+ */
+function UsOvernightCard() {
+  const q = useQuery({
+    queryKey: QK.newsPremarket,
+    queryFn: api.newsPremarket,
+    refetchInterval: 60_000,
+    staleTime: 45_000,
+  })
+  const us = q.data?.us
+  if (!us || (!us.indices?.length && !us.leaders?.length)) return null
+
+  const groups = [
+    { title: '美 股 指 数', rows: us.indices },
+    { title: '期 指', rows: us.futures },
+    { title: '美 债 收 益 率', rows: us.treasuries },
+  ].filter(g => g.rows?.length)
+
+  return (
+    <section className={cn(cardCls, 'regime-us')} aria-label="美股夜盘">
+      <h2 className="regime-card-heading">
+        <Activity aria-hidden="true" />美股夜盘<small>{us.as_of ?? ''} · 60 秒刷新</small>
+      </h2>
+      <div className="regime-us-groups">
+        {groups.map(g => (
+          <div key={g.title} className="regime-us-group">
+            <span className="regime-band-k">{g.title}</span>
+            <div className="regime-us-rows">
+              {g.rows.map(r => (
+                <div key={r.code} className="regime-us-row">
+                  <span className="k">{r.name}</span>
+                  <span className="v">
+                    {r.close != null ? r.close.toFixed(2) : '—'}
+                    {/* 美债收益率是 % 本身, 不是涨跌幅, 不套涨跌色 */}
+                    {g.title === '美 债 收 益 率'
+                      ? null
+                      : <em className={pctCls(r.pct)}>{fmtPct(r.pct)}</em>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {us.leaders?.length ? (
+          <div className="regime-us-group">
+            <span className="regime-band-k">龙 头 股</span>
+            <div className="regime-us-rows">
+              {us.leaders.map(r => (
+                <div key={r.code} className="regime-us-row">
+                  <span className="k">{r.name}</span>
+                  <span className="v">
+                    {r.close != null ? r.close.toFixed(2) : '—'}
+                    <em className={pctCls(r.pct)}>{fmtPct(r.pct)}</em>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 function upShare(up: number | null | undefined, down: number | null | undefined): string {
   const u = up ?? 0
   const d = down ?? 0
@@ -713,7 +785,7 @@ export function Regime() {
     <div className="regime-page">
         <PageHeader
           title="市场环境"
-          subtitle="MARKET REGIME"
+          subtitle="市场环境"
           seal="境"
         />
 
@@ -772,6 +844,9 @@ export function Regime() {
           </div>
         </div>
       </div>
+
+      {/* 美股夜盘: 实时块, 不随下面两个 tab 切换 —— 两种刷新节奏同屏, 用卡片分开 */}
+      <UsOvernightCard />
 
       {/* ══ 情绪周期 tab: 阶段概览 + 时间轴 + 阶段×主线 + 主线排行 ══ */}
       <div className="regime-view-panel" id="regime-panel-phase" role="tabpanel" aria-labelledby="regime-tab-phase" hidden={view !== 'phase'}>
@@ -1019,7 +1094,7 @@ export function Regime() {
               </button>
             ))}
           </div>
-          <span className="text-[12px] text-muted">窗口内 top1 天数排序 · 点击「过滤」配置宽基概念屏蔽</span>
+          <span className="text-[12px] text-muted">窗口内居首天数排序 · 点击「过滤」配置宽基概念屏蔽</span>
         </div>
         {filterOpen && (
           <MainlineFilterPanel
@@ -1036,7 +1111,7 @@ export function Regime() {
               <tr className="border-b border-border text-[12px] text-muted">
                 <th className="py-1.5 pr-3 font-medium">#</th>
                 <th className="py-1.5 pr-3 font-medium">主线</th>
-                <th className="py-1.5 pr-3 font-medium text-right">top1 天数</th>
+                <th className="py-1.5 pr-3 font-medium text-right">居首天数</th>
                 <th className="py-1.5 pr-3 font-medium text-right">日均分</th>
                 <th className="py-1.5 pr-3 font-medium text-right">最高板</th>
               </tr>
@@ -1121,7 +1196,7 @@ export function Regime() {
           <div className="regime-rg2">
             <div className="min-w-0">
               <section className="plot regime-timeline">
-                <div className="plot-hd"><b>状态时间轴</b><span>STATE STRIP</span><em className="regime-plot-note">{rows[0].date} — {latest!.date} · {rows.length} 天</em></div>
+                <div className="plot-hd"><b>状态时间轴</b><span>状态带</span><em className="regime-plot-note">{rows[0].date} — {latest!.date} · {rows.length} 天</em></div>
                 <div className="regime-state-strip" role="img" aria-label={`${rows.length} 个交易日的环境状态分布时间轴`}>
                   {rows.map(r => <span key={r.date} title={`${r.date} ${REGIME_STATE_LABELS[r.state]}(${r.score})`} style={{ backgroundColor: REGIME_STATE_COLORS[r.state] }} />)}
                 </div>
@@ -1132,7 +1207,7 @@ export function Regime() {
 
               <section className="plot" aria-label="市场环境历史趋势">
                 <div className="plot-hd">
-                  <b>综合分 · 近 {rows.length} 个交易日</b><span>DAILY SCORE</span>
+                  <b>综合分 · 近 {rows.length} 个交易日</b><span>日线评分</span>
                   <div className="leg" aria-hidden="true"><i className="a">综合分</i><i className="u">强</i><i className="d">弱</i></div>
                 </div>
                 <div ref={trendRef} className="regime-chart" role="img" aria-label="环境综合分及四维指标历史趋势图" />
@@ -1160,11 +1235,11 @@ export function Regime() {
               {last40.length > 0 && (
                 <div className="regime-mini-plots" aria-label="近 40 日涨停与封板">
                   <div className="plot">
-                    <div className="plot-hd"><b>涨停家数 · 近 40 日</b><span>LIMIT UP</span></div>
+                    <div className="plot-hd"><b>涨停家数 · 近 40 日</b><span>涨停家数</span></div>
                     <div ref={limitUpRef} className="regime-mini-chart" role="img" aria-label="近 40 日涨停家数柱状图" />
                   </div>
                   <div className="plot">
-                    <div className="plot-hd"><b>封板率 · 近 40 日</b><span>SEAL RATE</span></div>
+                    <div className="plot-hd"><b>封板率 · 近 40 日</b><span>封板率</span></div>
                     <div ref={sealRef} className="regime-mini-chart" role="img" aria-label="近 40 日封板率柱状图" />
                   </div>
                 </div>
