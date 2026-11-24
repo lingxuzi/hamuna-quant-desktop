@@ -417,35 +417,21 @@ jobs:
             EP_BUCKET="${EP_BUCKET##*/}"
           fi
 
-          # 桶名来源优先级:
+          # 桶名来源 (只有这两条, 因为第三条不存在):
           #   1. 仓库变量 HQUANT_R2_BUCKET (显式配置, 永远最准)
-          #   2. endpoint 路径 (桶级写法自带桶名)
-          #   3. 更新基址反推 (R2 公开开发域名形如 https://pub-<BUCKET>.r2.dev,
-          #      桶名就在域名里 —— 不用再多配一个变量就能推出来)
-          #   4. ListBuckets 自动发现 (兜底: R2 的 API token 默认只授权单桶,
-          #      多半没有 ListBuckets 权限, 走到这里说明前三条都没用上)
+          #   2. 桶级 endpoint 写法 (https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>)
+          #   3. ListBuckets 兜底 —— 但 R2 的 API token 默认只授权单个桶
+          #      (Object Read & Write), 没有 ListBuckets 权限, 所以这条基本必失败,
+          #      只作为「万一 token 是 Admin 权限」的侥幸路径。
+          #
+          # 曾经试过从更新基址反推, 是错的: R2 的公开开发域名
+          # https://pub-<HASH>.r2.dev 里 <HASH> 是随机串, 与桶名无关
+          # (实测去掉 pub- 后 NoSuchBucket)。别再往回加。
           if [ -z "${R2_BUCKET:-}" ] && [ -n "$EP_BUCKET" ]; then
             R2_BUCKET="$EP_BUCKET"
             echo "::notice::从 R2 endpoint 路径取到桶名: $R2_BUCKET"
           fi
           UB="${UPDATE_BASE_URL%/}"
-          UB_HOST="${UB#*://}"; UB_HOST="${UB_HOST%%/*}"
-          bucket_ok() {   # 桶存在性探测: 列得出对象 (rc=0) 才算存在
-            aws s3 ls "s3://$1/" --endpoint-url "$EP_HOST" --max-items 1 >/dev/null 2>&1
-          }
-          if [ -z "${R2_BUCKET:-}" ] && [ "${UB_HOST%.r2.dev}" != "$UB_HOST" ]; then
-            stem="${UB_HOST%.r2.dev}"
-            cands=("$stem")
-            case "$stem" in pub-*) cands+=("${stem#pub-}") ;; esac
-            last=""
-            for cand in "${cands[@]}"; do
-              if bucket_ok "$cand"; then R2_BUCKET="$cand"; break; fi
-              last="$cand"
-            done
-            # 一个都探不出来 (权限不足等) → 留最后一个候选, 让上传步骤去报错
-            [ -z "${R2_BUCKET:-}" ] && [ -n "$last" ] && R2_BUCKET="$last"
-            [ -n "${R2_BUCKET:-}" ] && echo "::notice::从更新基址 $UB_HOST 反推出桶名: $R2_BUCKET"
-          fi
           if [ -z "${R2_BUCKET:-}" ]; then
             ls_err="$(mktemp)"
             buckets=$(aws s3 ls --endpoint-url "$EP_HOST" \
@@ -461,7 +447,7 @@ jobs:
             else
               echo "::error::定不出桶名, 且 ListBuckets 列不出任何桶。"
               echo "::error::aws s3 ls 的真实报错: $(tr '\n' ' ' < "$ls_err")"
-              echo "::error::三种修法: ① 在 R2 控制台确认桶名, 填入本仓库变量 HQUANT_R2_BUCKET; ② 把 secret R2_ENDPOINT_URL 改成桶级写法 (https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>); ③ 让 HQUANT_UPDATE_BASE_URL 用 R2 的公开开发域名 (https://pub-<BUCKET>.r2.dev), 桶名会从域名里反推出来。"
+              echo "::error::两种修法: ① 在 R2 控制台的桶列表里抄下桶名, 填入本仓库变量 HQUANT_R2_BUCKET; ② 把 secret R2_ENDPOINT_URL 改成桶级写法 (https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>), 桶名从路径里自动取。"
               exit 1
             fi
           fi
