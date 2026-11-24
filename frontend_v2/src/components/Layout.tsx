@@ -985,28 +985,35 @@ export function Layout() {
               className="toc-rowline"
             />
             <span>沪深京<b>{universeCount != null ? universeCount.toLocaleString('zh-CN') : '—'}</b></span>
-            {/* 版本行: 有新版本时版本号旁挂更新标记 (底部控制区宽度已满, 更新入口归位到版本旁) */}
+            {/* 版本行: 有新版本时把版本号换成「→ 新版本号」并挂下载图标。
+                只放图标不写版本号, 用户看不出「新版本是哪个」, 还得点进去猜。 */}
             <span>
               版本
-              <b className="inline-flex items-center gap-1.5">
-                {version || '—'}
-                {hasUpdate && (() => {
-                  // 清单没给 notes_url 且未配置下载页时只提示不可点, 避免 href="" 空跳转
-                  const href = update.info?.url || RELEASES_URL
-                  const cls = 'inline-flex items-center text-amber-400 transition-transform hover:scale-110 animate-breath'
-                  const title = `发现新版本 ${update.info?.latest ?? ''}，点击前往下载`
-                  return href ? (
-                    <a href={href} target="_blank" rel="noreferrer" className={cls}
-                       title={title} aria-label="前往下载新版本">
-                      <Download className="h-[11px] w-[11px]" />
-                    </a>
-                  ) : (
-                    <span className={cls} title={title} aria-label="有新版本可更新">
-                      <Download className="h-[11px] w-[11px]" />
-                    </span>
-                  )
-                })()}
-              </b>
+              {hasUpdate ? (() => {
+                // 清单没给 notes_url 且未配置下载页时只提示不可点, 避免 href="" 空跳转
+                const href = update.info?.url || RELEASES_URL
+                const latest = update.info?.latest ?? ''
+                const cls = 'inline-flex items-center gap-1 text-amber-400 animate-breath'
+                const title = href
+                  ? `发现新版本 ${latest}，点击前往下载`
+                  : `发现新版本 ${latest}`
+                const inner = (
+                  <>
+                    {latest || '新版本'}
+                    <Download aria-hidden="true" className="h-[11px] w-[11px]" />
+                  </>
+                )
+                return href ? (
+                  <a href={href} target="_blank" rel="noreferrer" className={cls}
+                     title={title} aria-label={`前往下载新版本 ${latest}`}>
+                    {inner}
+                  </a>
+                ) : (
+                  <b className={cls} title={title} aria-label={`有新版本 ${latest}`}>{inner}</b>
+                )
+              })() : (
+                <b>{version || '—'}</b>
+              )}
             </span>
           </div>
         )}

@@ -295,6 +295,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.version }}
+          UPDATE_BASE_URL: ${{ vars.HQUANT_UPDATE_BASE_URL }}
         run: |
           set -euo pipefail
           mkdir -p assets && cd assets
@@ -343,6 +344,15 @@ jobs:
           if not channels:
               print("::warning::Release 上没有任何安装包资产, 跳过 latest.json 生成")
               sys.exit(0)
+
+          # 下载地址指向 R2 公开基址 (与 latest.json 同桶同域名)。
+          # 不写 GitHub 的 browser_download_url: 国内下 130MB 走 GitHub 很慢,
+          # 且 R2 是我们自己的对外通道 —— 客户端只认这一个域名。
+          # 环境变量缺失时退回 GitHub 资产地址, 保证清单照样可用。
+          base = os.environ.get("UPDATE_BASE_URL", "").rstrip("/")
+          if base:
+              for ch in channels.values():
+                  ch["url"] = f"{base}/{ch['name']}"
 
           manifest = {
               "version": version,
@@ -464,6 +474,21 @@ jobs:
           export AWS_CONFIG_FILE
           printf '[default]\ns3 =\n  addressing_style = path\n' > "$AWS_CONFIG_FILE"
 
+          # 安装包也进 R2 —— 清单里的下载地址指向这里。国内直连 GitHub 下 130MB
+          # 又慢又容易断, R2 是我们自己的对外通道, 客户端只认这一个域名。
+          # 先传安装包再传清单: 顺序反了会出现「清单已更新、安装包还没到」的空窗,
+          # 客户端点下载就 404。
+          shopt -s nullglob
+          for f in assets/HQuant-Setup-x64-*.exe assets/HQuant-macos-arm64-*.dmg \
+                   assets/HQuant-linux-x64-*.tar.gz; do
+            echo "上传 $(basename "$f") → s3://$R2_BUCKET/$(basename "$f")"
+            aws s3 cp "$f" "s3://$R2_BUCKET/$(basename "$f")" \
+              --endpoint-url "$EP_HOST" \
+              --content-type "application/octet-stream" \
+              --cache-control "public, max-age=31536000, immutable"
+          done
+          shopt -u nullglob
+
           aws s3 cp latest.json "s3://$R2_BUCKET/latest.json" \
             --endpoint-url "$EP_HOST" \
             --content-type "application/json" \
@@ -483,4 +508,22 @@ jobs:
             echo "::error::在 R2 控制台 → ${R2_BUCKET} → 设置 → CORS 策略, 粘贴: [{\"AllowedOrigins\":[\"*\"],\"AllowedMethods\":[\"GET\",\"HEAD\"],\"AllowedHeaders\":[\"*\"],\"MaxAgeSeconds\":3600}]"
             exit 1
           fi
+          # 清单里的下载地址必须指向 R2 且真的存在 —— 上一版只把 latest.json
+          # 传了上去, 安装包留在 GitHub, 客户端点下载走的是境外地址。
+          grep -q "$UB/" latest.json || {
+            echo "::error::latest.json 里的下载地址没指向更新基址 $UB —— 检查生成清单那一步的 UPDATE_BASE_URL。"
+            exit 1
+          }
+          for url in $(python3 -c "
+          import json
+          m = json.load(open('latest.json'))
+          print('\n'.join(c['url'] for c in m.get('channels', {}).values()))
+          "); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I --max-time 60 "$url" || echo 000)
+            case "$code" in
+              200|206) echo "安装包可下载: $url" ;;
+              *) echo "::error::清单里的安装包地址不可用 (http $code): $url"
+                 exit 1 ;;
+            esac
+          done
           echo "::notice::更新清单已发布: $UB/latest.json"
