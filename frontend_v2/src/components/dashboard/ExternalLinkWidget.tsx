@@ -9,7 +9,7 @@
  * - 部分站点以 X-Frame-Options/CSP 拒绝嵌入 → 白屏兜底: 常驻「新窗口打开」+ 提示文案。
  */
 import { useMemo } from 'react'
-import { ExternalLink, Link2 } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 
 export function ExternalLinkWidget({ title, url }: { title: string; url: string }) {
   const host = useMemo(() => {
@@ -22,18 +22,16 @@ export function ExternalLinkWidget({ title, url }: { title: string; url: string 
 
   return (
     <section className="panel flex min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 pb-1.5">
-        <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
-          <span className="h-3 w-[2px] bg-accent" />
-          <Link2 className="h-[12px] w-[12px] shrink-0 text-accent" />
-          <span className="truncate" title={title}>{title}</span>
-          {host && <span className="shrink-0 truncate font-mono text-[10px] text-muted">{host}</span>}
+      <div className="mb-1.5 flex shrink-0 items-baseline justify-between gap-2">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground" title={title}>{title}</span>
+          {host && <span className="shrink-0 truncate font-mono text-[9.5px] tracking-[0.1em] text-muted">{host}</span>}
         </span>
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1 rounded-btn px-1.5 py-0.5 text-[10px] text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-1 text-[10px] text-secondary transition-colors hover:text-accent"
           title="在新窗口打开"
         >
           <ExternalLink className="h-[12px] w-[12px]" />新窗口

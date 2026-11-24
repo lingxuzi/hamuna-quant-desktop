@@ -5,7 +5,7 @@
  * 行为不变; A 股语义色约定: 红涨(text-bull)绿跌(text-bear)。
  */
 import type { ReactNode } from 'react'
-import { Activity, Settings2 } from 'lucide-react'
+import { Settings2 } from 'lucide-react'
 
 export function n(v: number | null | undefined) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
@@ -68,8 +68,9 @@ export function compactCount(v: number | null | undefined) {
   return x.toFixed(0)
 }
 
-export function SectionTitle({ icon: Icon, title, hint, onConfig, configTitle }: {
-  icon: typeof Activity
+/** 挂件题头 — 与纪事流同一套排字: 宋体标题 + 右侧等宽小注, 不加色条与彩色图标。
+ *  色条/彩图标是卡片语汇, 每个格子都顶一条会把整页拉成马赛克。 */
+export function SectionTitle({ title, hint, onConfig, configTitle }: {
   title: string
   hint?: ReactNode
   /** 传入即在标题行右侧加配置齿轮 (如情绪雷达的评分口径编辑) */
@@ -77,14 +78,10 @@ export function SectionTitle({ icon: Icon, title, hint, onConfig, configTitle }:
   configTitle?: string
 }) {
   return (
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1.5">
-        <span className="h-3 w-[2px] bg-accent" />
-        <Icon className="h-3.5 w-3.5 text-accent" />
-        <h2 className="font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">{title}</h2>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {hint && <span className="font-mono text-[10px] text-muted">{hint}</span>}
+    <div className="mb-2 flex items-baseline justify-between gap-2">
+      <h2 className="min-w-0 truncate font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">{title}</h2>
+      <div className="flex shrink-0 items-baseline gap-1.5">
+        {hint && <span className="font-mono text-[9.5px] tracking-[0.1em] text-muted">{hint}</span>}
         {onConfig && (
           <button
             type="button"
@@ -102,8 +99,9 @@ export function SectionTitle({ icon: Icon, title, hint, onConfig, configTitle }:
 }
 
 export function MiniMetric({ label, value, cls = 'text-foreground' }: { label: string; value: string; cls?: string }) {
+  // 底色用 --base 与纪事流 .strip-4 一致: bg-surface 会亮一档, 平铺格看着像卡片
   return (
-    <div className="min-w-0 bg-surface px-2 py-1.5">
+    <div className="min-w-0 bg-base px-2 py-1.5">
       <div className="truncate text-[10px] tracking-[0.06em] text-muted">{label}</div>
       <div className={`mt-0.5 truncate font-mono text-xs font-medium tabular-nums ${cls}`}>{value}</div>
     </div>
@@ -115,7 +113,7 @@ export function KpiCell({ label, value, sub, tone = 'neutral' }: { label: ReactN
   const isPlain = typeof value === 'string' || typeof value === 'number'
   const color = tone === 'bull' ? 'text-bull' : tone === 'bear' ? 'text-bear' : tone === 'accent' ? 'text-accent' : 'text-foreground'
   return (
-    <div className="flex min-w-0 flex-col justify-center bg-surface px-2.5 py-1.5">
+    <div className="flex min-w-0 flex-col justify-center bg-base px-2.5 py-1.5">
       <div className="flex items-center gap-1 truncate text-[10px] tracking-[0.06em] text-muted">{label}</div>
       <div className={`mt-1 truncate font-mono text-[17px] font-medium leading-none tabular-nums ${isPlain ? color : 'text-foreground'}`}>{value}</div>
       {sub && <div className="mt-1 truncate text-[10px] text-muted">{sub}</div>}

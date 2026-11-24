@@ -4,19 +4,19 @@
  * render(ctx, item?) 输出该组件的完整卡片(自带边框/标题, 与抽离前视觉一致);
  * DashboardGrid 负责定位/拖拽/缩放壳, 不感知具体组件内部。
  */
-import type { CSSProperties } from 'react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, BarChart3, BellRing, Flame, Gauge, LineChart, Link2, Sparkles, Target, TrendingUp, TrendingDown, Coins, Repeat } from 'lucide-react'
+import { ArrowUpRight, BarChart3, BellRing, Flame, Gauge, LineChart, Link2, Sparkles, TrendingUp, TrendingDown, Coins, Repeat } from 'lucide-react'
 import type { AlertEvent, OverviewMarket } from '@/lib/api'
 import { fmtBigNum } from '@/lib/format'
 import type { DimensionMembersTarget } from '@/components/DimensionMembersDialog'
 import { SealedBadge } from '@/components/SealedBadge'
 import { scoreColor, fmtPrice, fmtStockPct, pctClass, compactCount, SectionTitle, MiniMetric, KpiCell } from './shared'
+import { DistFig } from '@/components/charts/DistFig'
 import { EmotionScoreConfigDialog } from './EmotionScoreConfigDialog'
 import {
-  IndexTicker, BreadthBar, DistributionBars, EmotionRadar, LadderMini, StockList, HotRankCard, MonitorWidget,
+  IndexTicker, BreadthBar, EmotionRadar, LadderMini, StockList, HotRankCard, MonitorWidget,
   stockListNav, rankNav,
 } from './widgets'
 import type { DashboardItem, WidgetType } from './layout'
@@ -50,12 +50,8 @@ export interface WidgetDef {
   render: (ctx: WidgetCtx, item: DashboardItem) => ReactNode
 }
 
-function sectionCard(children: ReactNode, opts: { className?: string; style?: CSSProperties } = {}): ReactNode {
-  return (
-    <section style={opts.style} className={`panel ${opts.className ?? ''}`}>
-      {children}
-    </section>
-  )
+function sectionCard(children: ReactNode): ReactNode {
+  return <section className="panel">{children}</section>
 }
 
 /** 情绪雷达卡片 — 自带评分口径配置入口 (齿轮 → 对话框)。
@@ -67,15 +63,14 @@ function EmotionRadarCard({ ctx }: { ctx: WidgetCtx }) {
       {sectionCard(
         <>
           <SectionTitle
-            icon={Sparkles}
             title="情绪雷达"
-            hint={`情绪评分 ${ctx.score}`}
+            // 原卡片靠边框着色表达分数区间; 描边撤掉后把色落在读数上, 信息不丢
+            hint={<span style={{ color: scoreColor(ctx.score) }}>情绪评分 {ctx.score}</span>}
             onConfig={() => setConfigOpen(true)}
             configTitle="配置情绪评分的计算方式"
           />
           <EmotionRadar radar={ctx.data.radar} score={ctx.score} />
         </>,
-        { style: { borderColor: `${scoreColor(ctx.score)}40` } },
       )}
       {configOpen && <EmotionScoreConfigDialog onClose={() => setConfigOpen(false)} />}
     </>
@@ -108,8 +103,8 @@ function TrendWidget({ ctx }: { ctx: WidgetCtx }) {
   return (
     <div className="flex h-full flex-col">
       <div>
-        <SectionTitle icon={LineChart} title="趋势强度" hint="均线/新高低" />
-        <div className="grid grid-cols-3 gap-px bg-border">
+        <SectionTitle title="趋势强度" hint="均线/新高低" />
+        <div className="grid grid-cols-3 content-start gap-px bg-border">
           <MiniMetric label="站上MA5" value={`${data.trend.above_ma5_pct.toFixed(0)}%`} cls="text-accent" />
           <MiniMetric label="站上MA20" value={`${data.trend.above_ma20_pct.toFixed(0)}%`} cls="text-accent" />
           <MiniMetric label="站上MA60" value={`${data.trend.above_ma60_pct.toFixed(0)}%`} cls="text-accent" />
@@ -119,8 +114,8 @@ function TrendWidget({ ctx }: { ctx: WidgetCtx }) {
         </div>
       </div>
       <div className="mt-1.5 border-t border-border pt-1.5">
-        <SectionTitle icon={Target} title="实用监控" hint="盘中观察" />
-        <div className="grid grid-cols-3 gap-px bg-border">
+        <SectionTitle title="实用监控" hint="盘中观察" />
+        <div className="grid grid-cols-3 content-start gap-px bg-border">
           <MiniMetric label="炸板" value={`${data.limit.broken ?? 0}`} cls="text-warning" />
           <MiniMetric label="跌停" value={`${data.limit.limit_down ?? 0}`} cls="text-bear" />
           <MiniMetric label="站上MA60" value={`${data.trend.above_ma60_pct.toFixed(0)}%`} cls="text-accent" />
@@ -136,14 +131,12 @@ function TrendWidget({ ctx }: { ctx: WidgetCtx }) {
 function MonitorSection({ ctx }: { ctx: WidgetCtx }) {
   return (
     <section className="panel">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-[2px] bg-accent" />
-          <BellRing className="h-3.5 w-3.5 text-accent" />
-          <h2 className="font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">监控中心</h2>
-          <span className="font-mono text-[10px] text-muted">实时信号</span>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="truncate font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">监控中心</h2>
+          <span className="shrink-0 font-mono text-[9.5px] tracking-[0.1em] text-muted">实时信号</span>
         </div>
-        <Link to="/monitor" className="inline-flex items-center justify-center h-[20px] w-[20px] rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors" title="进入监控中心">
+        <Link to="/monitor" className="inline-flex shrink-0 items-center justify-center h-[18px] w-[18px] text-muted transition-colors hover:text-accent" title="进入监控中心">
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </div>
@@ -176,12 +169,12 @@ export const WIDGET_DEFS: WidgetDef[] = [
     id: 'distribution', label: '涨跌分布 / 广度', icon: BarChart3, minW: 3, minH: 6, defW: 4, defH: 8, optIn: true,
     render: ctx => sectionCard(
       <>
-        <SectionTitle icon={BarChart3} title="涨跌分布 / 广度" hint={`${ctx.data.breadth.total}只`} />
-        <DistributionBars rows={ctx.data.distribution} />
+        <SectionTitle title="涨跌分布 / 广度" hint={`${ctx.data.breadth.total}只`} />
+        <DistFig rows={ctx.data.distribution} counts />
         <div className="mt-2">
           <BreadthBar data={ctx.data.breadth} />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-px bg-border">
+        <div className="mt-2 grid grid-cols-2 content-start gap-px bg-border">
           <MiniMetric label="平均涨跌" value={fmtStockPct(ctx.data.breadth.avg_pct)} cls={pctClass(ctx.data.breadth.avg_pct)} />
           <MiniMetric label="中位涨跌" value={fmtStockPct(ctx.data.breadth.median_pct)} cls={pctClass(ctx.data.breadth.median_pct)} />
         </div>
@@ -250,7 +243,7 @@ export const WIDGET_DEFS: WidgetDef[] = [
     id: 'ladder', label: '涨停梯队', icon: Flame, minW: 3, minH: 6, defW: 4, defH: 8, optIn: true,
     render: ctx => sectionCard(
       <>
-        <SectionTitle icon={Flame} title="涨停梯队" hint={<span className="inline-flex items-center gap-1">{`涨停 ${ctx.data.limit.limit_up}`}{ctx.isSealedDegrade && <span className="text-[9px] px-1 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-500">{ctx.hasDepth ? '未修正' : '降级'}</span>}</span>} />
+        <SectionTitle title="涨停梯队" hint={<span className="inline-flex items-center gap-1">{`涨停 ${ctx.data.limit.limit_up}`}{ctx.isSealedDegrade && <span className="text-[9px] px-1 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-500">{ctx.hasDepth ? '未修正' : '降级'}</span>}</span>} />
         <LadderMini limit={ctx.data.limit} />
       </>,
     ),

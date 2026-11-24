@@ -102,7 +102,6 @@
 .dash-grid-editing .react-grid-item.react-grid-placeholder {
   background: hsl(var(--accent) / 0.08);
   border: 1.5px dashed hsl(var(--accent) / 0.55);
-  border-radius: 8px;
   opacity: 1;
 }
 

@@ -7,7 +7,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Flame } from 'lucide-react'
 import { api, type MarketSnapshotRow, type OverviewDimensionRankItem, type OverviewMarket, type AlertEvent } from '@/lib/api'
 import { fmtBigNum, fmtPct } from '@/lib/format'
 import { dimensionKindForSourceField, type DimensionMembersTarget } from '@/components/DimensionMembersDialog'
@@ -62,40 +61,17 @@ export function BreadthBar({ data }: { data: OverviewMarket['breadth'] }) {
   const flatW = Math.max(0, 100 - upW - downW)
   return (
     <div className="space-y-2">
-      {/* 与上方涨跌分布同向: 左跌(绿) 右涨(红) */}
-      <div className="flex h-2.5 overflow-hidden rounded-full bg-elevated">
-        <div className="bg-bear/85" style={{ width: `${downW}%` }} />
+      {/* 与上方涨跌分布同向: 左跌(绿) 右涨(红)。方角与 .dist 的柱子同一形状语汇 */}
+      <div className="flex h-2.5 overflow-hidden bg-elevated">
+        <div className="bg-bear" style={{ width: `${downW}%` }} />
         <div className="bg-muted/45" style={{ width: `${flatW}%` }} />
-        <div className="bg-bull/85" style={{ width: `${upW}%` }} />
+        <div className="bg-bull" style={{ width: `${upW}%` }} />
       </div>
-      <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-        <div className="rounded bg-bear/8 px-2 py-1 text-bear">跌 <span className="font-mono">{data.down}</span></div>
-        <div className="rounded bg-elevated/70 px-2 py-1 text-muted">平 <span className="font-mono">{data.flat}</span></div>
-        <div className="rounded bg-bull/8 px-2 py-1 text-bull">涨 <span className="font-mono">{data.up}</span></div>
+      <div className="grid grid-cols-3 content-start gap-px bg-border text-[11px]">
+        <div className="bg-base px-2 py-1 text-bear">跌 <span className="font-mono">{data.down}</span></div>
+        <div className="bg-base px-2 py-1 text-muted">平 <span className="font-mono">{data.flat}</span></div>
+        <div className="bg-base px-2 py-1 text-bull">涨 <span className="font-mono">{data.up}</span></div>
       </div>
-    </div>
-  )
-}
-
-// ===== 涨跌分布直方 =====
-export function DistributionBars({ rows }: { rows: OverviewMarket['distribution'] }) {
-  const maxCount = Math.max(...rows.map(r => r.count), 1)
-  return (
-    <div className="grid h-24 grid-cols-8 items-end gap-1 pt-1">
-      {rows.map((r, i) => {
-        const positive = i >= 4
-        return (
-          <div key={r.label} className="flex h-full min-w-0 flex-col items-center justify-end gap-0.5">
-            <div className="font-mono text-[9px] text-muted">{r.count || ''}</div>
-            <div
-              className={`w-2 rounded-full ${positive ? 'bg-gradient-to-t from-bull/45 to-bull/90' : 'bg-gradient-to-t from-bear/45 to-bear/90'}`}
-              style={{ height: `${Math.max(4, r.count / maxCount * 86)}%` }}
-              title={`${r.label}: ${r.count}只`}
-            />
-            <div className="truncate text-[9px] text-muted">{r.label}</div>
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -218,13 +194,7 @@ export function StockList({ title, rows, mode, onStockClick, activeSymbol }: {
 }) {
   return (
     <div className="panel">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-[2px] bg-accent" />
-          <h3 className="font-serif text-[13px] font-semibold tracking-[0.06em] text-foreground">{title}</h3>
-        </div>
-        <span className="font-mono text-[9px] tracking-[0.1em] text-muted">TOP {Math.min(rows.length, 8)}</span>
-      </div>
+      <SectionTitle title={title} hint={`前 ${Math.min(rows.length, 8)}`} />
       <div>
         {rows.slice(0, 8).map((r, idx) => (
           <button
@@ -353,7 +323,7 @@ export function HotRankCard({ title, rank, configUrl, onStockClick, onDimensionC
   const hasData = (rank?.leading?.length ?? 0) > 0 || (rank?.lagging?.length ?? 0) > 0
   return (
     <section className="panel">
-      <SectionTitle icon={Flame} title={title} hint="领涨/领跌 · 点击板块看成分股" />
+      <SectionTitle title={title} hint="领涨 / 领跌" />
       {hasData ? (
         <div className="grid grid-cols-2 gap-2">
           <RankColumn title="领涨" rows={rank?.leading ?? []} tone="bull" onStockClick={onStockClick} onDimensionClick={onDimensionClick} activeSymbol={activeSymbol} />
@@ -429,15 +399,18 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
               initial={{ opacity: 0, y: -8, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-              className={`relative overflow-hidden rounded-md border pl-2.5 pr-2 py-1.5 transition-colors ${ev.symbol && ev.symbol === activeSymbol ? 'border-accent/40 bg-accent/5' : 'border-border/40 bg-surface/60 hover:border-border hover:bg-surface'}`}
+              className={cn(
+                'relative border-b border-dotted border-border py-1.5 pl-2.5 pr-1 transition-colors',
+                ev.symbol && ev.symbol === activeSymbol && 'bg-accent/[0.06]',
+              )}
             >
-              <div className={cn('absolute left-0 top-0 h-full w-0.5', sev)} />
+              <div className={cn('absolute left-0 top-1.5 bottom-1.5 w-0.5', sev)} />
               {/* 第一行: 代码 + 名称 + 价格 + 涨跌幅 (点击代码/名称弹日K) */}
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => isSector ? navigate('/monitor') : ev.symbol && onStockClick(ev, alertNav)}
                   title={isSector ? '在监控中心查看板块告警' : ev.symbol ? `查看 ${ev.symbol} 日K` : undefined}
-                  className={`inline-flex items-center gap-1 min-w-0 shrink-0 rounded hover:bg-elevated/60 transition-colors -mx-0.5 px-0.5 ${isSector || ev.symbol ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`-mx-0.5 inline-flex min-w-0 shrink-0 items-center gap-1 px-0.5 transition-colors hover:bg-elevated/60 ${isSector || ev.symbol ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                   <span className="font-mono text-[10px] font-medium text-foreground/80 hover:text-accent">{ev.symbol?.replace(/\.(SH|SZ|BJ)$/, '')}</span>
                   {ev.symbol && (() => {
@@ -488,7 +461,7 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
                   {ev.signals && ev.signals.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {ev.signals.map(signal => (
-                        <span key={signal} className="rounded bg-accent/8 px-1 py-px text-[8px] text-accent/80">{cnSignal(signal, customNames)}</span>
+                        <span key={signal} className="bg-accent/8 px-1 py-px text-[8px] text-accent/80">{cnSignal(signal, customNames)}</span>
                       ))}
                     </div>
                   )}
@@ -496,7 +469,7 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
               ) : (
                 <>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className={cn('shrink-0 rounded px-1 py-px text-[8px] font-medium', _SOURCE_BADGE[ev.source] ?? 'bg-elevated text-muted')}>
+                    <span className={cn('shrink-0 px-1 py-px text-[8px] font-medium', _SOURCE_BADGE[ev.source] ?? 'bg-elevated text-muted')}>
                       {sourceLabel(ev.source)}
                     </span>
                     {ev.message && (
@@ -509,7 +482,7 @@ export function MonitorWidget({ onStockClick, activeSymbol }: {
                   {ev.signals && ev.signals.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {ev.signals.map((s, j) => (
-                        <span key={j} className="rounded bg-accent/8 px-1 py-px text-[8px] text-accent/80">{cnSignal(s, customNames)}</span>
+                        <span key={j} className="bg-accent/8 px-1 py-px text-[8px] text-accent/80">{cnSignal(s, customNames)}</span>
                       ))}
                     </div>
                   )}

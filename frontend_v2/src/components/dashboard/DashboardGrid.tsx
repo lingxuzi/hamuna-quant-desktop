@@ -92,7 +92,7 @@ export function DashboardGrid({ ctx, items, onItemsChange, editing }: DashboardG
   const isMobile = mounted && width < 768
 
   return (
-    <div ref={containerRef as unknown as React.RefObject<HTMLDivElement>} className={cn('dash-grid relative', editing && 'dash-grid-editing')}>
+    <div ref={containerRef as unknown as React.RefObject<HTMLDivElement>} className={cn('dash-grid relative mt-5', editing && 'dash-grid-editing')}>
       {/* 编辑态操作提示 (入口与控制组在页面头部「重载」右侧) */}
       {editing && (
         <div className="mb-1.5 text-[11px] text-muted">
@@ -132,12 +132,12 @@ export function DashboardGrid({ ctx, items, onItemsChange, editing }: DashboardG
                 key={it.i}
                 className={cn(
                   // overflow-hidden 根除内容溢出压盖相邻组件(卡片内容自然高度可能大于格子);
-                  editing && 'cursor-grab select-none rounded-card ring-1 ring-accent/30 hover:ring-accent/60 active:cursor-grabbing',
+                  editing && 'cursor-grab select-none ring-1 ring-accent/30 hover:ring-accent/60 active:cursor-grabbing',
                 )}
                 style={{ overflow: 'hidden' }}
               >
                 {editing && (
-                  <div className="absolute inset-x-0 top-0 z-10 flex h-[18px] items-center justify-between rounded-t-card bg-surface/95 pl-2 pr-5 text-[10px] text-secondary shadow-sm">
+                  <div className="absolute inset-x-0 top-0 z-10 flex h-[18px] items-center justify-between border-b border-accent/25 bg-base/95 pl-2 pr-5 text-[10px] text-secondary">
                     <span className="flex min-w-0 items-center gap-1">
                       {Icon && <Icon className="h-[12px] w-[12px] shrink-0 text-accent" />}
                       <span className="truncate">{def?.label ?? it.t}{it.t === 'ext-link' && it.p?.title ? ` · ${it.p.title}` : ''}</span>
@@ -145,7 +145,7 @@ export function DashboardGrid({ ctx, items, onItemsChange, editing }: DashboardG
                     <button
                       type="button"
                       onClick={() => removeItem(it.i)}
-                      className="dash-widget-remove flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded text-muted hover:bg-danger/15 hover:text-danger"
+                      className="dash-widget-remove flex h-[16px] w-[16px] shrink-0 items-center justify-center text-muted hover:bg-danger/15 hover:text-danger"
                       title="移除组件"
                     >
                       <X className="h-[12px] w-[12px]" />

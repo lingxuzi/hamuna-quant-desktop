@@ -96,18 +96,16 @@ export function AddWidgetPanel({
 
   return (
     <div className="relative">
+      {/* 与工具栏「恢复默认」「完成」同刻度 (ctl-md): 并排控件高度不一致会显得这一行没对齐。
+          开合态交给 aria-pressed 的通用开关样式, 不再自绘描边/底色。 */}
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen(v => !v)}
-        className={cn(
-          'ctl ctl-sm ctl-btn inline-flex items-center gap-1 px-1.5',
-          open
-            ? 'border-accent/50 bg-accent/10 text-accent'
-            : 'border-border bg-elevated text-secondary hover:text-foreground hover:border-accent/40',
-        )}
+        aria-pressed={open}
+        className="ctl ctl-md ctl-btn"
       >
-        <Plus className="h-[12px] w-[12px]" />添加组件
+        <Plus className="h-[13px] w-[13px]" />添加组件
       </button>
 
       {open && anchorRef.current && anchorVersion > 0 && createPortal(
@@ -116,7 +114,7 @@ export function AddWidgetPanel({
           style={{ left: anchorRef.current.left, top: anchorRef.current.top, width: PANEL_W }}
           className="fixed z-[9999] bg-surface border border-border p-2 shadow-2xl shadow-scrim/40"
         >
-          <div className="mb-1.5 px-0.5 text-[10px] font-medium text-muted">内置组件</div>
+          <div className="mb-1.5 px-0.5 font-mono text-[9.5px] tracking-[0.1em] text-muted">内置组件</div>
           <div className="max-h-56 space-y-0.5 overflow-y-auto">
             {WIDGET_DEFS.filter(d => d.id !== 'ext-link').map(d => {
               // optIn 组件可多例, 不因已放置而禁用
@@ -128,9 +126,9 @@ export function AddWidgetPanel({
                   disabled={placed}
                   onClick={() => { onAdd(d.id); if (!d.optIn) setOpen(false) }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                    'flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors',
                     placed
-                      ? 'cursor-default text-muted/50'
+                      ? 'cursor-not-allowed text-muted'
                       : 'cursor-pointer text-secondary hover:bg-elevated hover:text-foreground',
                   )}
                   title={placed ? '已在布局中' : undefined}
@@ -144,26 +142,26 @@ export function AddWidgetPanel({
           </div>
 
           <div className="mt-2 border-t border-border/60 pt-2">
-            <div className="mb-1.5 px-0.5 text-[10px] font-medium text-muted">外部链接(可加多个)</div>
+            <div className="mb-1.5 px-0.5 font-mono text-[9.5px] tracking-[0.1em] text-muted">外部链接</div>
             <div className="space-y-1.5">
               <input
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder="标题, 如: 东财行情"
                 maxLength={30}
-                className="ctl ctl-md ctl-input w-full px-2.5 ring-1 ring-border/40 placeholder:text-muted/40 focus:ring-2 focus:ring-accent/40 bg-base"
+                className="ctl ctl-md ctl-input w-full"
               />
               <input
                 value={url}
                 onChange={e => { setUrl(e.target.value); setUrlError('') }}
                 placeholder="https://… (仅 http/https)"
-                className="ctl ctl-md ctl-input w-full px-2.5 font-mono ring-1 ring-border/40 placeholder:text-muted/40 focus:ring-2 focus:ring-accent/40 bg-base"
+                className="ctl ctl-md ctl-input w-full font-mono"
               />
               {urlError && <div className="text-[10px] text-danger">{urlError}</div>}
               <button
                 type="button"
                 onClick={addExtLink}
-                className="ctl ctl-md ctl-btn soft w-full px-2.5 hover:bg-accent/25 bg-accent/15"
+                className="ctl ctl-md ctl-btn soft w-full"
               >
                 添加到看板
               </button>
