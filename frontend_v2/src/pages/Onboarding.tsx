@@ -278,18 +278,18 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
         </p>
       ) : (
         <div className="rowset mt-6">
-          {/* 内置源 easytdx: 装依赖即用 */}
+          {/* 内置源 (内部数据源): 装依赖即用 */}
           <div className="r">
             <div className="lab">
               <b>
-                easytdx
+                内部数据源
                 <span className="ml-1.5 text-[10px] font-normal text-muted/60">内置</span>
               </b>
               <div className="tag-row mt-1.5">
                 {(easyPlugin?.datasets ?? []).map(ds => <span key={ds}>{DATASET_LABELS[ds] ?? ds}</span>)}
               </div>
               <small>
-                通达信直连行情源，提供日K、除权因子、实时行情、分钟K、五档盘口与全量分钟，无需 Key 与计费。
+                内置直连行情源，提供日K、除权因子、实时行情、分钟K、五档盘口与全量分钟，无需 Key 与计费。
               </small>
               {!easyReady && <small>依赖尚未就绪，点「安装依赖」自动补齐（需几分钟）。</small>}
               {installMsg && <p className="mt-1 text-[10.5px] text-bear">{installMsg}</p>}
@@ -304,11 +304,11 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
             </div>
           </div>
 
-          {/* 第三方源 fuyao: 填 Key 启用 */}
+          {/* 第三方源 (同花顺官方): 填 Key 启用 */}
           <div className="r">
             <div className="lab">
               <b>
-                fuyao
+                同花顺官方
                 <span className="ml-1.5 text-[10px] font-normal text-muted/60">第三方</span>
               </b>
               <div className="tag-row mt-1.5">
@@ -363,7 +363,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
 
       <p className="mt-3 flex items-start gap-2 text-[10.5px] leading-[1.75] text-muted">
         <Puzzle aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-accent/70" />
-        <span>easytdx 为内置数据源，fuyao 补充财务数据；每个能力可在数据源页单独选择来源。</span>
+        <span>内部数据源覆盖行情，同花顺官方补充财务数据；每个能力可在数据源页单独选择来源。</span>
       </p>
 
       <div className="foot">

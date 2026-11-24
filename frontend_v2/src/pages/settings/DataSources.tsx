@@ -37,15 +37,15 @@ import {
 import { QK } from '@/lib/queryKeys'
 import { usePreferences } from '@/lib/useSharedQueries'
 import { AnchorWrap } from '@/lib/useCardFlash'
-import { DEFAULT_ROUTING, buildProviderRouting } from '@/lib/provider-routing'
+import { DEFAULT_ROUTING, buildProviderRouting, BUILTIN_PROVIDER, BUILTIN_PROVIDER_LABEL } from '@/lib/provider-routing'
 import { toast } from '@/components/Toast'
 import { PluginMetadata } from '@/components/data/PluginMetadata'
 import { DataSourceEditor } from './DataSourceEditor'
 
 /** 内置源名 (唯一内置源, 展示归「内置」组) */
-const BUILTIN = 'easytdx'
-/** 内置源展示名 (后端 display_name 带库名括注, 界面只留中文名) */
-const BUILTIN_LABEL = '通达信直连'
+const BUILTIN = BUILTIN_PROVIDER
+/** 内置源展示名 (界面不暴露实现库名) */
+const BUILTIN_LABEL = BUILTIN_PROVIDER_LABEL
 
 const DATASET_LABEL: Record<string, string> = {
   realtime: '实时',
@@ -67,7 +67,7 @@ const CAP_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   financial: Landmark,
 }
 
-/** 展示名清洗: 去掉后端 display_name 尾部的库名括注 (「通达信直连 (easy-tdx-plus)」→「通达信直连」) */
+/** 展示名清洗: 去掉后端 display_name 尾部的括注 (第三方库名等实现细节) */
 function displayName(raw: string): string {
   return raw.replace(/\s*\(.*\)$/, '')
 }
@@ -662,7 +662,7 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
           <span className="v">{pendingSources.length}</span>
           <small>
             {pendingSources.length
-              ? pendingSources.map(p => `${p.name} · ${p.status?.split('(')[0] ?? '待接入'}`).join(' · ')
+              ? pendingSources.map(p => `${p.display} · ${p.status?.split('(')[0] ?? '待接入'}`).join(' · ')
               : '无'}
           </small>
         </div>

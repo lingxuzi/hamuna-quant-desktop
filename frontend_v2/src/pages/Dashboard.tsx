@@ -7,6 +7,7 @@ import { ArrowUpRight, Database, Info, Loader2, Play, RefreshCw, Sparkles } from
 import { DatePicker } from '@/components/DatePicker'
 import { api, type AlertEvent } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
+import { BUILTIN_PROVIDER, BUILTIN_PROVIDER_LABEL } from '@/lib/provider-routing'
 import { DimensionMembersDialog, type DimensionMembersTarget } from '@/components/DimensionMembersDialog'
 import { useDataStatus, useCapabilities, useSettings, usePreferences, isDataStatusPending, resolveHasNoData } from '@/lib/useSharedQueries'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
@@ -102,13 +103,14 @@ export function Dashboard() {
     queryFn: api.dataSources,
     staleTime: 60_000,
   })
-  const activeProvider = prefs.data?.daily_data_provider || 'easytdx'
+  const activeProvider = prefs.data?.daily_data_provider || BUILTIN_PROVIDER
   const providerLabel = [
     ...(dataSourceList.data?.builtin ?? []),
     ...(dataSourceList.data?.plugins ?? []),
     ...(dataSourceList.data?.custom ?? []),
   ].find(s => s.name === activeProvider)?.display_name
-    ?.replace(/（.*?）|\(.*?\)/g, '').trim() || activeProvider
+    ?.replace(/（.*?）|\(.*?\)/g, '').trim()
+    || (activeProvider === BUILTIN_PROVIDER ? BUILTIN_PROVIDER_LABEL : activeProvider)
   // 无本地数据(enriched/daily 都没有)→ 常驻引导卡片
   // 注: 后端 status 的 rows 为性能刻意返回 0, 用 trading_days 判断是否有数据;
   // 统计暂不可用时不算无数据 (见 resolveHasNoData)

@@ -558,7 +558,7 @@ def list_data_sources() -> dict:
     return {
         "builtin": [{
             "name": "easytdx",
-            "display_name": "通达信直连 (easy-tdx-plus)",
+            "display_name": "内部数据源",
             "datasets": ["daily", "adj_factor", "realtime", "minute", "depth5", "full_minute"],
         }],
         "plugins": custom_sources.list_plugins(),

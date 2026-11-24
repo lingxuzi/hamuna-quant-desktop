@@ -89,7 +89,7 @@ def _module_available() -> bool:
 def availability() -> tuple[bool, str]:
     """loader 启动自检: 只查模块是否装好, 不做网络探测(冷启动不该等 TCP 超时)。"""
     if not _module_available():
-        return False, "easy-tdx-plus 未安装, 点击「安装依赖」或 uv sync --extra easytdx"
+        return False, "运行库未安装, 点「安装依赖」自动补齐"
     return True, "ok"
 
 
@@ -98,7 +98,7 @@ class _EasyTdxConfig:
     """轻量 config shim, 让 custom loader 的 provider_has_dataset 能识别本 provider。"""
 
     name: str = "easytdx"
-    display_name: str = "通达信直连"
+    display_name: str = "内部数据源"
     datasets: dict = field(default_factory=lambda: dict.fromkeys(_DATASETS))
     path: None = None
     builtin: bool = True

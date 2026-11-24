@@ -1,17 +1,21 @@
 import type { CapabilityRoute, ProviderField } from '@/lib/api'
 
+/** 内置数据源: id 是内部路由键, 展示名对外只叫「内部数据源」(不暴露实现库名)。 */
+export const BUILTIN_PROVIDER = 'easytdx'
+export const BUILTIN_PROVIDER_LABEL = '内部数据源'
+
 /** 全部可路由偏好字段的默认生效源。
  *
- *  行情类 (日K/除权/分钟/全量分钟/五档/实时) 跟随内置源 easytdx,
- *  财务跟随 fuyao 插件 —— 与后端 capabilities 注册表同口径。
+ *  行情类 (日K/除权/分钟/全量分钟/五档/实时) 跟随内置源,
+ *  财务跟随同花顺官方插件 —— 与后端 capabilities 注册表同口径。
  */
 export const DEFAULT_ROUTING: Record<ProviderField, string> = {
-  daily_data_provider: 'easytdx',
-  adj_factor_provider: 'easytdx',
-  minute_data_provider: 'easytdx',
-  full_minute_data_provider: 'easytdx',
-  depth5_data_provider: 'easytdx',
-  realtime_data_provider: 'easytdx',
+  daily_data_provider: BUILTIN_PROVIDER,
+  adj_factor_provider: BUILTIN_PROVIDER,
+  minute_data_provider: BUILTIN_PROVIDER,
+  full_minute_data_provider: BUILTIN_PROVIDER,
+  depth5_data_provider: BUILTIN_PROVIDER,
+  realtime_data_provider: BUILTIN_PROVIDER,
   financial_data_provider: 'fuyao',
 }
 
