@@ -204,3 +204,33 @@ def test_tick_rule_fires_on_unknown_field() -> None:
 def test_unparseable_file_reports_syntax_error() -> None:
     issues = qmt_lint.lint_text(_BAD_HEADER + "def (\n")
     assert any(i.rule == "py36" and "语法" in i.message for i in issues), issues
+
+
+def test_legacy_api_rule_fires_on_deprecated_calls() -> None:
+    """官方标注为不推荐 / 已弃用 / 旧版的接口一律拦下。"""
+    rules = _lint(
+        "def handlebar(C):\n"
+        "    C.get_stock_name('600000.SH')\n"
+        "    C.get_market_data(['close'], ['600000.SH'])\n"
+        "    C.get_history_data('600000.SH', 10)\n"
+        "    C.get_local_data('600000.SH', ['close'])\n"
+        "    C.run_time('f', '5nSecond', '2019-10-14 13:20:00')\n"
+        "    C.get_instrumentdetail('600000.SH')\n"
+    )
+    assert rules.count("legacy_api") == 6, rules
+
+
+def test_api_sig_rule_fires_on_extra_positional_arg() -> None:
+    rules = _lint(
+        "def handlebar(C):\n"
+        "    C.get_instrument_detail('600000.SH', True)\n"
+    )
+    assert "api_sig" in rules
+
+
+def test_api_sig_rule_allows_single_positional_arg() -> None:
+    rules = _lint(
+        "def handlebar(C):\n"
+        "    C.get_instrument_detail('600000.SH')\n"
+    )
+    assert "api_sig" not in rules

@@ -217,7 +217,8 @@ def test_config_round_trips_into_script() -> None:
     assert ": true" not in text and ": false" not in text and ": null" not in text
 
 # ── 驱动层: 从生成产物里 exec 出真实函数, 验刚修过的持仓语义 ──
-_DRIVER_FUNCS = {"_held_bars", "_exit_holds", "_lots", "_ranked_entries"}
+_DRIVER_FUNCS = {"_held_bars", "_exit_holds", "_lots", "_ranked_entries",
+                 "_instrument_detail", "_shares", "_stock_meta"}
 _DRIVER_CLASSES = {"_State"}
 
 def _driver_ns(strategy_id: str = "ma_golden_cross") -> dict:
@@ -233,6 +234,7 @@ def _driver_ns(strategy_id: str = "ma_golden_cross") -> dict:
                 "MAX_HOLD_DAYS": 20, "CONFIG": {"amount": 10000}}
     exec(compile(ast.Module(body=keep, type_ignores=[]), "<driver>", "exec"), ns)
     ns["_STATE"] = ns["_State"]()
+    ns["_INSTRUMENT_CACHE"] = {}
     return ns
 
 
@@ -280,6 +282,62 @@ def test_exit_holds_stop_loss_by_cost() -> None:
     reasons = ns["_exit_holds"](
         market, np.zeros(1, bool), np.array([9.0]), positions, 20260102)
     assert reasons == {"600000.SH": "stop-loss"}
+
+
+class _LegacyClient:
+    """老版本客户端: get_instrument_detail 只接受 stockcode。"""
+
+    def get_instrument_detail(self, stockcode):
+        return {"InstrumentName": "浦发银行", "FloatVolumn": 1.0e10,
+                "TotalVolumn": 1.1e10}
+
+
+class _IsCompleteClient:
+    """新版本客户端: 额外接受 iscomplete 参数。"""
+
+    def get_instrument_detail(self, stockcode, iscomplete=False):
+        assert iscomplete is True
+        return {"InstrumentName": "浦发银行", "FloatVolume": 1.0e10,
+                "TotalVolume": 1.1e10}
+
+
+class _ShareApiClient(_IsCompleteClient):
+    """支持 ContextInfo.get_last_volume / get_total_share 的客户端。"""
+
+    def get_last_volume(self, stockcode):
+        return 2.0e10
+
+    def get_total_share(self, stockcode):
+        return 2.2e10
+
+
+def test_stock_meta_supports_legacy_instrument_detail_signature() -> None:
+    """老客户端不接受 iscomplete 时不得抛 TypeError。"""
+    ns = _driver_ns()
+    names, float_shares, total_shares = ns["_stock_meta"](
+        _LegacyClient(), ["600000.SH"])
+    assert names == ["浦发银行"]
+    assert float_shares == [1.0e10]
+    assert total_shares == [1.1e10]
+
+
+def test_stock_meta_supports_iscomplete_signature() -> None:
+    ns = _driver_ns()
+    names, float_shares, total_shares = ns["_stock_meta"](
+        _IsCompleteClient(), ["600000.SH"])
+    assert names == ["浦发银行"]
+    assert float_shares == [1.0e10]
+    assert total_shares == [1.1e10]
+
+
+def test_stock_meta_prefers_contextinfo_share_apis() -> None:
+    """股本取 ContextInfo 专接口, 不是合约信息里的字段。"""
+    ns = _driver_ns()
+    names, float_shares, total_shares = ns["_stock_meta"](
+        _ShareApiClient(), ["600000.SH"])
+    assert names == ["浦发银行"]
+    assert float_shares == [2.0e10]
+    assert total_shares == [2.2e10]
 
 
 def _signal_row_ns() -> dict:

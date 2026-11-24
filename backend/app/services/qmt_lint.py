@@ -38,6 +38,25 @@ DOC = {
     "thread": "qmt-docs/python-innerApi/user_attention.md:56「python 无法使用多线程和多进程」",
     "volume": "qmt-docs/SKILL.md「股票交易必须是 100 的整数倍」",
     "entry": "qmt-docs/python-innerApi/system_function.md:49「系统会在 init 后、handlebar 前调用 after_init」",
+    "legacy_api": "qmt-docs/python-innerApi 各接口页「不推荐 / 已弃用 / 旧版」标注",
+    "api_sig": "qmt-docs/python-innerApi/data_function.md:1931"
+               "「get_instrument_detail(stockcode, iscomplete=False); 旧版本客户端不支持 iscomplete」",
+}
+
+# 官方标注为不推荐 / 已弃用 / 旧版的接口: 函数名 → (替代接口, 文档依据)
+LEGACY_APIS = {
+    "get_stock_name": ("get_instrument_detail(...)[\"InstrumentName\"]",
+                       "system_function.md:311「计划后续版本抛弃」"),
+    "get_market_data": ("get_market_data_ex",
+                        "data_function.md:1246【不推荐】"),
+    "get_history_data": ("get_market_data_ex",
+                         "data_function.md:1186【不推荐】"),
+    "get_local_data": ("get_market_data_ex",
+                       "data_function.md:1099【不推荐】"),
+    "run_time": ("schedule_run",
+                 "system_function.md:117「新版设置定时器函数」"),
+    "get_instrumentdetail": ("get_instrument_detail",
+                             "data_function.md:1931「旧版本客户端的函数名」"),
 }
 
 QMT_ENTRY_FUNCS = {"init", "after_init", "handlebar"}
@@ -320,6 +339,27 @@ def check_volume_literal(tree: ast.AST) -> list[Issue]:
     return issues
 
 
+def check_legacy_api(tree: ast.AST) -> list[Issue]:
+    """禁掉官方标注为不推荐 / 已弃用 / 旧版的接口, 并校参数个数。"""
+    issues = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _call_name(node)
+        if name == "get_instrument_detail" and len(node.args) > 1:
+            issues.append(Issue(
+                "api_sig",
+                "get_instrument_detail 只接受 1 个位置参数 (stockcode); "
+                "旧版本客户端不支持 iscomplete, 多传会 TypeError",
+                node.lineno))
+        legacy = LEGACY_APIS.get(name)
+        if legacy is not None:
+            issues.append(Issue(
+                "legacy_api",
+                f"{name} 是旧版接口, 请改用 {legacy[0]} ({legacy[1]})",
+                node.lineno))
+    return issues
+
 CHECKS = (
     check_encoding,
     check_py36,
@@ -328,6 +368,7 @@ CHECKS = (
     check_tick_fields,
     check_entry_shape,
     check_volume_literal,
+    check_legacy_api,
 )
 
 

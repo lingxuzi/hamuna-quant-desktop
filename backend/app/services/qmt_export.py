@@ -249,21 +249,58 @@ def _tradable_codes(C):
     return result
 
 
+def _instrument_detail(C, code):
+    """兼容 QMT 客户端版本: 有的只收 stockcode, 有的另有 iscomplete 参数。"""
+    getter = (getattr(C, "get_instrument_detail", None)
+              or getattr(C, "get_instrumentdetail", None))
+    if getter is None:
+        return {}
+    try:
+        return getter(code, True) or {}
+    except TypeError:
+        # 老版本客户端的签名是 get_instrument_detail(stockcode)
+        return getter(code) or {}
+
+def _shares(C, code, detail):
+    """流通股本 / 总股本。
+
+    优先 ContextInfo 专接口 (data_function.md: get_last_volume / get_total_share);
+    老客户端没有这两个方法时退回合约信息里的 FloatVolume / TotalVolume
+    (低等级客户端字段名可能是 FloatVolumn / TotalVolumn)。
+    """
+    float_volume = 0.0
+    total_volume = 0.0
+    if hasattr(C, "get_last_volume") and hasattr(C, "get_total_share"):
+        try:
+            float_volume = float(C.get_last_volume(code) or 0.0)
+            total_volume = float(C.get_total_share(code) or 0.0)
+        except (TypeError, ValueError):
+            float_volume = 0.0
+            total_volume = 0.0
+    if not float_volume:
+        float_volume = float(detail.get("FloatVolume")
+                              or detail.get("FloatVolumn") or 0.0)
+    if not total_volume:
+        total_volume = float(detail.get("TotalVolume")
+                              or detail.get("TotalVolumn") or 0.0)
+    return float_volume, total_volume
+
 def _stock_meta(C, codes):
     """名称 / 流通股本 / 总股本，逐标的缓存。"""
     names = []
     float_shares = []
     total_shares = []
     for code in codes:
-        detail = _INSTRUMENT_CACHE.get(code)
-        if detail is None:
-            detail = C.get_instrument_detail(code, True) or {}
-            _INSTRUMENT_CACHE[code] = detail
-        names.append(str(detail.get("InstrumentName") or ""))
-        float_shares.append(float(detail.get("FloatVolume")
-                                  or detail.get("FloatVolumn") or 0.0))
-        total_shares.append(float(detail.get("TotalVolume")
-                                  or detail.get("TotalVolumn") or 0.0))
+        row = _INSTRUMENT_CACHE.get(code)
+        if row is None:
+            detail = _instrument_detail(C, code)
+            float_volume, total_volume = _shares(C, code, detail)
+            row = (str(detail.get("InstrumentName") or ""),
+                   float_volume, total_volume)
+            _INSTRUMENT_CACHE[code] = row
+        names.append(row[0])
+        float_shares.append(row[1])
+        total_shares.append(row[2])
     return names, float_shares, total_shares
 
 
@@ -448,7 +485,11 @@ def _signals(market):
 
 # ── 下单 ──────────────────────────────────────────────────────────
 def _account(C):
-    return CONFIG.get("account_id") or getattr(C, "account", "") or ""
+    """资金账号: 优先导出配置, 其次取 QMT 注入的全局 account
+    (trading_function.md: 策略交易界面运行时 account 会被赋值为策略配置账号)。"""
+    return (CONFIG.get("account_id")
+            or globals().get("account", "")
+            or getattr(C, "account", "") or "")
 
 
 def _positions(C):
@@ -674,6 +715,8 @@ def _signal_row(market, entry_fill):
 
 def _on_open(C):
     """实盘盘前：重算最近窗口，按上一交易日收盘信号下单。"""
+    # 股本每天可能变 (解禁 / 回购), 缓存跨天会拿到陈旧流通股本
+    _INSTRUMENT_CACHE.clear()
     market = _build_market(C, _STATE.codes, int(WARMUP_BARS) + 5, "")
     if market is None:
         print("warn: no market data at open")
