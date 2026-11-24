@@ -226,15 +226,46 @@ _BAR_FIELDS = ["open", "high", "low", "close", "volume", "amount", "preClose"]
 _INSTRUMENT_CACHE = {}
 
 
+def _xt(name, *args, **kwargs):
+    """优先走 xtquant 原生接口。
+
+    ContextInfo 在部分客户端是 pybind11 绑定 (python/_PyContextInfo.py), 它的
+    返回值转不成 Python 对象 —— get_market_data_ex 会报 "Unable to convert
+    function return value to a Python type"; 原生接口返回纯 dict, 一定可用。
+    拿不到 (没有 xtquant / 服务没开) 时返回 None, 由调用方退回 ContextInfo。
+    """
+    if xtdata is None:
+        return None
+    func = getattr(xtdata, name, None)
+    if func is None:
+        return None
+    try:
+        return func(*args, **kwargs)
+    except Exception as exc:
+        warned = globals().setdefault("_XT_FAILED", set())
+        if name not in warned:
+            warned.add(name)
+            print("[qmt-export] xtquant.%s 调用失败, 回退 ContextInfo: %s"
+                  % (name, exc))
+        return None
+
+
 # ── 股票池 ────────────────────────────────────────────────────────
+def _sector_codes(C, sector):
+    codes = _xt("get_stock_list_in_sector", sector)
+    if codes is None:
+        codes = C.get_stock_list_in_sector(sector)
+    return list(codes or [])
+
+
 def _tradable_codes(C):
     pool = CONFIG["universe"]
     if pool in ("沪深A股", "沪深京A股"):
-        codes = list(C.get_stock_list_in_sector("沪深A股"))
+        codes = _sector_codes(C, "沪深A股")
         if pool == "沪深京A股":
-            codes += list(C.get_stock_list_in_sector("京市A股"))
+            codes += _sector_codes(C, "京市A股")
     else:
-        codes = list(C.get_stock_list_in_sector(pool))
+        codes = _sector_codes(C, pool)
     # 剔除可转债 / 逆回购：它们混在A股板块里但语义完全不同
     result = []
     for code in codes:
@@ -250,7 +281,10 @@ def _tradable_codes(C):
 
 
 def _instrument_detail(C, code):
-    """兼容 QMT 客户端版本: 有的只收 stockcode, 有的另有 iscomplete 参数。"""
+    """取合约信息。xtquant 原生接口只有一个参数, 没有 iscomplete 的版本差异。"""
+    detail = _xt("get_instrument_detail", code)
+    if detail:
+        return detail
     getter = (getattr(C, "get_instrument_detail", None)
               or getattr(C, "get_instrumentdetail", None))
     if getter is None:
@@ -264,25 +298,23 @@ def _instrument_detail(C, code):
 def _shares(C, code, detail):
     """流通股本 / 总股本。
 
-    优先 ContextInfo 专接口 (data_function.md: get_last_volume / get_total_share);
-    老客户端没有这两个方法时退回合约信息里的 FloatVolume / TotalVolume
-    (低等级客户端字段名可能是 FloatVolumn / TotalVolumn)。
+    先用合约信息里的字段 —— 那是本地数据, 零网络访问; 低等级客户端的字段名
+    可能是 FloatVolumn / TotalVolumn。字段缺失时才退到 ContextInfo 的
+    get_last_volume / get_total_share, 那两个要问行情服务器, 可能被 QMT
+    的网络访问策略拦下。
     """
-    float_volume = 0.0
-    total_volume = 0.0
+    float_volume = float(detail.get("FloatVolume")
+                          or detail.get("FloatVolumn") or 0.0)
+    total_volume = float(detail.get("TotalVolume")
+                          or detail.get("TotalVolumn") or 0.0)
+    if float_volume and total_volume:
+        return float_volume, total_volume
     if hasattr(C, "get_last_volume") and hasattr(C, "get_total_share"):
         try:
-            float_volume = float(C.get_last_volume(code) or 0.0)
-            total_volume = float(C.get_total_share(code) or 0.0)
+            float_volume = float(C.get_last_volume(code) or 0.0) or float_volume
+            total_volume = float(C.get_total_share(code) or 0.0) or total_volume
         except (TypeError, ValueError):
-            float_volume = 0.0
-            total_volume = 0.0
-    if not float_volume:
-        float_volume = float(detail.get("FloatVolume")
-                              or detail.get("FloatVolumn") or 0.0)
-    if not total_volume:
-        total_volume = float(detail.get("TotalVolume")
-                              or detail.get("TotalVolumn") or 0.0)
+            pass
     return float_volume, total_volume
 
 def _stock_meta(C, codes):
@@ -306,10 +338,21 @@ def _stock_meta(C, codes):
 
 # ── 取数 ──────────────────────────────────────────────────────────
 def _fetch(C, codes, count, end_time, adjust):
+    """取日线。优先走 xtquant 原生接口 (见 _xt 的说明)。
+
+    ContextInfo 版只在原生接口不可用时兜底, 且不订阅 (subscribe=False):
+    订阅会向行情服务器发起连接, 「Python 进程访问了网络地址」会被 QMT
+    直接中止策略; 订阅数量还有上限 (日线约 300 只), 全市场订阅不完。
+    """
+    data = _xt("get_market_data_ex", _BAR_FIELDS, codes, period="1d",
+               end_time=end_time, count=count, dividend_type=adjust,
+               fill_data=False)
+    if data is not None:
+        return data
     return C.get_market_data_ex(_BAR_FIELDS, codes, period="1d",
                                 end_time=end_time, count=count,
                                 dividend_type=adjust, fill_data=False,
-                                subscribe=not C.do_back_test)
+                                subscribe=False)
 
 
 def _panel(raw, codes, field):
@@ -621,13 +664,25 @@ def _trade(C, market, entry_row, exit_row, last_row, today):
 
 
 def _live_price_row(C, market):
-    """实盘用最新分笔价成交；取不到就退回昨收。"""
+    """实盘判断止损用的最新分笔价；取不到就退回昨收。
+
+    只取持仓标的 —— 对全市场几千只调 get_full_tick 会让客户端向行情服务器
+    请求全推, 触发 QMT 的网络访问拦截。买入价由 passorder 的 prType=5
+    (最新价) 交给客户端, 这里的价格只用于判断止损与信号, 用昨收即可。
+    """
     row = np.array(market.close[-1], dtype=np.float64, copy=True)
-    try:
-        ticks = C.get_full_tick(list(market.symbols))
-    except Exception:
+    held = [code for code in _positions(C) if code in market.symbols]
+    if not held:
         return row
+    ticks = _xt("get_full_tick", held)
+    if ticks is None:
+        try:
+            ticks = C.get_full_tick(held)
+        except Exception:
+            return row
     for column, code in enumerate(market.symbols):
+        if code not in held:
+            continue
         tick = ticks.get(code) or {}
         price = tick.get("lastPrice")
         if price and float(price) > 0:
@@ -719,7 +774,8 @@ def _on_open(C):
     _INSTRUMENT_CACHE.clear()
     market = _build_market(C, _STATE.codes, int(WARMUP_BARS) + 5, "")
     if market is None:
-        print("warn: no market data at open")
+        print("warn: no market data at open (本地没有该股票池的日线历史? "
+              "需在 QMT 客户端下载)")
         return
     entry, exit_, score = _signals(market)
     row = _signal_row(market, CONFIG.get("entry_fill", "open_t+1"))
@@ -743,11 +799,14 @@ def _header(strategy, strategy_id: str, meta: dict) -> str:
         "2. basic_filter 的 exclude_new_days 未生效（仓库在 polars 层过滤，本文件无该口径）",
         "3. ST 判定用 export 时的当期简称，历史 ST 期间会被按板块带宽处理",
         "4. CONFIG['live_trade'] 默认为 False，只打印信号不下单",
+        "5. 行情走 xtquant 原生接口 (xtdata) 取，不走 ContextInfo —— 后者在"
+        "部分客户端是 pybind11 绑定，返回值转不成 Python 对象",
     ]
     if strategy.matrix_strategy is None:
         # 表达式策略没有可执行的 filter(), 入场/出场由 ENTRY/EXIT_SIGNALS 重算
-        lines.insert(-1, "5. 表达式策略的 filter() 不随导出运行，买卖点只按 "
-                         "ENTRY_SIGNALS/EXIT_SIGNALS 重算（导出期已校验两者等价）")
+        lines.append(
+            "6. 表达式策略的 filter() 不随导出运行，买卖点只按 "
+            "ENTRY_SIGNALS/EXIT_SIGNALS 重算（导出期已校验两者等价）")
     lines += ['"""', ""]
     return "\n".join(lines)
 
@@ -895,6 +954,13 @@ def build_qmt_script(
         _header(strategy, strategy_id, strategy.meta),
         "import time",
         "import numpy as np",
+        "",
+        "# xtquant 原生接口: 返回值是纯 Python 对象, 能跨进程传;",
+        "# ContextInfo 在部分客户端是 pybind11 绑定, 返回值转换会失败。",
+        "try:",
+        "    from xtquant import xtdata",
+        "except Exception:",
+        "    xtdata = None",
         "",
         _constants(strategy, dict(config, _overrides=overrides), params,
                    signals=declared_signals),
