@@ -44,7 +44,8 @@ def list_alerts(
                 events = _rows_with_ext(events, value_maps)
         except Exception:  # noqa: BLE001
             pass
-    total = alert_store.count(_data_dir(request))
+    # 与列表用同一个 days 窗口, 否则 total 会包含本次查询之外的历史记录
+    total = alert_store.count(_data_dir(request), days=days)
     return {"alerts": events, "total": total}
 
 

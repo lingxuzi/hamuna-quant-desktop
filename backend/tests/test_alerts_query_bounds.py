@@ -67,3 +67,16 @@ def test_valid_params_still_return_all_records(tmp_path):
         resp = client.get("/api/alerts", params=params)
         assert resp.status_code == 200, resp.text
         assert len(resp.json()["alerts"]) == min(3, params["limit"])
+
+def test_total_shares_the_same_window_as_the_rows(tmp_path):
+    """总数与列表必须同一时间窗口 —— 否则页面按总数渲染条目、按列表渲染行,
+    过期记录会让「32 条异动」下面一条都不显示。"""
+    now_ms = int(time.time() * 1000)
+    stale = now_ms - (alert_store.MAX_DAYS + 1) * 86400 * 1000
+    alert_store.append_many(tmp_path, [
+        {"ts": now_ms, "rule_id": "fresh", "source": "monitor", "type": "price"},
+        {"ts": stale, "rule_id": "stale", "source": "monitor", "type": "price"},
+    ])
+    body = _client(tmp_path).get("/api/alerts", params={"days": 7}).json()
+    assert [e["rule_id"] for e in body["alerts"]] == ["fresh"]
+    assert body["total"] == 1

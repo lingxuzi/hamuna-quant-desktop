@@ -177,16 +177,13 @@ def delete_one(data_dir: Path, ts: int) -> bool:
         return True
 
 
-def count(data_dir: Path) -> int:
-    """返回当前记录总数。持锁读, 防与整文件重写并发。"""
-    p = _path(data_dir)
-    if not p.exists():
-        return 0
-    try:
-        with _lock, p.open("r", encoding="utf-8") as f:
-            return sum(1 for line in f if line.strip())
-    except Exception:
-        return 0
+def count(data_dir: Path, days: int = MAX_DAYS) -> int:
+    """返回近 N 天记录数 —— 直接数 list_recent 的结果, 窗口口径不可能漂移。
+
+    早先是「文件里所有非空行」, 会把已过期、只等 prune 清理的记录算进去:
+    页面按总数渲染条目、按 list_recent 渲染行, 就出现「32 条异动」下面一条不显示。
+    """
+    return len(list_recent(data_dir, days=days, limit=MAX_RECORDS))
 
 
 def _prune_locked(p: Path) -> None:
