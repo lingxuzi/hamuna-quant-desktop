@@ -375,6 +375,7 @@ jobs:
           # (报 "You must specify a region") —— 显式给一个占位值。
           AWS_DEFAULT_REGION: us-east-1
           R2_BUCKET: ${{ vars.HQUANT_R2_BUCKET }}
+          UPDATE_BASE_URL: ${{ vars.HQUANT_UPDATE_BASE_URL }}
         run: |
           set -euo pipefail
           # 清单刚由上一步上传到 Release, 这里取本地生成的那份 (同 job 同工作区)
@@ -396,22 +397,71 @@ jobs:
             exit 1
           fi
 
-          # 桶名没配就自动发现: 凭据在, ListBuckets 能看到可访问的桶。
-          # 只有一个就直接用 (省掉一次手工抄桶名); 多个则列出来让人挑;
-          # 一个都列不出 → 多半是 endpoint 配错或 token 权限不足, 直接点名要人工确认。
+          # endpoint 归一 —— R2 的 S3 端点有两种写法:
+          #   账户级 https://<ACCOUNT>.r2.cloudflarestorage.com
+          #   桶级   https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>
+          # 桶级写法的路径里就带着桶名 (省掉一次手工配置); 上传一律用账户级
+          # 端点 + path-style, 请求 URL 固定为 R2 文档里的
+          # https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>/<KEY>。
+          EP="${AWS_ENDPOINT_URL%/}"
+          case "$EP" in
+            http://*|https://*) ;;
+            *) echo "::error::R2 endpoint 非法: '$AWS_ENDPOINT_URL' (应以 http:// 或 https:// 开头)"; exit 1 ;;
+          esac
+          EP_HOST="${EP%%://*}"          # https
+          EP_REST="${EP#*://}"           # <ACCOUNT>.r2.cloudflarestorage.com[/<BUCKET>]
+          EP_HOST="$EP_HOST://${EP_REST%%/*}"
+          EP_BUCKET=""
+          if [ "${EP_REST%%/*}" != "$EP_REST" ]; then
+            EP_BUCKET="${EP_REST#*/}"    # 桶级写法 → 路径末段就是桶名
+            EP_BUCKET="${EP_BUCKET##*/}"
+          fi
+
+          # 桶名来源优先级:
+          #   1. 仓库变量 HQUANT_R2_BUCKET (显式配置, 永远最准)
+          #   2. endpoint 路径 (桶级写法自带桶名)
+          #   3. 更新基址反推 (R2 公开开发域名形如 https://pub-<BUCKET>.r2.dev,
+          #      桶名就在域名里 —— 不用再多配一个变量就能推出来)
+          #   4. ListBuckets 自动发现 (兜底: R2 的 API token 默认只授权单桶,
+          #      多半没有 ListBuckets 权限, 走到这里说明前三条都没用上)
+          if [ -z "${R2_BUCKET:-}" ] && [ -n "$EP_BUCKET" ]; then
+            R2_BUCKET="$EP_BUCKET"
+            echo "::notice::从 R2 endpoint 路径取到桶名: $R2_BUCKET"
+          fi
+          UB="${UPDATE_BASE_URL%/}"
+          UB_HOST="${UB#*://}"; UB_HOST="${UB_HOST%%/*}"
+          bucket_ok() {   # 桶存在性探测: 列得出对象 (rc=0) 才算存在
+            aws s3 ls "s3://$1/" --endpoint-url "$EP_HOST" --max-items 1 >/dev/null 2>&1
+          }
+          if [ -z "${R2_BUCKET:-}" ] && [ "${UB_HOST%.r2.dev}" != "$UB_HOST" ]; then
+            stem="${UB_HOST%.r2.dev}"
+            cands=("$stem")
+            case "$stem" in pub-*) cands+=("${stem#pub-}") ;; esac
+            last=""
+            for cand in "${cands[@]}"; do
+              if bucket_ok "$cand"; then R2_BUCKET="$cand"; break; fi
+              last="$cand"
+            done
+            # 一个都探不出来 (权限不足等) → 留最后一个候选, 让上传步骤去报错
+            [ -z "${R2_BUCKET:-}" ] && [ -n "$last" ] && R2_BUCKET="$last"
+            [ -n "${R2_BUCKET:-}" ] && echo "::notice::从更新基址 $UB_HOST 反推出桶名: $R2_BUCKET"
+          fi
           if [ -z "${R2_BUCKET:-}" ]; then
-            buckets=$(aws s3 ls --endpoint-url "$AWS_ENDPOINT_URL" \
-                        --query 'Buckets[].Name' --output text 2>/dev/null \
-                      | tr '\t' '\n' | sed '/^$/d' || true)
-            count=$(printf '%s\n' "$buckets" | grep -c . || true)
+            ls_err="$(mktemp)"
+            buckets=$(aws s3 ls --endpoint-url "$EP_HOST" \
+                        --query 'Buckets[].Name' --output text 2>"$ls_err" || true)
+            names=$(printf '%s\n' "$buckets" | tr '\t' '\n' | sed '/^$/d')
+            count=$(printf '%s\n' "$names" | grep -c . || true)
             if [ "$count" = "1" ]; then
-              R2_BUCKET=$(printf '%s\n' "$buckets" | head -n1)
-              echo "::notice::未配置 variable HQUANT_R2_BUCKET, 自动发现桶名: $R2_BUCKET"
-            elif [ "$count" = "0" ]; then
-              echo "::error::未配置 variable HQUANT_R2_BUCKET, 且 ListBuckets 列不出任何桶 —— 检查 secret R2_ENDPOINT_URL 与 token 权限, 或直接在 R2 控制台确认桶名后填入该仓库变量。"
+              R2_BUCKET=$(printf '%s\n' "$names" | head -n1)
+              echo "::notice::自动发现桶名: $R2_BUCKET"
+            elif [ "$count" -gt 1 ]; then
+              echo "::error::凭据可见多个桶 (${count} 个): $(printf '%s\n' "$names" | paste -sd, -)。请在 R2 控制台确认要发版的桶, 填入该仓库变量 HQUANT_R2_BUCKET。"
               exit 1
             else
-              echo "::error::未配置 variable HQUANT_R2_BUCKET, 且凭据可见多个桶 (${count} 个): ${buckets//$'\n'/, }。请在 R2 控制台确认要发版的桶, 填入该仓库变量。"
+              echo "::error::定不出桶名, 且 ListBuckets 列不出任何桶。"
+              echo "::error::aws s3 ls 的真实报错: $(tr '\n' ' ' < "$ls_err")"
+              echo "::error::三种修法: ① 在 R2 控制台确认桶名, 填入本仓库变量 HQUANT_R2_BUCKET; ② 把 secret R2_ENDPOINT_URL 改成桶级写法 (https://<ACCOUNT>.r2.cloudflarestorage.com/<BUCKET>); ③ 让 HQUANT_UPDATE_BASE_URL 用 R2 的公开开发域名 (https://pub-<BUCKET>.r2.dev), 桶名会从域名里反推出来。"
               exit 1
             fi
           fi
@@ -422,7 +472,29 @@ jobs:
               exit 1 ;;
           esac
 
+          # path-style: AWS CLI 默认按桶名拼 virtual-host 域名, 这里显式钉死
+          # path-style, 请求 URL 才是 <账户级端点>/<桶名>/<KEY>。
+          AWS_CONFIG_FILE="$(mktemp)"
+          export AWS_CONFIG_FILE
+          printf '[default]\ns3 =\n  addressing_style = path\n' > "$AWS_CONFIG_FILE"
+
           aws s3 cp latest.json "s3://$R2_BUCKET/latest.json" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
+            --endpoint-url "$EP_HOST" \
             --content-type "application/json" \
             --cache-control "public, max-age=300"
+
+          # 公网自检 —— 客户端就是从这个地址读清单, 浏览器直连必须带 CORS 头,
+          # 否则 fetch 被浏览器拦掉, "检查更新"永远失败 (R2 的 token 只有对象
+          # 读写权限, 改不了桶的 CORS 策略, 只能在这里验 + 报错指路)。
+          hdr="$(mktemp)"
+          if ! curl -fsS -D "$hdr" -o /dev/null \
+               -H "Origin: http://127.0.0.1:3018" "$UB/latest.json"; then
+            echo "::error::上传成功, 但公网地址读不到清单: $UB/latest.json —— 检查桶是否公开、r2.dev 域名是否已启用。"
+            exit 1
+          fi
+          if ! grep -qi '^access-control-allow-origin:' "$hdr"; then
+            echo "::error::清单已上传, 但 R2 桶没开 CORS —— 浏览器直连会被拦, 客户端「检查更新」拿不到版本。"
+            echo "::error::在 R2 控制台 → ${R2_BUCKET} → 设置 → CORS 策略, 粘贴: [{\"AllowedOrigins\":[\"*\"],\"AllowedMethods\":[\"GET\",\"HEAD\"],\"AllowedHeaders\":[\"*\"],\"MaxAgeSeconds\":3600}]"
+            exit 1
+          fi
+          echo "::notice::更新清单已发布: $UB/latest.json"
