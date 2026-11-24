@@ -371,11 +371,57 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          # R2 不区分 region, 但 AWS CLI 没有 region 就不发请求
+          # (报 "You must specify a region") —— 显式给一个占位值。
+          AWS_DEFAULT_REGION: us-east-1
           R2_BUCKET: ${{ vars.HQUANT_R2_BUCKET }}
         run: |
           set -euo pipefail
           # 清单刚由上一步上传到 Release, 这里取本地生成的那份 (同 job 同工作区)
           test -f latest.json || { echo "::error::latest.json 未生成"; exit 1; }
+
+          # 凭据缺一不可 —— 缺了就点名, 别让 AWS 抛 "Invalid bucket name" 正则错误
+          # (那次失败: 桶名变量没配, 拼出 s3:///latest.json, 报错完全指不到配置项)
+          # 注意 secret 名与注入的 env 名不同 (R2_ACCESS_KEY_ID → AWS_ACCESS_KEY_ID),
+          # 按 env 名取值、按 secret 名报错。
+          missing=()
+          for pair in "R2_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID" \
+                      "R2_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY" \
+                      "R2_ENDPOINT_URL=AWS_ENDPOINT_URL"; do
+            secret_name="${pair%%=*}"; env_name="${pair#*=}"
+            [ -n "${!env_name:-}" ] || missing+=("secret $secret_name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::R2 凭据缺失: ${missing[*]} —— 在仓库 Settings → Secrets and variables → Actions 里补齐后重跑。"
+            exit 1
+          fi
+
+          # 桶名没配就自动发现: 凭据在, ListBuckets 能看到可访问的桶。
+          # 只有一个就直接用 (省掉一次手工抄桶名); 多个则列出来让人挑;
+          # 一个都列不出 → 多半是 endpoint 配错或 token 权限不足, 直接点名要人工确认。
+          if [ -z "${R2_BUCKET:-}" ]; then
+            buckets=$(aws s3 ls --endpoint-url "$AWS_ENDPOINT_URL" \
+                        --query 'Buckets[].Name' --output text 2>/dev/null \
+                      | tr '\t' '\n' | sed '/^$/d' || true)
+            count=$(printf '%s\n' "$buckets" | grep -c . || true)
+            if [ "$count" = "1" ]; then
+              R2_BUCKET=$(printf '%s\n' "$buckets" | head -n1)
+              echo "::notice::未配置 variable HQUANT_R2_BUCKET, 自动发现桶名: $R2_BUCKET"
+            elif [ "$count" = "0" ]; then
+              echo "::error::未配置 variable HQUANT_R2_BUCKET, 且 ListBuckets 列不出任何桶 —— 检查 secret R2_ENDPOINT_URL 与 token 权限, 或直接在 R2 控制台确认桶名后填入该仓库变量。"
+              exit 1
+            else
+              echo "::error::未配置 variable HQUANT_R2_BUCKET, 且凭据可见多个桶 (${count} 个): ${buckets//$'\n'/, }。请在 R2 控制台确认要发版的桶, 填入该仓库变量。"
+              exit 1
+            fi
+          fi
+          # 桶名先按 S3 规则自检, 别把非法值交给 AWS 去报正则
+          case "$R2_BUCKET" in
+            ""|*[!a-z0-9.-]*)
+              echo "::error::桶名非法: '$R2_BUCKET' (只允许小写字母、数字、连字符与点)"
+              exit 1 ;;
+          esac
+
           aws s3 cp latest.json "s3://$R2_BUCKET/latest.json" \
             --endpoint-url "$AWS_ENDPOINT_URL" \
             --content-type "application/json" \
