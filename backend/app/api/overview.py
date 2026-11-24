@@ -363,6 +363,22 @@ def _build_overview(request: Request, as_of: date | None = None) -> dict:
     )
 
 
+def peek_overview(request: Request) -> dict:
+    """读取总览聚合结果, 给外部风险温度等服务复用 (不重复全市场扫描)。
+
+    命中缓存直接用; 未命中则按最新日期装配一份, 但不写缓存 —— 写入权仍归
+    market_overview 端点, 避免旁路把半新数据钉进 TTL 窗口。
+    """
+    with _cache_lock:
+        cached = _cache if _cache_key == "latest" else None
+    if cached is not None:
+        return cached
+    try:
+        return _build_overview(request)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 @router.get("/market")
 def market_overview(request: Request, as_of: date | None = None):
     """总览页单次请求聚合数据，避免前端拉全市场明细后再计算。"""

@@ -90,6 +90,22 @@ export function Dashboard() {
     queryFn: () => api.alertsList({ days: 7, limit: 10 }),
     refetchInterval: 60_000,
   })
+  // 盘前简报与要闻: 同样必须在下面的早退之前声明。盘前是隔夜收盘 3 分钟一刷,
+  // 要闻按 30s 轮询; 都不订阅行情 SSE。
+  const premarket = useQuery({
+    queryKey: QK.newsPremarket,
+    queryFn: api.newsPremarket,
+    refetchInterval: 180_000,
+    retry: false,
+  })
+  const news = useQuery({
+    queryKey: QK.newsFast(),
+    queryFn: () => api.newsFast({ limit: 12 }),
+    refetchInterval: 30_000,
+  })
+  // 自选代码: 用来在要闻里标出「命中自选」的行 (与自选页共用缓存, 不额外请求)
+  const watchlist = useQuery({ queryKey: QK.watchlist, queryFn: api.watchlistList, staleTime: 60_000 })
+  const watchlistSymbols = new Set((watchlist.data?.symbols ?? []).map(w => w.symbol))
   const data = overview.data
   const caps = useCapabilities()
   const settings = useSettings()
@@ -237,6 +253,9 @@ export function Dashboard() {
       rows: (alerts.data?.alerts ?? []).filter(ev => ev.symbol).slice(0, 4)
         .map(ev => ({ symbol: ev.symbol!, name: ev.name, desc: ev.message })),
     },
+    premarket: premarket.data,
+    news: news.data?.items ?? [],
+    watchlistSymbols,
   }
 
   return (
@@ -271,7 +290,7 @@ export function Dashboard() {
       </AnimatePresence>
       {/* 无除权因子能力时的同步前置确认 */}
       {adjGate.dialog}
-      <PageHeader title="市场看板" subtitle="MARKET BOARD" seal="盘" />
+      <PageHeader title="市场看板" subtitle="市场看板" seal="盘" />
 
       <div className="toolbar">
         <div className="tb-left">
@@ -341,7 +360,8 @@ export function Dashboard() {
           编辑态隐藏纪事与右栏, 网格独占宽度 — 否则「添加组件」后新格子被挤到右栏底下。
           索引/分布/雷达/趋势/梯队等已由纪事承载的组件默认不在布局里, 用「添加组件」补回时按普通格子渲染。 */}
       {!dashEditing && <Headline data={data} />}
-      {!dashEditing && <Chronicle ctx={chronicleCtx} />}
+      {/* 网格在纪事之上: 自己摆的组件是当日阅读的入口, 排在手边第一屏;
+          纪事流是随后逐条展开的叙事。放在下面要滚很久才能碰到自己加的东西。 */}
       {/* 默认布局为空 (纪事+右栏已承载) 时不挂网格 — 空容器多出 6px 间距 */}
       {(dashEditing || dashItems.length > 0) && (
         <DashboardGrid
@@ -351,6 +371,7 @@ export function Dashboard() {
           editing={dashEditing}
         />
       )}
+      {!dashEditing && <Chronicle ctx={chronicleCtx} />}
       <footer className="coda">
         <span className="coda-mark">卷末</span>
         <div className="coda-fin">
@@ -421,7 +442,7 @@ function FetchDataCard({
             ⓘ 获取数据后即可进行策略定制、回测验证、策略扫描等本地分析功能。
           </p>
           <p className="mt-1 text-[11px] text-muted leading-relaxed">
-            💡 配置同花顺接口 Key 可解锁财务四表 / 龙虎榜 / 盘前风向标 / 竞价异动:
+            💡 配置同花顺接口密钥可解锁财务四表 / 龙虎榜 / 盘前风向标 / 竞价异动:
             <Link to="/settings?tab=data-sources" className="text-accent hover:text-accent/80 transition-colors">前往设置 →</Link>
           </p>
 
@@ -505,7 +526,7 @@ function WelcomeFetchModal({
         <div className="mx-auto mt-4 max-w-md rounded-btn bg-elevated/60 px-4 py-3 text-left">
           <div className="text-[11px] font-medium text-secondary">获取完成后的推荐步骤</div>
           <ol className="mt-1.5 space-y-1 text-[11px] text-muted leading-relaxed">
-            <li>1. <span className="text-secondary">配置同花顺接口 Key</span> — 解锁财务四表 / 龙虎榜 / 盘前风向标 / 竞价异动</li>
+            <li>1. <span className="text-secondary">配置同花顺接口密钥</span> — 解锁财务四表 / 龙虎榜 / 盘前风向标 / 竞价异动</li>
             <li>2. <span className="text-secondary">分钟数据落盘(可选)</span> — 分钟策略回测与板块分时走势需要</li>
             <li>3. <span className="text-secondary">开始研究</span> — 自选加标的 → 策略扫描 → 回测验证</li>
           </ol>

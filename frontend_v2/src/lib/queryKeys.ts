@@ -34,6 +34,9 @@ export const QK = {
   quoteStatus:    ['quote-status'] as const,
   quoteInterval:  ['quote-interval'] as const,
   overviewMarket: (asOf?: string) => ['overview-market', asOf ?? 'latest'] as const,
+  // 要闻与盘前: 不随行情 tick 失效 (新闻按自己的 30s 轮询, 外盘是隔夜收盘)
+  newsFast: (symbols?: string[]) => ['news-fast', (symbols ?? []).join(',')] as const,
+  newsPremarket: ['news-premarket'] as const,
   indexQuotes:    ['index-quotes'] as const,
 
   // Watchlist

@@ -191,9 +191,81 @@ def _build_emotion_block(overview: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_premarket_block(overview: dict, news: list[dict]) -> str:
+    """隔夜外围 + 外部风险温度 + 事件传导链, 作为复盘的盘前上下文。
+
+    外部风险温度(-100..+100)与本节的市场情绪评分(0-100)是两套口径:
+    前者衡量隔夜外围环境, 后者衡量当日 A 股内部情绪, 不要混为一谈。
+    """
+    from app.services import premarket as premarket_svc
+
+    try:
+        snap = premarket_svc.snapshot()
+    except Exception:  # noqa: BLE001
+        return ""
+    if not snap.get("markets") and not snap.get("cross_assets"):
+        return ""
+
+    lines: list[str] = []
+    mk = snap.get("markets") or []
+    if mk:
+        lines.append("### 隔夜外盘")
+        for m in mk:
+            pct = m.get("pct")
+            lines.append(
+                f"- {m.get('name')}（{m.get('region')}）{m.get('close')}"
+                + (f" {pct:+.2f}%" if pct is not None else "（涨跌幅未知）")
+            )
+    cx = snap.get("cross_assets") or []
+    if cx:
+        lines.append("")
+        lines.append("### 跨资产")
+        for c in cx:
+            pct = c.get("pct")
+            role = "低权重计分" if c.get("role") == "scored" else "背景观察"
+            lines.append(f"- {c.get('name')}（{role}）{c.get('close')}"
+                         + (f" {pct:+.2f}%" if pct is not None else ""))
+
+    risk = premarket_svc.compute_risk(overview, snap, news)
+    lines.extend([
+        "",
+        "### 外部风险温度",
+        f"- 得分 {risk['score']:+d}（{risk['stance']}），置信度 {risk['confidence']}",
+        f"- 结论: {risk['summary']}",
+        *[f"- 研究观察: {a}" for a in risk["advice"]],
+        f"- 口径: {risk['methodology']}",
+        "- 分项: " + "；".join(
+            f"{s['label']} {s['score']:+.1f}（{s['value']}）" for s in risk["signals"]
+        ),
+    ])
+
+    events = [e for e in premarket_svc.build_events(news, snap) if e["headline_count"] > 0]
+    if events:
+        lines.extend([
+            "",
+            "### 事件传导链（待验证线索, 不直接计分）",
+            "以下 `事实` 可核验，`推断` 只是本系统的假设 —— 写结论时不得把两者混成一句。",
+        ])
+        for e in events:
+            facts, infer = e["facts"], e["inference"]
+            lines.append(f"- **{e['label']}**（{e['headline_count']} 条）")
+            lines.append("  - 事实·命中标题: " + "；".join(
+                f"{h.get('title')}（{h.get('source')}）" for h in facts["headlines"]))
+            lines.append("  - 事实·指标读数: " + "；".join(
+                f"{w['code']} {w['value']}{w.get('unit') or ''}"
+                f"{'（' + w['state'] + '）' if w.get('state') != 'fresh' else ''}"
+                for w in facts["watch"]))
+            lines.append(f"  - 推断·宏观传导: {infer['macro_path']}")
+            lines.append(f"  - 推断·A 股映射: {infer['a_share_lens']}")
+            lines.append(f"  - 推断·失效条件: {infer['invalidation']}")
+
+    return "\n".join(lines)
+
+
 def _build_user_prompt(overview: dict, news: list[dict], focus: str, lhb_context: str = "",
-                       bench_context: str = "") -> str:
-    """构建用户消息:复盘日期 + 市场数据精简切片 + 龙虎榜(可选) + 盘前风向标(可选) + 新闻 + 关注点。"""
+                       bench_context: str = "", premarket_context: str = "") -> str:
+    """构建用户消息:复盘日期 + 市场数据精简切片 + 龙虎榜(可选) + 盘前风向标(可选)
+    + 盘前外围(可选) + 新闻 + 关注点。"""
     as_of = overview.get("as_of") or "今日"
 
     parts: list[str] = [
@@ -230,6 +302,10 @@ def _build_user_prompt(overview: dict, news: list[dict], focus: str, lhb_context
             "## 盘前风向标(竞价)",
             bench_context,
         ])
+
+    # 盘前外围 (隔夜外盘 + 跨资产 + 外部风险温度 + 事件链; 数据缺失为空不占段)
+    if premarket_context:
+        parts.extend(["", "## 盘前外围", premarket_context])
 
     if news:
         news_lines = []
@@ -338,7 +414,13 @@ async def recap_market_stream(
         from app.services import auction_benchmark as auction_benchmark_svc
 
         bench_ctx = auction_benchmark_svc.build_recap_context(repo.store.data_dir)
-        user_prompt = _build_user_prompt(overview, news or [], focus, lhb_ctx, bench_ctx)
+        # 要闻: 调用方未注入时从本地缓存取 (手动复盘与定时复盘共用这一处)
+        from app.services import news as news_svc
+
+        news_rows = news or news_svc.list_recent(repo.store.data_dir, 8)
+        premarket_ctx = _build_premarket_block(overview, news_rows)
+        user_prompt = _build_user_prompt(overview, news_rows, focus, lhb_ctx, bench_ctx,
+                                         premarket_ctx)
         got_content = False
         async for delta in stream_ai_text(
             [

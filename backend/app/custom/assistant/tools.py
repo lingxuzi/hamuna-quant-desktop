@@ -588,6 +588,53 @@ def _get_market_overview(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     return build_market_overview(repo, quote_service=ctx.quote_service, depth_service=ctx.depth_service)
 
 
+def _get_market_news(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    from app.services import news as news_service
+
+    raw = args.get("symbols") or []
+    if isinstance(raw, str):
+        raw = [s.strip() for s in raw.split(",") if s.strip()]
+    codes = [str(s).strip().upper() for s in raw if str(s).strip()]
+    limit = max(1, min(int(args.get("limit") or 20), 50))
+    rows = news_service.list_recent(ctx.data_dir, limit, codes or None)
+    if not rows:
+        note = ("没有匹配的近期新闻。新闻源可能尚未完成首轮抓取, 或今日暂无与该标的相关的报道。"
+                if codes else "暂无近期新闻缓存。")
+        return {"count": 0, "rows": [], "note": note}
+    names = ctx.repo.get_name_map(sorted({s for r in rows for s in (r.get("symbols") or [])})) \
+        if ctx.repo is not None else {}
+    out = [{
+        "title": r.get("title"),
+        "snippet": r.get("snippet"),
+        "source": r.get("source"),
+        "published_date": r.get("published_date"),
+        "url": r.get("url"),
+        "symbols": [{"symbol": s, "name": names.get(s, "")} for s in (r.get("symbols") or [])],
+    } for r in rows]
+    return {"count": len(out), "rows": out}
+
+
+def _get_premarket(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    from app.services import news as news_service
+    from app.services import premarket as premarket_service
+    from app.services.market_overview_builder import build_market_overview
+
+    repo = _require_repo(ctx)
+    try:
+        overview = build_market_overview(repo, quote_service=ctx.quote_service,
+                                         depth_service=ctx.depth_service)
+    except Exception as e:
+        raise ValueError(f"装配市场总览失败, 无法计算外部风险温度: {e}") from e
+    news_rows = news_service.list_recent(ctx.data_dir, 40)
+    payload = premarket_service.premarket_payload(overview, news_rows)
+    if not payload.get("markets") and not payload.get("cross_assets"):
+        raise ValueError("盘前数据暂无 (外围或跨资产接口均未返回), 请稍后重试。")
+    payload["events"] = [e for e in payload.get("events") or [] if e["headline_count"] > 0]
+    payload["note"] = ("外部风险温度为 -100..+100, 衡量隔夜外围环境; 与看板的 0-100 情绪评分"
+                       "(衡量当日 A 股内部情绪) 是两套口径, 不要混用。事件链不参与评分。")
+    return payload
+
+
 def _get_indices(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if ctx.quote_service is not None:
         df = ctx.quote_service.get_index_quotes()
@@ -1493,6 +1540,8 @@ _LOCAL_TOOLS: dict[str, Callable[[dict[str, Any], ToolContext], Any]] = {
     "get_financials": _get_financials,
     "get_watchlist": _get_watchlist,
     "get_market_overview": _get_market_overview,
+    "get_market_news": _get_market_news,
+    "get_premarket": _get_premarket,
     "get_indices": _get_indices,
     "get_sector_rotation": _get_sector_rotation,
     "get_regime": _get_regime,
@@ -1581,6 +1630,27 @@ def _local_tool_schemas() -> list[dict[str, Any]]:
         _schema(
             "get_market_overview",
             "市场总览(看板首页口径): 指数、涨跌家数、成交额、涨停/连板梯队、涨跌幅分布、均线趋势占比、情绪雷达与领涨领跌/活跃榜。无参数。",
+            {},
+            [],
+        ),
+        _schema(
+            "get_market_news",
+            "查询最近 A 股财经要闻(多源 RSS 合并去重, 含来源/时间/相关标的)。"
+            "传 symbols 时只返回命中这些标的的条目。",
+            {
+                "symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "可选, 证券代码数组, 如 ['600519.SH']。不传则返回全市场要闻。",
+                },
+                "limit": {"type": "integer", "description": "返回条数 (1-50, 默认 20)"},
+            },
+            [],
+        ),
+        _schema(
+            "get_premarket",
+            "查询盘前简报: 隔夜外盘指数、跨资产(A50/离岸人民币/美元指数/黄金/原油)、"
+            "外部风险温度(-100..+100, 含 9 项分项得分)与事件传导链。无参数。",
             {},
             [],
         ),

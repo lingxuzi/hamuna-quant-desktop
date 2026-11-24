@@ -5,10 +5,11 @@
  * 数据缺失的条目整条不出。条目里的数字可以直接点开个股/板块, 与网格组件共用回调。
  */
 import type { ReactNode } from 'react'
-import type { OverviewMarket } from '@/lib/api'
+import type { NewsItem, OverviewMarket, PremarketSnapshot } from '@/lib/api'
 import { fmtBigNum } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { DistFig } from '@/components/charts/DistFig'
+import { EventChainFig } from './EventChainFig'
 import { fmtStockPct, fmtIndexPct, fmtParts, pctClass } from './shared'
 
 export interface ChronicleCtx {
@@ -22,6 +23,12 @@ export interface ChronicleCtx {
     total: number
     rows: Array<{ symbol: string; name?: string | null; desc: string }>
   }
+  /** 盘前简报 (隔夜外围 + 外部风险温度); 加载中/失败时为 undefined */
+  premarket?: PremarketSnapshot
+  /** 最近要闻 (多源 RSS 合并去重) */
+  news?: NewsItem[]
+  /** 自选代码, 用来在要闻里标出命中行 */
+  watchlistSymbols?: Set<string>
 }
 
 interface Entry {
@@ -145,6 +152,166 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
   const { data } = ctx
   const entries: Entry[] = []
 
+  // 0. 盘前 —— 当日第一件事: 隔夜外围怎么走, 决定开盘情绪
+  const pm = ctx.premarket
+  if (pm?.markets?.length || pm?.cross_assets?.length) {
+    const risk = pm.risk
+    const mk = pm.markets ?? []
+    const cx = pm.cross_assets ?? []
+    const us = pm.us
+    // 指数按展示顺序排, 期指(last=N225) 与跨资产另起句
+    const idx = mk.filter(m => m.kind !== 'future')
+    const fut = mk.filter(m => m.kind === 'future')
+    // 外盘里最弱的一条用来做标题抓手; 全缺时退回风险温度
+    const worst = idx.filter(m => m.pct != null)
+      .reduce<typeof idx[number] | null>((a, b) => (!a || (b.pct ?? 0) < (a.pct ?? 0) ? b : a), null)
+    entries.push({
+      key: 'premarket',
+      title: worst
+        ? `隔夜外围，${worst.name} ${fmtIndexPct(worst.pct ?? 0)} 最弱`
+        : `隔夜外围 ${idx.length} 个市场`,
+      en: '隔夜外围',
+      tag: risk ? `${risk.stance} · ${risk.confidence}` : undefined,
+      body: (
+        <>
+          {idx.length > 0 && (
+            <>
+              美股{' '}
+              {idx.map((m, n) => (
+                <span key={m.key}>
+                  {n > 0 && '、'}
+                  {m.name} <b className={pctClass(m.pct)}>
+                    {m.pct != null ? fmtIndexPct(m.pct) : m.close}
+                  </b>
+                </span>
+              ))}。
+            </>
+          )}
+          {fut.length > 0 && (
+            <>
+              期指 {fut.map((m, n) => (
+                <span key={m.key}>
+                  {n > 0 && '、'}
+                  {m.name.replace(' 期指', '')} <b className={pctClass(m.pct)}>
+                    {m.pct != null ? fmtIndexPct(m.pct) : m.close}
+                  </b>
+                </span>
+              ))}。
+            </>
+          )}
+          {cx.length > 0 && (
+            <>
+              跨资产 {cx.map((c, n) => (
+                <span key={c.key}>
+                  {n > 0 && '、'}
+                  {c.name} <b className={pctClass(c.pct)}>
+                    {c.pct != null ? fmtIndexPct(c.pct) : (c.close ?? '—')}
+                  </b>
+                </span>
+              ))}。
+            </>
+          )}
+          {risk && (
+            <>
+              外部风险温度 <b style={{ color: risk.color }}>{risk.score > 0 ? `+${risk.score}` : risk.score}</b>
+              （{risk.stance}）—— {risk.summary}
+              {risk.degraded && <span className="p"> · 部分数据源降级，置信度下调</span>}
+            </>
+          )}
+        </>
+      ),
+      figure: us?.leaders?.length ? {
+        head: '美 股 龙 头',
+        node: (
+          <div className="roster two">
+            {us.leaders.slice(0, 6).map(s => (
+              <div key={s.code} className="it">
+                <span className="n">{s.name}</span>
+                <span className="code">{s.code}</span>
+                <span className={cn('p', pctClass(s.pct))}>
+                  {s.pct != null ? fmtIndexPct(s.pct) : (s.close ?? '—')}
+                </span>
+              </div>
+            ))}
+          </div>
+        ),
+      } : idx.length ? {
+        head: '隔 夜 外 盘',
+        node: (
+          <div className="strip-4">
+            {idx.slice(0, 4).map(m => (
+              <div key={m.key} className="c">
+                <span className="k">{m.name}</span>
+                <div className={cn('v', pctClass(m.pct))}>
+                  {m.pct != null ? fmtIndexPct(m.pct) : m.close}
+                </div>
+              </div>
+            ))}
+          </div>
+        ),
+      } : undefined,
+    })
+  }
+
+  // 0a. 事件传导链 —— 新闻标题按关键词分桶。事实在左, 推断向右流动, 用粒子图而不是段落
+  const chains = (pm?.events ?? []).filter(e => e.headline_count > 0)
+  if (chains.length) {
+    const shown = chains.slice(0, 4)
+    entries.push({
+      key: 'events',
+      title: chains.length > 1
+        ? `${chains.length} 条事件线索待验证`
+        : `事件线索：${chains[0].label}`,
+      en: '事件传导',
+      tag: '待验证',
+      body: (
+        <>
+          第一个节点是命中标题数与指标读数，中间是推断的传导路径，末节点是可能落到的 A 股方向。
+          线索不参与风险温度计分，失效条件写在每行末尾。
+        </>
+      ),
+      figure: { head: '事 实 → 推 断 → A 股', node: <EventChainFig events={shown} /> },
+    })
+  }
+
+
+  // 0b. 要闻 —— 命中自选的行标出来, 端上是自选/持仓命中的系统通知
+  const newsRows = (ctx.news ?? []).filter(n => n.title)
+  if (newsRows.length) {
+    const watch = ctx.watchlistSymbols ?? new Set<string>()
+    const hitCount = newsRows.filter(n => (n.symbols ?? []).some(s => watch.has(s))).length
+    entries.push({
+      key: 'news',
+      title: hitCount > 0
+        ? `要闻 ${newsRows.length} 条，${hitCount} 条命中自选`
+        : `要闻 ${newsRows.length} 条`,
+      en: '实时要闻',
+      tag: hitCount > 0 ? '自选相关' : undefined,
+      body: <>标题与来源来自公开新闻源，按标题近似度去重；命中自选标的的条目会另发系统通知。</>,
+      figure: {
+        head: '最 近 要 闻',
+        node: (
+          <div className="roster one">
+            {newsRows.slice(0, 6).map(n => {
+              const hits = (n.symbols ?? []).filter(s => watch.has(s))
+              return (
+                <div key={n.id} className="it">
+                  <span className="n">{n.title}</span>
+                  <span className="code">
+                    {hits.length > 0
+                      ? hits.map(s => n.symbol_names?.[s] || s).join('、')
+                      : (n.source || '')}
+                  </span>
+                  {hits.length > 0 && <span className="p">自选</span>}
+                </div>
+              )
+            })}
+          </div>
+        ),
+      },
+    })
+  }
+
   // 1. 指数
   const ix = data.indices ?? []
   if (ix.length) {
@@ -157,7 +324,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     const br = data.breadth
     entries.push({
       key: 'indices', title: `${head}，${worst.name || worst.symbol} ${fmtIndexPct(worst.change_pct)}`,
-      en: 'CLOSING', tag: '收盘',
+      en: '当日行情', tag: '收盘',
       body: (
         <>
           四大核心指数{head}，{ix.map((i, n) => {
@@ -203,7 +370,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     entries.push({
       key: 'breadth',
       title: `涨 ${b.up} / 跌 ${b.down}，下跌家数占 ${downShare}%`,
-      en: 'BREADTH',
+      en: '成交广度',
       body: (
         <>
           全市场 <b>{b.total}</b> 只，平盘 <b>{b.flat}</b> 只，上涨率 <b>{b.up_pct.toFixed(1)}%</b>；
@@ -223,7 +390,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     entries.push({
       key: 'limit',
       title: `涨停 ${lim.limit_up} 家，最高 ${lim.max_boards || 0} 板`,
-      en: 'LIMIT LADDER',
+      en: '涨停梯队',
       body: (
         <>
           涨停 <b>{lim.limit_up}</b> 只、跌停 <b>{lim.limit_down}</b> 只，
@@ -274,7 +441,7 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     entries.push({
       key: 'sectors',
       title: con?.leading?.[0] ? `行业与概念：${lead?.name ?? '—'} 领涨` : '行业榜',
-      en: 'SECTORS',
+      en: '板块强弱',
       body: (
         <>
           {lead && <>行业领涨 <button type="button" className="lk" onClick={() => ctx.openDimension(lead)}>{lead.name}</button> <span className={pctClass(lead.avg_pct)}>{fmtStockPct(lead.avg_pct)}</span></>}
@@ -286,19 +453,19 @@ export function Chronicle({ ctx }: { ctx: ChronicleCtx }) {
     })
   }
 
-  // 5. 监控
-  if (ctx.alerts.total > 0) {
+  // 5. 监控 —— 有行才出: 只报总数却画不出行, 读者只会以为列表丢了
+  if (ctx.alerts.total > 0 && ctx.alerts.rows.length > 0) {
     entries.push({
       key: 'alerts',
       title: `监控触发 ${ctx.alerts.total} 条异动`,
-      en: 'ALERTS',
+      en: '盯盘提醒',
       tag: '需处理',
       emphasis: true,
       body: <>点开行可查看个股当日分时与五档。</>,
-      figure: ctx.alerts.rows.length ? {
+      figure: {
         head: '最 近 触 发',
         node: <Roster rows={ctx.alerts.rows} onPick={r => ctx.openStock('alert', r.symbol, r.name ?? undefined)} />,
-      } : undefined,
+      },
     })
   }
 
@@ -340,7 +507,7 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
   return (
     <aside className="rail" aria-label="市场指标">
       <div className="rail-b">
-        <div className="rail-h"><b>指数</b><span>INDEX</span></div>
+        <div className="rail-h"><b>指数</b><span>核心四项</span></div>
         {(data.indices ?? []).map(i => (
           <div key={i.symbol} className="ix">
             <span className="ix-n">{i.name || i.symbol}</span>
@@ -350,7 +517,7 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
         ))}
       </div>
       <div className="rail-b">
-        <div className="rail-h"><b>成交与广度</b><span>BREADTH</span></div>
+        <div className="rail-h"><b>成交与广度</b><span>两市合计</span></div>
         <div className="rail-kv">
           <div><span className="k">两市成交</span><span className="v">{fmtBigNum(data.amount?.total)}</span></div>
           <div><span className="k">平均涨幅</span><span className={cn('v', pctClass(b?.avg_pct))}>{fmtStockPct(b?.avg_pct)}</span></div>
@@ -361,7 +528,7 @@ export function MetricRail({ data }: { data: OverviewMarket }) {
         </div>
       </div>
       <div className="rail-b">
-        <div className="rail-h"><b>涨跌分布</b><span>DISTRIBUTION</span></div>
+        <div className="rail-h"><b>涨跌分布</b><span>八档区间</span></div>
         <DistFig rows={data.distribution ?? []} />
       </div>
       <div className="rail-b">

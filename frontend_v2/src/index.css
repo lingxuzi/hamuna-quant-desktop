@@ -495,13 +495,14 @@ nav :focus-visible { outline-offset: -2px; }
     line-height: 1.12;
     color: hsl(var(--fg-primary));
   }
+  /* 副标是中文: 等宽字体 + .4em 字距会让汉字散成单字, 改用无衬线 + 常规字距 */
   .ins-title i {
     display: block;
     font-style: normal;
-    font-size: 10.5px;
-    letter-spacing: .4em;
+    font-size: 11px;
+    letter-spacing: .2em;
     color: hsl(var(--fg-muted));
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-weight: 400;
     margin-top: 5px;
   }
@@ -571,6 +572,45 @@ nav :focus-visible { outline-offset: -2px; }
     font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .18em;
     color: hsl(var(--fg-muted)); margin-bottom: 8px;
   }
+  /* ---- 事件传导链: 粒子沿管道从「事实」流向「A 股映射」 ---- */
+  .evfig { display: grid; gap: 14px; }
+  .evfig-item { border-top: 1px solid hsl(var(--border)); padding-top: 9px; }
+  .evfig-item:first-child { border-top: 0; padding-top: 0; }
+  .evfig-hd { display: flex; align-items: baseline; gap: 8px; font-size: 11px; }
+  .evfig-hd b { font-weight: 500; color: hsl(var(--fg-primary)); }
+  .evfig-hd span { font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; color: hsl(var(--fg-muted)); }
+  /* 窄屏横向滚动: 节点文字不压叠, 也不折行成竖排 */
+  .evfig-scroll { overflow-x: auto; margin-top: 4px; }
+  .evfig-svg { display: block; width: 100%; min-width: 480px; height: 78px; overflow: visible; }
+  .evfig-pipe { stroke: hsl(var(--border)); stroke-width: 1; stroke-dasharray: 3 4; }
+  .evfig-node circle { fill: hsl(var(--base)); stroke: hsl(var(--fg-muted)); stroke-width: 1; }
+  .evfig-node text {
+    font-family: var(--font-sans); font-size: 9.5px; letter-spacing: .04em;
+    fill: hsl(var(--fg-muted));
+  }
+  .evfig-node.src circle { fill: hsl(var(--fg-muted)); stroke: hsl(var(--fg-muted)); }
+  .evfig-node.out circle { fill: hsl(var(--accent)); stroke: hsl(var(--accent)); }
+  .evfig-node.out text { fill: hsl(var(--accent)); }
+  .evfig-pt {
+    fill: hsl(var(--accent));
+    animation: evfig-flow 4.2s linear infinite;
+  }
+  @keyframes evfig-flow {
+    from { transform: translateX(0); opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    to   { transform: translateX(var(--evfig-span)); opacity: 0; }
+  }
+  .evfig-note {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px;
+    font-size: 10.5px; line-height: 1.7; color: hsl(var(--fg-secondary)); max-width: none;
+  }
+  .evfig-note .warn { color: hsl(var(--warning)); }
+  /* 减少动效时隐去粒子: 三个点停在起点会叠成一个, 管道本身已说明流向 */
+  @media (prefers-reduced-motion: reduce) {
+    .evfig-pt { display: none; }
+  }
+
   /* 八档分布: 零轴居中, 左跌(绿)右涨(红) */
   .dist { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; align-items: end; height: 62px; }
   .dist .bar { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
@@ -633,7 +673,7 @@ nav :focus-visible { outline-offset: -2px; }
   .rail-b + .rail-b { border-top: 1px solid hsl(var(--border)); padding-top: 18px; }
   .rail-h {
     display: flex; align-items: baseline; justify-content: space-between;
-    font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .18em;
+    font-family: var(--font-sans); font-size: 9.5px; letter-spacing: .1em;
     color: hsl(var(--fg-muted)); margin-bottom: 10px;
   }
   .rail-h b { font-family: var(--font-sans); font-size: 11px; letter-spacing: 0; color: hsl(var(--fg-secondary)); font-weight: 400; }
@@ -680,8 +720,11 @@ nav :focus-visible { outline-offset: -2px; }
    * 逐格描边卡 (原 .leaf-cell) 已全部替换为设计稿的 1px 发丝线网格 (.hgrid)、
    * 横线条目行 (.rowset) 与分节题头 (.sec-h), 不再保留描边卡样式。 */
 
-  /* ---- 面板: 纸面 + 1px 描边, 不投影不模糊 ----
-   * 看板挂件类名恰好是 "panel", 会吃到这里的 padding/overflow。
+  /* ---- 面板: 看板挂件的格子 ----
+   * 语汇跟纪事流一致: 只留一条顶部加重线分格, 不描边、不垫实底色。
+   * 描边卡 + surface 实底会让挂件看起来像「另一个页面里的东西」, 摆在纪事流
+   * 下方就是一排悬浮方块; 纪事流本身靠发丝线与留白分隔, 挂件照抄同一套。
+   *
    * 挂件自带自己的间隔, 用 .panel 登记本层: Tailwind 的 :where(.panel) 优先级为 0,
    * 整个 .panel 块的属性都会被挂件自己的原子类盖掉, 不会有半覆盖。
    * 注意: 层内 priority(0) 声明在构建器去重后仍可能压过层外同值声明,
@@ -689,9 +732,9 @@ nav :focus-visible { outline-offset: -2px; }
   .panel {
     height: 100%;
     overflow: hidden;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--surface));
-    padding: 10px;
+    border-top: 1px solid hsl(var(--border-strong));
+    background: transparent;
+    padding: 10px 12px 10px;
   }
 
   /* ---- 三字读数: 大字结论 + 旁注 ---- */
@@ -727,7 +770,7 @@ nav :focus-visible { outline-offset: -2px; }
   .plot { position: relative; border: 1px solid hsl(var(--border)); background: hsl(var(--surface)); margin-top: 10px; }
   .plot-hd { display: flex; align-items: baseline; gap: 10px; padding: 7px 10px; border-bottom: 1px solid hsl(var(--border)); }
   .plot-hd b { font-size: 11.5px; font-weight: 500; color: hsl(var(--fg-primary)); }
-  .plot-hd > span { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; color: hsl(var(--fg-muted)); }
+  .plot-hd > span { font-family: var(--font-sans); font-size: 9.5px; letter-spacing: .08em; color: hsl(var(--fg-muted)); }
   .plot-hd .leg { margin-left: auto; display: flex; gap: 12px; }
   .plot-hd .leg i {
     font-style: normal; font-family: var(--font-sans); font-size: 9.5px; color: hsl(var(--fg-secondary));
@@ -843,7 +886,7 @@ nav :focus-visible { outline-offset: -2px; }
     margin-bottom: 9px; line-height: 1.4; color: hsl(var(--fg-primary));
   }
   .e-en {
-    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .18em;
+    font-family: var(--font-sans); font-size: 10px; letter-spacing: .12em;
     color: hsl(var(--fg-muted)); font-weight: 400; flex: 0 0 auto;
   }
   .e-tag {

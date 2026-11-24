@@ -557,6 +557,130 @@ export interface OverviewDimensionRankItem {
   } | null
 }
 
+// ===== 要闻与盘前简报 =====
+
+export interface NewsItem {
+  id: string
+  title: string
+  snippet?: string
+  source?: string
+  url?: string | null
+  /** 北京时间 "YYYY-MM-DD HH:MM" */
+  published_date?: string | null
+  /** 命中的 A 股标的代码 */
+  symbols?: string[]
+  /** 标的代码 → 名称（名称表查不到时缺该键） */
+  symbol_names?: Record<string, string>
+}
+
+export interface PremarketMarket {
+  key: string
+  name: string
+  region: string
+  kind: string
+  close: number
+  previous_close?: number | null
+  pct?: number | null
+  quote_time?: string | null
+  state: 'fresh' | 'partial' | 'stale' | 'missing'
+}
+
+export interface PremarketCrossAsset {
+  key: string
+  name: string
+  /** scored = 参与风险温度计分; context = 仅背景参考 */
+  role: 'scored' | 'context'
+  close?: number | null
+  previous_close?: number | null
+  pct?: number | null
+  quote_time?: string | null
+  state: 'fresh' | 'partial' | 'stale' | 'missing'
+}
+
+export interface RiskSignal {
+  key: string
+  label: string
+  value: string
+  score: number
+  note: string
+}
+
+/** 外部风险温度 -100..+100 —— 与看板 0-100 情绪评分是两套口径：外部环境 vs 内部情绪 */
+export interface RiskTemperature {
+  score: number
+  stance: string
+  color: string
+  confidence: '高' | '中' | '低'
+  /** 一句话结论，按档位固定 */
+  summary: string
+  /** 研究观察，2-3 条；不是仓位建议 */
+  advice: string[]
+  coverage: number
+  signals: RiskSignal[]
+  degraded: boolean
+  methodology: string
+  as_of?: string | null
+}
+
+export interface EventWatch {
+  code: string
+  value?: number | null
+  pct?: number | null
+  unit?: string
+  state: 'fresh' | 'stale' | 'missing'
+}
+
+export interface EventChain {
+  key: string
+  label: string
+  headline_count: number
+  /** 可核验的观察：命中的标题 + 指标实际读数 */
+  facts: {
+    headlines: Array<{ title?: string; source?: string; published_date?: string; url?: string | null }>
+    watch: EventWatch[]
+  }
+  /** 本系统的推断：传导路径 / A 股映射 / 失效条件，不得当成新闻事实 */
+  inference: {
+    macro_path: string
+    a_share_lens: string
+    invalidation: string
+  }
+}
+
+/** 美股夜盘环境（easytdx 增强块，腾讯/新浪兜底时可能为 null） */
+export interface UsOvernightRow {
+  code: string
+  name: string
+  close?: number | null
+  previous_close?: number | null
+  pct?: number | null
+  region?: string
+}
+
+export interface UsOvernight {
+  indices: UsOvernightRow[]
+  leaders: UsOvernightRow[]
+  futures: UsOvernightRow[]
+  treasuries: UsOvernightRow[]
+  us10y?: number | null
+  as_of?: string | null
+  source: string
+}
+
+export interface PremarketSnapshot {
+  markets: PremarketMarket[]
+  cross_assets: PremarketCrossAsset[]
+  macro: { vix?: number | null; us10y?: number | null; nikkei225?: number | null }
+  health: Record<string, 'fresh' | 'partial' | 'stale' | 'missing'>
+  as_of?: string | null
+  /** 拉取失败时沿用上次成功值并置 true */
+  stale?: boolean
+  risk: RiskTemperature
+  events: EventChain[]
+  /** 美股夜盘：指数/龙头/期指/美债，来自 easytdx */
+  us?: UsOvernight | null
+}
+
 export interface OverviewMarket {
   as_of: string | null
   quote_status: {
@@ -3727,6 +3851,17 @@ export const api = {
   marketSnapshot: () =>
     request<{ as_of: string | null; rows: MarketSnapshotRow[] }>('/api/screener/market-snapshot'),
   overviewMarket: (asOf?: string) => request<OverviewMarket>(`/api/overview/market${asOf ? `?as_of=${asOf}` : ''}`),
+
+  // 要闻: 多源 RSS 合并去重后的最近条目 (symbols 非空时只返回命中这些标的的)
+  newsFast: (params?: { limit?: number; symbols?: string[] }) => {
+    const qs = new URLSearchParams()
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.symbols?.length) qs.set('symbols', params.symbols.join(','))
+    const s = qs.toString()
+    return request<{ items: NewsItem[]; total: number }>(`/api/news/fast${s ? `?${s}` : ''}`)
+  },
+  // 盘前简报: 隔夜外盘 + 跨资产 + 外部风险温度 + 事件传导链
+  newsPremarket: () => request<PremarketSnapshot>('/api/news/premarket'),
 
   // 概念涨幅轮动矩阵: 每列(日期)各自把所有概念按当天涨幅从高到低排序
   rpsRotation: (days: number, kind?: 'concept' | 'industry', level?: number) =>

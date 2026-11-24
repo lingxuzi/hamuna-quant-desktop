@@ -31,6 +31,7 @@ from app.api import (
     intraday,
     kline,
     lab,
+    news,
     lots,
     market_recap,
     mining,
@@ -317,6 +318,15 @@ async def _application_lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("minute_refresh init failed: %s", e)
 
+    # 要闻轮询 (60s 一轮, 命中自选/持仓时发系统通知; 新闻不进告警流)
+    try:
+        from app.services.news import NewsPoller
+        poller = NewsPoller(data_dir=repo.store.data_dir, repo=repo)
+        app.state.news_poller = poller
+        poller.start()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("news_poller init failed: %s", e)
+
     # 停机缺口自检: 延迟后台扫描, 发现最近交易日的盘中快照/缺口时自动创建
     # 修复任务 (盘中停机→次日开实时场景, 不修则坏数据被"只刷今天"分支永久留存)
     try:
@@ -568,6 +578,9 @@ async def _application_lifespan(app: FastAPI):
         mrs = getattr(app.state, "minute_refresh", None)
         if mrs:
             mrs.stop()
+        npl = getattr(app.state, "news_poller", None)
+        if npl:
+            npl.stop()
         # webhook/系统通知投递线程池: 放弃排队投递并关闭, 避免通知静默丢失在 daemon 线程里
         from app.services.quote_service import shutdown_delivery_executors
 
@@ -766,6 +779,7 @@ app.include_router(config_backup.router)
 app.include_router(import_center.router)
 app.include_router(lots.router)
 app.include_router(alerts.router)
+app.include_router(news.router)
 app.include_router(events.router)
 app.include_router(rps.router)
 app.include_router(sector_rotation.router)

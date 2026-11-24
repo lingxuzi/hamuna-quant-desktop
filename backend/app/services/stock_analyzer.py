@@ -163,12 +163,19 @@ _SYSTEM_PROMPT = """你是一位拥有 15 年 A 股一线研究经验的技术�
 
 **绝对不要**在无数据时编造 ROE / 增速等数字。
 
-### 5. 📰 消息面(价量异动推断)
-**注意:本期无直接新闻数据输入。** 请基于 K 线的**异动信号**进行客观推断(如:
+### 5. 📰 消息面
+**若用户消息中提供了「与该标的相关的近期新闻」**,本节以那些新闻为依据客观归纳:
+- 只陈述新闻标题与摘要里写明的事实,不改写、不扩写、不补充新闻中没有的内容
+- 明确区分「新闻已确认的事实」与「市场可能的解读」,后者标注"[推断]"
+- 新闻与该股的关联度由你判断并在句子里交代(如"该消息影响的是行业而非公司本身")
+
+**若用户消息标注了「本期无该标的的直接新闻数据」**,请基于 K 线的**异动信号**做客观推断(如:
 - 涨停/连板/炸板 → 可能存在利好或资金关注
 - 放量暴跌 → 可能存在未公开扰动
 - 突破放量 → 可能存在催化剂
-明确标注"[推断]",告诉读者这是基于价量的客观推测,真实消息面数据待接入。若无明显异动,直说"近期价量平稳,无明显异动信号"。
+明确标注"[推断]",告诉读者这是基于价量的客观推测。若无明显异动,直说"近期价量平稳,无明显异动信号"。
+
+无论哪种情况,**绝不要编造新闻标题、媒体名或发布时间**。
 
 ### 6. ⚖️ 综合研判与风险提示
 2-3 段,只做客观描述,不下操作结论:
@@ -234,10 +241,12 @@ def _build_user_prompt(
     asset_type: str = "stock",
     paper_positions: list[dict] | None = None,
     raw_close: float | None = None,
+    news: list[dict] | None = None,
 ) -> str:
-    """构建用户消息:标的 + 价位摘要 + 技术指标 JSON + 财务摘要 + 关注点 (+ 虚拟持仓)。
+    """构建用户消息:标的 + 价位摘要 + 技术指标 JSON + 财务摘要 + 新闻 + 关注点 (+ 虚拟持仓)。
 
     asset_type 用于区分无财务数据时的文案:指数/ETF 无财务是常态,不走 Free 文案。
+    news 非空时第 5 节改由真实新闻驱动, 空时走原有的价量推断降级文案。
     """
     parts: list[str] = [
         f"标的标准代码: {symbol}",
@@ -279,6 +288,28 @@ def _build_user_prompt(
             "",
             "(该标的暂无财务数据:当前为 Free 模式或尚未同步财务报表。"
             "请按系统提示词第 4 节的说明,在基本面/财务面维度给出\"接入中\"的友好提示,不要编造数据。)",
+        ])
+
+    if news:
+        news_lines = []
+        for i, n in enumerate(news[:8], 1):
+            title = (n.get("title") or "").strip()
+            snippet = (n.get("snippet") or "").strip()
+            meta = " / ".join(p for p in ((n.get("source") or "").strip(),
+                                          (n.get("published_date") or "").strip()) if p)
+            news_lines.append(f"{i}. {title} ({meta})\n   {snippet}" if meta
+                              else f"{i}. {title}\n   {snippet}")
+        parts.extend([
+            "",
+            "以下是与该标的相关的近期新闻标题与摘要(已去重), 第 5 节消息面请据此客观归纳,"
+            "不要编造新闻内容:",
+            "\n".join(news_lines),
+        ])
+    else:
+        parts.extend([
+            "",
+            "(本期无该标的的直接新闻数据。第 5 节消息面请按系统提示词的要求,"
+            "基于 K 线的异动信号做推断并标注「[推断]」。)",
         ])
 
     from app.services.ai_provider import build_focus_instruction
@@ -374,9 +405,17 @@ async def analyze_stock_stream(
         raw_close = float(df.tail(1)["raw_close"][0]) if "raw_close" in df.columns else None
 
         kline_tail = _clean_rows(df, _KLINE_KEEP_COLS)
+        # 该标的的相关新闻 (取不到时为空, 第 5 节退回价量推断)
+        stock_news: list[dict] = []
+        try:
+            from app.services import news as news_svc
+
+            stock_news = news_svc.list_recent(data_dir, 8, [symbol])
+        except Exception as e:  # noqa: BLE001
+            logger.debug("读取个股新闻失败 (跳过注入): %s", e)
         user_prompt = _build_user_prompt(kline_tail, fins, levels, close, symbol, focus,
                                          asset_type=asset_type, paper_positions=paper_positions,
-                                         raw_close=raw_close)
+                                         raw_close=raw_close, news=stock_news)
         got_content = False
         async for delta in stream_ai_text(
             [
