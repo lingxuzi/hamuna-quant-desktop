@@ -2521,7 +2521,7 @@ wheels = [
 
 [[package]]
 name = "tickflow-stock-panel-backend"
-version = "0.3.31"
+version = "0.3.33"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
