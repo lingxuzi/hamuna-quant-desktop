@@ -18,6 +18,12 @@ import { applyPageZoom, getPageZoom } from './lib/pageZoom'
 import { applyTheme, getTheme } from './lib/theme'
 // 字体自托管 (@fontsource): 替代 rsms.me / Google Fonts 渲染阻塞外链,
 // 内网/离线部署不再白屏等字体。权重覆盖 tailwind 全部用量 (300-900)。
+// 中文同样内置: Windows 自带的中文字体栈只有宋体/雅黑, 宋体在小字号下发虚,
+// 而原字体栈里的 Noto/PingFang 在 Windows 上一个都没有, 会静默回退。
+// 用变量字体 (一个文件覆盖 100-900) + unicode-range 分片, 浏览器只下载
+// 页面实际用到的那几片, 不是 4MB 全量。
+import '@fontsource-variable/noto-sans-sc'
+import '@fontsource-variable/noto-serif-sc'
 import '@fontsource/inter/300.css'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'

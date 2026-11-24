@@ -47,8 +47,12 @@
   /* 遮罩 — 弹层背后的压暗层, 亮/纸用暖墨, 暗用近黑 */
   --scrim: 30 12% 14%;
   /* 字族 — 与 tailwind.config.ts 同源, 避免 CSS 与原子类各写一份 */
-  --font-serif: 'Noto Serif CJK SC', 'Source Han Serif SC', 'Songti SC', serif;
-  --font-sans: 'Noto Sans CJK SC', 'Source Han Sans SC', Inter, 'HarmonyOS Sans SC', 'PingFang SC', system-ui, sans-serif;
+  /* 西文在前、中文在后: 浏览器按字符逐个回落, Inter 没有的汉字才掉到
+   * Noto Sans SC Variable (main.tsx 内置, 非系统字体)。顺序反过来会让
+   * 数字/英文也用 Noto 的拉丁字形, 丢掉 Inter 的 tabular-nums 观感。
+   * 末尾系统字族只兜底内置字体加载失败。 */
+  --font-serif: 'Noto Serif SC Variable', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Songti SC', serif;
+  --font-sans: Inter, 'Noto Sans SC Variable', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
   /* 原生滚动条/表单控件外观跟随主题。实测 (mac WKWebView, 2026-10): 声明了
    * 标准 scrollbar-color 后引擎按规范压掉 ::-webkit-scrollbar 伪类, 但颜色值
@@ -225,15 +229,18 @@ body {
   /* 暗色模式不用 antialiased — 让字形保持饱满,不发虚 */
   -webkit-font-smoothing: subpixel-antialiased;
   -moz-osx-font-smoothing: auto;
-  text-rendering: optimizeLegibility;
+  /* 不设 text-rendering: optimizeLegibility —— Chromium 在 12px 小字号上
+   * 为了连字/字距会走更贵的排版路径, 实测反而发毛。默认 (auto) 最清晰。 */
 }
 
-/* 宣纸: 横向极低对比纤维 + 右上角一处赭石晕, 只在纸色皮肤下铺 */
+/* 宣纸: 横向极低对比纤维 + 右上角一处赭石晕, 只在纸色皮肤下铺。
+ * 故意不用 background-attachment: fixed —— 它会把这个元素提成合成层,
+ * 层内文字从 ClearType 次像素抗锯齿降级成灰度, 表现为「字发虚、边框还锐利」。
+ * 而且本应用 html/body 固定 100% 高、滚动全在内层容器, fixed 与默认视觉无差。 */
 html.paper body {
   background-image:
     repeating-linear-gradient(0deg, hsl(var(--fg-primary) / 0.018) 0 1px, transparent 1px 4px),
     radial-gradient(900px 700px at 88% 0%, hsl(var(--accent) / 0.05), transparent 65%);
-  background-attachment: fixed;
 }
 
 /* 键盘可达性: 统一焦点环, 三套皮肤上都可见 */
