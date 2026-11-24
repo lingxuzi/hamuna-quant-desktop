@@ -1,5 +1,5 @@
 /**
- * URL 嵌入型扩展页面 — 整页内嵌外部 http(s) 页面。
+ * 网页嵌入型扩展页面 — 整页内嵌外部 http(s) 页面。
  *
  * 安全约定与看板 ExternalLinkWidget 一致 (配合 dashboard/layout.ts sanitizeExtUrl):
  * - URL 仅 http(s) 且拒绝与本站同源 — 同源内容配 allow-scripts+allow-same-origin

@@ -73,7 +73,7 @@ export function FinancialSyncPanel() {
           if (r.synced?.reason === 'already running') {
             toast('财务数据正在同步中，请稍候', 'success')
           } else if (r.synced?.reason === 'no FINANCIAL capability') {
-            toast('财务数据能力未就绪，请检查 API Key 或刷新页面后重试', 'error')
+            toast('财务数据能力未就绪，请检查接口密钥或刷新页面后重试', 'error')
           } else {
             toast(`同步未能开始${r.synced?.reason ? `:${r.synced.reason}` : ''}`, 'error')
           }

@@ -157,7 +157,7 @@ it('keeps a failed uninstall available for retry without reporting success', asy
 it('shows the restart status instead of controls after scheduling uninstall', async () => {
   await render(<PackageActions plugin={{ ...amberPlugin, pending_remove: true, enabled: false, available: false }} refresh={mocks.refresh} />)
   expect(node.textContent).toContain('卸载已安排')
-  expect(node.textContent).toContain('API Key 保留')
+  expect(node.textContent).toContain('接口密钥保留')
   expect(button('卸载插件')).toBeUndefined()
   expect(button('选择启用能力')).toBeUndefined()
   expect(mocks.matrix).not.toHaveBeenCalled()

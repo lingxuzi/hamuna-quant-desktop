@@ -162,7 +162,7 @@ export function SettingsExtPagesPanel() {
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">把扩展数据配置成左侧分析菜单</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-secondary">
               选择扩展数据源、分析模板、分组字段和列表列后，系统会生成一个可访问的动态分析页面。
-              也可以直接填网址创建 URL 嵌入页；要导入 .tsx 源码页面请到「页面插件」区块的「导入源码」。
+              也可以直接填网址创建 网页嵌入页；要导入 .tsx 源码页面请到「页面插件」区块的「导入源码」。
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -171,7 +171,7 @@ export function SettingsExtPagesPanel() {
               className="ctl ctl-md ctl-btn inline-flex items-center justify-center gap-1.5 px-2.5 hover:border-accent/60 hover:text-accent"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              新建 URL 页
+              新建外部网页
             </button>
             <button
               onClick={() => { resetForm(); setShowForm(true) }}
@@ -220,7 +220,7 @@ export function SettingsExtPagesPanel() {
                   placeholder="https://example.com/page"
                   className="ctl ctl-lg ctl-input w-full px-3.5 bg-base"
                 />
-                <span className="block text-[10px] text-muted/70">仅 http(s)、≤500 字符，不支持嵌入本站；部分站点可拒绝被嵌入</span>
+                <span className="block text-[10px] text-muted/70">仅支持网页地址、≤500 字符，不支持嵌入本站；部分站点可拒绝被嵌入</span>
               </label>
             ) : (
               <label className="space-y-1.5">
@@ -249,7 +249,7 @@ export function SettingsExtPagesPanel() {
                 <option value="dimension_rank">维度热度榜</option>
                 <option value="ranking">指标排名榜</option>
                 <option value="table">明细表</option>
-                <option value="url">URL 嵌入</option>
+                <option value="url">网页嵌入</option>
               </select>
             </label>
             <label className="space-y-1.5">

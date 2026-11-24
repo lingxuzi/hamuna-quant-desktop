@@ -53,7 +53,7 @@ export function ExtDataApiPanel({ config, copied, setCopied }: {
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-muted">cURL 示例</span>
+          <span className="text-[10px] text-muted">命令行示例</span>
           <button
             onClick={() => handleCopy(curlCmd)}
             className="text-[10px] text-accent hover:text-accent/80 flex items-center gap-0.5 transition-colors"

@@ -310,7 +310,7 @@ export function ExtDataStatCard({ config, onDelete, deleting, onEdit }: {
                         <span className={`text-xs ${dragOver ? 'text-accent' : 'text-secondary'}`}>
                           拖拽文件到此处，或点击选择
                         </span>
-                        <span className="text-[10px] text-muted/70">支持 CSV / Excel，需包含 symbol 列</span>
+                        <span className="text-[10px] text-muted/70">支持表格文件，需包含标的代码列</span>
                       </>
                     )}
                   </div>

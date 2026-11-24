@@ -85,7 +85,7 @@ export function WarmupBadge() {
                 </p>
                 <p className="mt-1.5 text-muted">
                   若本地数据恰好从回测起点才开始, 开头几个月指标算不出、信号不触发,
-                  <span className="text-secondary"> 属正常现象, 不是 bug</span>。等数据攒够后自然开始产生交易。
+                  <span className="text-secondary"> 属正常现象，不是缺陷</span>。等数据攒够后自然开始产生交易。
                 </p>
                 <div className="mt-2 border-t border-border/60 pt-2 text-muted">
                   <span className="text-secondary">解决:</span> 把历史数据补到回测起点之前至少半年, 或把起点往后挪。

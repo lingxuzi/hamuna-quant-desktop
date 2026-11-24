@@ -361,9 +361,9 @@ export function DataSourceEditor({
                   className={`${INPUT_CLS} w-full`}
                 >
                   <option value="none">无需鉴权</option>
-                  <option value="bearer">Bearer Token</option>
-                  <option value="header">自定义 Header</option>
-                  <option value="query">Query 参数</option>
+                  <option value="bearer">请求头令牌</option>
+                  <option value="header">自定义请求头</option>
+                  <option value="query">查询参数</option>
                 </select>
                 {config.auth.type !== 'none' && (
                   <input
@@ -392,7 +392,7 @@ export function DataSourceEditor({
                     <span className="flex-1 text-left">{DATASET_LABEL[key]}</span>
                     {enabled
                       ? <span className="text-[9px] text-accent">已配置</span>
-                      : <span className="text-[9px] text-muted/50">回退 TF</span>
+                      : <span className="text-[9px] text-muted/50">回退至 TickFlow</span>
                     }
                     <Toggle
                       checked={enabled}

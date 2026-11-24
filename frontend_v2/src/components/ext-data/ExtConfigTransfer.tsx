@@ -25,7 +25,7 @@ export function ExtConfigExportButton({ id, label }: { id: string; label: string
       anchor.click()
       anchor.remove()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast('配置已导出，不含 API Key 和历史数据', 'success')
+      toast('配置已导出，不含接口密钥和历史数据', 'success')
     } catch (error) {
       toast(error instanceof Error ? error.message : '配置导出失败，请重试', 'error')
     } finally { setBusy(false) }
@@ -87,7 +87,7 @@ export function ExtConfigImportDialog({ onClose }: { onClose: () => void }) {
     <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
       <div>
         <h2 id="ext-config-import-title" className="text-base font-semibold text-foreground">导入扩展数据配置</h2>
-        <p className="mt-1 text-xs leading-5 text-secondary">一次导入一张表的配置，API Key 由接收方自行填写。</p>
+        <p className="mt-1 text-xs leading-5 text-secondary">一次导入一张表的配置，接口密钥由接收方自行填写。</p>
       </div>
       <button type="button" aria-label="关闭" onClick={close} disabled={!!busy}
         className="ctl ctl-sm ctl-ghost ctl-icon shrink-0 text-secondary hover:bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"><X className="h-[16px] w-[16px]" /></button>
@@ -96,7 +96,7 @@ export function ExtConfigImportDialog({ onClose }: { onClose: () => void }) {
       {done ? <div role="status" className="space-y-3 text-sm leading-6 text-secondary">
         <div className="flex items-center gap-2 font-medium text-foreground"><CheckCircle2 className="h-[20px] w-[20px] text-emerald-600 dark:text-emerald-400" />导入成功</div>
         <p>「{preview?.label}」已添加到数据卡片，标识为 <code className="break-all">{id}</code>。</p>
-        {preview?.has_pull ? <p>{preview.requires_key ? '打开该卡片的设置，在“拉取”中填写自己的 API Key 并测试。' : '打开该卡片的设置，测试拉取接口。'}定时拉取默认关闭，确认后再启用。</p>
+        {preview?.has_pull ? <p>{preview.requires_key ? '打开该卡片的设置，在“拉取”中填写自己的接口密钥并测试。' : '打开该卡片的设置，测试拉取接口。'}定时拉取默认关闭，确认后再启用。</p>
           : <p>可在该卡片中上传数据或配置拉取接口。</p>}
       </div> : <>
         <input ref={input} type="file" accept=".zip,application/zip" className="hidden" aria-label="选择扩展配置包"
@@ -104,7 +104,7 @@ export function ExtConfigImportDialog({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={() => input.current?.click()} disabled={!!busy}
           className={`${BUTTON} h-auto min-h-ctl-lg w-full justify-start gap-3 py-2`}>
           {busy === 'inspect' ? <Loader2 className="h-[20px] w-[20px] shrink-0 animate-spin" /> : <FileArchive className="h-[20px] w-[20px] shrink-0" />}
-          <span className="min-w-0 text-left"><span className="block truncate">{file?.name ?? '选择单表配置 ZIP'}</span><span className="mt-0.5 block text-xs text-secondary">不包含历史数据；最大 4 MiB</span></span>
+          <span className="min-w-0 text-left"><span className="block truncate">{file?.name ?? '选择单表配置 ZIP'}</span><span className="mt-0.5 block text-xs text-secondary">不含历史数据；最大 4 MB</span></span>
           <Upload className="ml-auto h-[16px] w-[16px] shrink-0" />
         </button>
         {preview && <div className="space-y-3">
@@ -117,7 +117,7 @@ export function ExtConfigImportDialog({ onClose }: { onClose: () => void }) {
               className="ctl ctl-lg ctl-input w-full px-3.5 focus:border-accent focus:ring-1 focus:ring-accent bg-base" />
           </label>
           <p id="ext-config-id-hint" className="text-xs leading-5 text-secondary">{preview.conflict ? '已有同名配置，已建议新标识。' : ''}仅限英文字母、数字和下划线；不会覆盖现有配置。</p>
-          <p className="text-xs leading-5 text-secondary">{preview.requires_key ? '导入后需填写自己的 API Key。' : '此配置未声明 API Key 鉴权。'}{preview.has_pull ? '定时拉取先保持关闭。' : ''}</p>
+          <p className="text-xs leading-5 text-secondary">{preview.requires_key ? '导入后需填写自己的接口密钥。' : '此配置未声明接口密钥鉴权。'}{preview.has_pull ? '定时拉取先保持关闭。' : ''}</p>
           {preview.warnings.length > 0 && <ul className="space-y-1 text-xs leading-5 text-amber-800 dark:text-amber-300">{preview.warnings.map(note => <li key={note}>{note}</li>)}</ul>}
         </div>}
         {error && <p role="alert" className="break-words text-sm leading-5 text-danger">{error}</p>}

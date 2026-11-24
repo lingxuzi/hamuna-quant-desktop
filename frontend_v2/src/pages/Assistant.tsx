@@ -21,7 +21,7 @@ export function Assistant() {
     <div className="flex min-h-0 flex-col">
       <PageHeader seal="助"
         title="AI 助手"
-        subtitle="ASSISTANT"
+        subtitle="智能助手"
         titleExtra={
           <>
             <span className={`tb-chip${s?.configured ? '' : ' warn'}`}>{s?.configured ? '已连接' : '未配置'}</span>

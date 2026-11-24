@@ -107,7 +107,7 @@ export function AbnormalMoves() {
       <div className="shrink-0">
         <PageHeader seal="异"
           title="异动监控"
-          subtitle="ABNORMAL MOVES"
+          subtitle="异动追踪"
           titleExtra={
             <>
               <span className="tb-chip warn">触发 {headerCounts.data?.counts.triggered ?? '—'}</span>
@@ -205,7 +205,7 @@ function AuctionView({ onOpenStock }: {
           <div className="mt-3 font-serif text-[16px] font-medium text-foreground">竞价数据源未配置</div>
           <p className="mx-auto mt-2 max-w-[38ch] text-[11.5px] leading-[1.75] text-secondary">
             竞价异动 (同花顺盘前风向标与全市场竞价扫描) 依赖同花顺接口,
-            复盘页的龙虎榜同样来自该数据源。在「设置 → 数据源」配置同花顺接口 Key 后即可使用。
+            复盘页的龙虎榜同样来自该数据源。在「设置 → 数据源」配置同花顺接口密钥后即可使用。
           </p>
           <Link to="/settings?tab=data-sources" className="ctl-btn ctl-sm pri mt-4">
             前往配置数据源

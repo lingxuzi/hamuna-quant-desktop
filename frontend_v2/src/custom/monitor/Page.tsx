@@ -209,7 +209,7 @@ export function Monitor() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader seal="监" title="监控中心" subtitle="MONITOR"
+      <PageHeader seal="监" title="监控中心" subtitle="监控中心"
         titleExtra={(
           <>
             <span className={cn('tb-chip', rulesCount === 0 && 'warn')}>规则 {rulesCount} 条</span>
@@ -453,7 +453,7 @@ function AlertsList({ alertsQuery, confirmClear, setConfirmClear, total, enterTs
         />
       ) : events.length === 0 ? (
         <EmptyState
-          eyebrow="NO ALERTS · 7 天"
+          eyebrow="近 7 天无提醒"
           title="近 7 天没有触发记录"
           hint="规则每 10 秒扫一遍实时行情，命中就写一条。现在一条规则都没有，所以这里空着 —— 不是加载失败。"
         />

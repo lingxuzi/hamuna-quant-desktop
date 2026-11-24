@@ -655,7 +655,7 @@ export function CreateExtDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <div className="text-[10px] text-muted mb-1">Headers（JSON，可选）</div>
+                  <div className="text-[10px] text-muted mb-1">请求头（JSON，可选）</div>
                   <textarea
                     value={headerStr}
                     onChange={(e) => setHeaderStr(e.target.value)}
@@ -815,15 +815,15 @@ export function CreateExtDialog({ onClose }: { onClose: () => void }) {
                     <div className="p-2.5 rounded-xl bg-elevated/60 text-muted/70">
                       <Upload className="h-[20px] w-[20px]" />
                     </div>
-                    <span className="text-[11px] text-secondary">拖拽或点击上传数据文件（CSV / Excel）</span>
-                    <span className="text-[10px] text-muted/70">自动识别列名和类型，symbol / code 列自动匹配</span>
+                    <span className="text-[11px] text-secondary">拖拽或点击上传数据文件（表格格式）</span>
+                    <span className="text-[10px] text-muted/70">自动识别列名和类型，标的代码列自动匹配</span>
                   </>
                 )}
               </div>
             ) : sourceMode === 'url' && fields.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/40 bg-elevated/20 py-6 flex flex-col items-center gap-1.5">
                 <RefreshCw className="h-[16px] w-[16px] text-muted/50" />
-                <span className="text-[11px] text-muted">填写 URL 后点击「测试识别」，按返回数据自动生成字段</span>
+                <span className="text-[11px] text-muted">填写地址后点击「测试识别」，按返回数据自动生成字段</span>
               </div>
             ) : sourceMode === 'manual' && fields.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/40 bg-elevated/20 py-6 flex flex-col items-center gap-2.5">

@@ -201,7 +201,7 @@ export function CompositeStrategyDialog({ open, onClose, onSavedId, editStrategy
               {/* 基本信息 */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs text-muted">策略 ID（自动生成）</label>
+                  <label className="mb-1 block text-xs text-muted">策略编号（自动生成）</label>
                   <input
                     value={strategyId}
                     readOnly

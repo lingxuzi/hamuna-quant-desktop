@@ -25,7 +25,7 @@ export function Signals() {
       <PageHeader
         seal="信"
         title="信号库"
-        subtitle="SIGNAL LIBRARY"
+        subtitle="信号库"
         right={<ResourceTransferButton kind="signal" />}
       />
       <SignalsBody highlight={highlight} />

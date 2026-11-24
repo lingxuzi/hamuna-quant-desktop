@@ -184,7 +184,7 @@ export function Indices() {
       <PageHeader
         seal="指"
         title="指数"
-        subtitle="INDICES"
+        subtitle="指数行情"
         titleExtra={
           <>
             <span className="tb-chip">{quotes.data?.count ?? CORE_INDEXES.length} 个指数</span>
@@ -298,8 +298,8 @@ export function Indices() {
             <>
               <div className="plot" role="tabpanel" hidden={tab !== 'daily'}>
                 <div className="plot-hd">
-                  <b>日 K · 近 180 个交易日</b><span>DAILY</span>
-                  <div className="leg"><i className="u">涨</i><i className="d">跌</i><i className="m">MA20</i></div>
+                  <b>日 K · 近 180 个交易日</b><span>日线</span>
+                  <div className="leg"><i className="u">涨</i><i className="d">跌</i><i className="m">20 日均线</i></div>
                 </div>
                 <div className="plotbody" data-day-chart>
                   <EChartsCandlestick
@@ -322,7 +322,7 @@ export function Indices() {
 
               <div className="plot" role="tabpanel" hidden={tab !== 'minute'}>
                 <div className="plot-hd">
-                  <b>分时 · {selectedDate ?? '—'}</b><span>INTRADAY</span>
+                  <b>分时 · {selectedDate ?? '—'}</b><span>分时</span>
                   <div className="leg"><i className="m">昨收 {fmtNum(prevClose)}</i></div>
                 </div>
                 <div className="plotbody">

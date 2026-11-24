@@ -126,7 +126,7 @@ export function StockAnalysis() {
     <div className="min-w-0">
       <PageHeader seal="析"
         title="个股分析"
-        subtitle="STOCK DEEP DIVE"
+        subtitle="个股深研"
         right={
           <div className="flex items-center gap-2">
             <StockFinancialSearch onSelect={onSelect} assetTypes="stock,index" />

@@ -83,7 +83,7 @@ export function MiningOosChart({ folds }: MiningOosChartProps) {
 
           return `<div style="font-size:11px;margin-bottom:5px">${escapeHtml(heading)}</div>
             <div style="display:flex;justify-content:space-between;gap:18px"><span>样本外收益</span><span style="font-family:monospace">${fold.return == null ? '—' : `${(fold.return * 100).toFixed(2)}%`}</span></div>
-            <div style="display:flex;justify-content:space-between;gap:18px"><span>Sharpe</span><span style="font-family:monospace">${fold.sharpe == null ? '—' : fold.sharpe.toFixed(2)}</span></div>`
+            <div style="display:flex;justify-content:space-between;gap:18px"><span>夏普比</span><span style="font-family:monospace">${fold.sharpe == null ? '—' : fold.sharpe.toFixed(2)}</span></div>`
         },
       },
       xAxis: {

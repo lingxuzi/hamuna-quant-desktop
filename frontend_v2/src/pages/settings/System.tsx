@@ -385,7 +385,7 @@ export function SettingsSystemPanel() {
         <div className="rowset">
           <div className="r">
             <div className="lab">
-              <b>详情页 URL 模板</b>
+              <b>详情页地址模板</b>
               <small className="truncate">{"支持 {code} {market} {symbol} · 留空关闭外链"}</small>
             </div>
             <div className="ctl">

@@ -61,11 +61,11 @@ it('previews a single configuration, imports it, and explains recipient key setu
   await mount()
   const file = await selectFile()
   expect(host.textContent).toContain('集合竞价')
-  expect(host.textContent).toContain('API Key')
+  expect(host.textContent).toContain('接口密钥')
   await click('导入配置')
   expect(api.extDataConfigImport).toHaveBeenCalledWith(file, 'auction')
   expect(host.textContent).toContain('导入成功')
-  expect(host.textContent).toContain('自己的 API Key')
+  expect(host.textContent).toContain('自己的接口密钥')
   expect(host.textContent).toContain('定时拉取')
 })
 

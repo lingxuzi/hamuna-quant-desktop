@@ -513,7 +513,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                   ? <><span className="font-mono">{s?.ai_codex_command ?? CODEX_COMMAND}</span> · <span className="font-mono">{codexModelLabel(s?.ai_model, s?.ai_codex_reasoning_effort)}</span></>
                   : <><span className="font-mono">{s?.ai_model}</span><span className="text-muted"> · {s?.ai_api_key_masked}</span></>
               ) : (
-                <span className="text-muted">{isCodexProvider ? '使用本机 codex exec, 无需填写 Key' : '填写下方参数并保存即可启用'}</span>
+                <span className="text-muted">{isCodexProvider ? '使用本机 codex exec, 无需填写密钥' : '填写下方参数并保存即可启用'}</span>
               )}
             </span>
           </div>
@@ -725,7 +725,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
                 </div>
               )}
 
-              <Field label="API Key">
+              <Field label="接口密钥">
                 <div className="relative">
                   <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={configured ? `${s?.ai_api_key_masked} · 留空不修改` : 'sk-...'} className={`${INPUT_CLS} pr-9`} />
                   <button onClick={() => setShowKey(v => !v)} className="ctl ctl-md ctl-ghost absolute right-1.5 top-1/2 inline-flex h-ctl-md w-[24px] px-0 -translate-y-1/2 items-center justify-center text-muted/40 hover:text-muted" tabIndex={-1} aria-label={showKey ? '隐藏' : '显示'}>
@@ -786,7 +786,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
             <p className="text-[11px] leading-relaxed text-muted">
               {isCodexProvider
                 ? 'Codex CLI 会复用本机已登录账户, 分析上下文将发送给 OpenAI/Codex。'
-                : 'API Key 仅保存在本机项目文件, 不会上传到任何服务器。'}
+                : '接口密钥仅保存在本机项目文件, 不会上传到任何服务器。'}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -816,7 +816,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
 
         {/* 配置文件: Key 统一存放位置, 支持外部编辑后热加载 */}
         {s?.secrets_path && (
-          <div className="border-t border-border/40 px-5 py-3" title="AI 与数据源 Key 统一存放在此文件; 外部编辑保存后点「重新加载」即生效, 无需重启。">
+          <div className="border-t border-border/40 px-5 py-3" title="AI 与数据源密钥统一存放在此文件; 外部编辑保存后点「重新加载」即生效, 无需重启。">
             <div className="flex items-center gap-2">
               <FileCog className="h-3.5 w-3.5 shrink-0 text-muted/70" />
               <span className="shrink-0 text-[11px] text-muted">配置文件</span>
@@ -837,7 +837,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
               </span>
             </div>
             <p className="mt-1.5 pl-[22px] text-[10px] leading-relaxed text-muted/80">
-              可直接用编辑器修改本文件, 保存后点「重新加载」同步; 所有 AI 与数据源 Key 均在此统一管理。
+              可直接用编辑器修改本文件, 保存后点「重新加载」同步; 所有 AI 与数据源密钥均在此统一管理。
             </p>
           </div>
         )}
@@ -854,7 +854,7 @@ export function SettingsAIPanel({ highlight }: { highlight?: string } = {}) {
         >
           <h3 id="ai-clear-title" className="text-sm font-medium text-foreground mb-2">清空 AI 配置</h3>
           <p className="text-xs text-secondary mb-5 leading-relaxed">
-            这会清空已保存的 provider、API Key、API 地址、模型和 Codex CLI 命令。之后可以重新配置。
+            这会清空已保存的 provider、接口密钥、API 地址、模型和 Codex CLI 命令。之后可以重新配置。
           </p>
           <div className="flex items-center justify-end gap-2">
             <button onClick={() => setConfirmClear(false)} className="ctl ctl-md ctl-ghost px-2.5 hover:bg-elevated/80 bg-elevated">

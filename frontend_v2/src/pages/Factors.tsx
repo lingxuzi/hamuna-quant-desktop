@@ -128,7 +128,7 @@ export function Factors() {
     <div className="flex min-h-full flex-col bg-base xl:h-full">
       <PageHeader seal="因"
         title="因子"
-        subtitle="FACTORS"
+        subtitle="因子库"
         titleExtra={(
           <>
             <Chip>{factorCount} 个因子</Chip>
@@ -269,7 +269,7 @@ export function Factors() {
               <div className="mt-2.5 border border-border bg-surface">
                 <div className="flex items-baseline gap-2.5 border-b border-border px-2.5 py-[7px]">
                   <b className="text-[11.5px] font-medium text-foreground">IC 衰减</b>
-                  <span className="font-mono text-[9px] tracking-[.14em] text-muted">IC DECAY</span>
+                  <span className="font-mono text-[9px] tracking-[.14em] text-muted">IC 衰减</span>
                 </div>
                 <div className="flex h-[150px] items-center justify-center px-3 text-center text-[11px] leading-[1.8] text-muted">
                   还没有检验记录<br />选中左侧任一因子后点「检验全部」

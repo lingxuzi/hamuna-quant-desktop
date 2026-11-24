@@ -341,7 +341,7 @@ function SetupCard({ accId, onDone, onCancel }: { accId: string; onDone: (create
           <div className="relative mt-1">
             <input type="number" step="1" min="0" value={slippageBps} onChange={e => setSlippageBps(e.target.value)}
               className="ctl ctl-md ctl-input w-full px-2.5 pr-7 font-mono focus:border-accent/50 bg-base" />
-            <i className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9.5px] not-italic text-muted">bp</i>
+            <i className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9.5px] not-italic text-muted">基点</i>
           </div>
         </div>
       </div>
@@ -598,7 +598,7 @@ function SuggestInput({
           {/* 结果计数 + 键盘操作提示 */}
           <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-elevated/40 px-3 py-1.5 text-[10px] text-muted">
             <span>{loading ? '搜索中…' : `${options.length} 个候选${value.trim() ? ` · “${value.trim()}”` : ''}`}</span>
-            <span className="font-mono tracking-tight">↑↓ 导航 · ↵ 选中 · esc 关闭</span>
+            <span className="font-mono tracking-tight">↑↓ 导航 · ↵ 选中 · Esc 关闭</span>
           </div>
           <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
             {loading && options.length === 0 ? (
@@ -935,7 +935,7 @@ function FeeSettingsModal({ accId, fees, queue, onSaved, onClose }: {
             <input type="number" step="0.1" min="0" max="50" value={stampQian} onChange={e => setStampQian(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-muted">滑点 (bps)</label>
+            <label className="block text-[11px] text-muted">滑点（基点）</label>
             <input type="number" step="1" min="0" max="200" value={slippageBps} onChange={e => setSlippageBps(e.target.value)} className={inputCls} />
           </div>
         </div>
@@ -1014,7 +1014,7 @@ function BaseDefaultsModal({ onClose }: { onClose: () => void }) {
             <input type="number" step="0.1" min="0" max="50" value={stampQian} onChange={e => setStampQian(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-muted">滑点 (bps)</label>
+            <label className="block text-[11px] text-muted">滑点（基点）</label>
             <input type="number" step="1" min="0" max="200" value={slippageBps} onChange={e => setSlippageBps(e.target.value)} className={inputCls} />
           </div>
         </div>
@@ -1619,7 +1619,7 @@ function CompareView({ onCreateSingle }: { onCreateSingle: () => void }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader seal="模"
         title="模拟盘"
-        subtitle="PAPER TRADING"
+        subtitle="模拟交易"
         titleExtra={
           <>
             <span className={`tb-chip${rows.length ? '' : ' warn'}`}>账户 {rows.length} 个</span>
@@ -2124,7 +2124,7 @@ function BatchCreateModal({ onClose, onCreated }: { onClose: () => void; onCreat
               <input type="number" step="0.1" min="0" value={stampQian} onChange={e => setStampQian(e.target.value)} className={cn(inputCls, 'mt-1')} />
             </div>
             <div>
-              <label className={labelCls}>滑点 (bps)</label>
+              <label className={labelCls}>滑点（基点）</label>
               <input type="number" step="1" min="0" value={slippageBps} onChange={e => setSlippageBps(e.target.value)} className={cn(inputCls, 'mt-1')} />
             </div>
           </div>
@@ -2494,7 +2494,7 @@ function AccountPanel({ acc, name, onDeleted }: { acc: string; name?: string; on
               ) : (
                 <div className="mt-2">
                   {rounds.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-muted">暂无完整回合 — FIFO 配对买卖后在此展示每笔回合的盈亏明细</div>
+                    <div className="py-6 text-center text-xs text-muted">暂无完整回合 — 先进先出配对买卖后在此展示每笔回合的盈亏明细</div>
                   ) : (
                     <table className="w-full text-xs">
                       <thead>

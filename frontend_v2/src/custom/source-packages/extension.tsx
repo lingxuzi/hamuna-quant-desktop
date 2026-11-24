@@ -58,10 +58,10 @@ export function InstallDialog({ onClose, onInstalled }: { onClose: () => void; o
       <h2 id="source-package-title" className="text-[16px] leading-6 font-semibold text-foreground">安装数据源插件</h2>
       <button className={button} aria-label="关闭" disabled={busy} onClick={onClose}><X size={16} /></button>
     </div>
-    <p className="text-sm text-secondary">安装后会在数据源列表中显示卡片。配置 API Key 后，再选择需要启用的能力。</p>
+    <p className="text-sm text-secondary">安装后会在数据源列表中显示卡片。配置接口密钥后，再选择需要启用的能力。</p>
     <label className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border p-6 text-sm text-secondary"
       onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void inspect(e.dataTransfer.files[0]) }}>
-      <Upload size={24} /><span>选择或拖入 ZIP 插件包 · 最大 20 MiB</span>
+      <Upload size={24} /><span>选择或拖入插件包（压缩包）· 最大 20 MB</span>
       <input aria-label="选择插件包" type="file" accept=".zip" disabled={busy} onChange={e => { void inspect(e.target.files?.[0]); e.target.value = '' }} className="max-w-full text-xs" />
     </label>
     {busy && <p role="status" className="flex gap-2 text-sm"><Loader2 size={16} className="animate-spin" />正在处理，请稍候…</p>}
@@ -117,7 +117,7 @@ export function PackageActions({ plugin, refresh }: FrontendSlotContextMap['sett
       <div className="space-y-1">
         <p className="font-medium text-foreground">卸载已安排</p>
         <p className="text-secondary">插件已停止接收新请求，重启主程序后删除插件文件。</p>
-        <p className="text-secondary">已保存的 API Key 保留，重新安装后可继续使用。</p>
+        <p className="text-secondary">已保存的接口密钥保留，重新安装后可继续使用。</p>
       </div>
     </div> : <>
     {references.length > 0 && <p className="text-secondary">当前分配的能力：<span className="text-foreground">{references.map(cap => cap.label).join('、')}</span></p>}
@@ -140,7 +140,7 @@ export function PackageActions({ plugin, refresh }: FrontendSlotContextMap['sett
       <div className="space-y-4 p-5 text-sm text-foreground sm:p-6">
         <h3 id="source-package-confirm-title" className="text-lg font-semibold">{confirm === 'remove' ? '卸载 ' + plugin.display_name : '回退 ' + plugin.display_name}</h3>
         {confirm === 'remove' ? <>
-          <p className="text-sm leading-6 text-secondary">确认后停止使用此插件，插件文件在下次重启主程序时删除。已保存的 API Key 保留。</p>
+          <p className="text-sm leading-6 text-secondary">确认后停止使用此插件，插件文件在下次重启主程序时删除。已保存的接口密钥保留。</p>
           {matrix.isFetching && <p role="status" className="flex items-center gap-2 text-xs text-secondary"><Loader2 className="h-[16px] w-[16px] animate-spin" aria-hidden="true" />正在检查受影响的能力…</p>}
           {matrix.isError && <div role="alert" className="space-y-2 text-xs text-danger"><p>无法读取当前能力分配，请重试后再卸载。</p><button type="button" className={button} disabled={matrix.isFetching} onClick={() => void matrix.refetch()}>重新读取能力</button></div>}
           {matrix.isSuccess && !matrix.isFetching && (references.length ? <div className="space-y-3">
@@ -153,7 +153,7 @@ export function PackageActions({ plugin, refresh }: FrontendSlotContextMap['sett
             </dl>
             {missingDefault && <p className="text-xs leading-6 text-amber-800 dark:text-amber-300">部分默认来源当前不可用，相应能力将暂停取数。可在数据源设置中配置或选择其他来源。</p>}
           </div> : <p className="text-xs text-secondary">此插件未分配给任何数据能力，可直接卸载。</p>)}
-        </> : <p className="text-sm leading-6 text-secondary">重启后切换到上一版本，已保存的 Key 和能力路由保留。</p>}
+        </> : <p className="text-sm leading-6 text-secondary">重启后切换到上一版本，已保存的密钥和能力路由保留。</p>}
         {error && <p role="alert" className="break-words text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
           <button className={button} disabled={busy} onClick={() => setConfirm(null)}>取消</button>
@@ -199,7 +199,7 @@ function RoutingDialog({ plugin, onClose, onSaved }: { plugin: FrontendSlotConte
       {caps.map(cap => <div key={cap.id} className="rounded border border-border p-3 space-y-2 text-xs">
         <label className="flex items-center gap-2"><input type="checkbox" disabled={busy} checked={selected.includes(cap.id)} onChange={e => setSelected(prev => e.target.checked ? [...prev, cap.id] : prev.filter(id => id !== cap.id))} />
           {cap.label}：{cap.current_display} → {plugin.display_name}</label>
-        {plugin.can_test ? <button className={button} disabled={busy} onClick={() => void test(cap.id)}>试拉{cap.label}</button> : <p className="text-muted">此插件未提供能力试拉；Key 验证不代表接口权限已确认。</p>}
+        {plugin.can_test ? <button className={button} disabled={busy} onClick={() => void test(cap.id)}>试拉{cap.label}</button> : <p className="text-muted">此插件未提供能力试拉；密钥验证不代表接口权限已确认。</p>}
         {tests[cap.id] && <p role="status">{tests[cap.id]}</p>}
       </div>)}
       {error && <p role="alert" className="text-danger text-xs">{error}</p>}

@@ -173,7 +173,7 @@ export function LightweightDaily({ data, assetType, symbol = '', height = 480, a
       <div className="mt-1 flex min-h-4 flex-wrap gap-x-4 gap-y-1 text-[10px]">
         {showMA && maFields.map(([field, token]) => <span key={field} style={{ color: color(token) }}>{field.toUpperCase()} {price(current?.[field], precision)}</span>)}
         {activeIndicators.includes('boll') && <span className="inline-flex flex-wrap gap-x-3" aria-label="BOLL 读数">
-          <span className="text-muted">BOLL</span>
+          <span className="text-muted">布林带</span>
           {bollFields.map(([field, label, token]) => <span key={field} style={{ color: color(token) }}>{`${label} ${price(current?.[field], precision)}`}</span>)}
         </span>}
         {/* 分母是该根昨收, 不是该根收盘 —— 标签叫「至今」会让悬停最后一根时显示当日涨跌幅而非 0% */}

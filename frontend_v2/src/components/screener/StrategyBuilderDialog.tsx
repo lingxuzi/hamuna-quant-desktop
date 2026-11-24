@@ -371,7 +371,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
   // Step 1: 生成
   const handleGenerate = async () => {
     if (!name.trim() || !rules.trim()) return
-    if (!aiStatus?.configured) { setError('AI 未配置，请在设置页面配置 API Key'); return }
+    if (!aiStatus?.configured) { setError('AI 未配置，请在设置页面配置接口密钥'); return }
     setLoading(true); setError(''); setCode(''); setValidated(false); setIterateRounds([]); setIterateDraftId('')
     try {
       if (iterateEnabled) {
@@ -416,7 +416,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
       }
     } catch (e: any) {
       const msg = friendlyStreamError(String(e?.message ?? ''))
-      setError(msg.includes('API Key') || msg.includes('api_key') ? 'AI API Key 未配置或无效' : (msg || '生成失败'))
+      setError(msg.includes('接口密钥') || msg.includes('api_key') ? 'AI 接口密钥未配置或无效' : (msg || '生成失败'))
     } finally { setLoading(false) }
   }
 
@@ -612,7 +612,7 @@ export function StrategyBuilderDialog({ open, onClose, onSavedId, mode = 'create
             {aiStatus && !aiStatus.configured && (
               <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
                 <AlertTriangle className="h-[16px] w-[16px] text-amber-400 shrink-0" />
-                <div className="flex-1 text-xs text-amber-400/80">AI API Key 未配置，无法生成策略。填写的内容会自动保存。</div>
+                <div className="flex-1 text-xs text-amber-400/80">AI 接口密钥未配置，无法生成策略。填写的内容会自动保存。</div>
                 <button onClick={() => { persist(); window.location.href = `${import.meta.env.BASE_URL}settings?tab=ai` }}
                   className="ctl ctl-md ctl-btn px-2.5 bg-amber-400/15 border-amber-400/30 text-amber-400 flex items-center gap-1.5 hover:bg-amber-400/20 shrink-0">
                   <Settings2 className="h-[12px] w-[12px]" />去配置

@@ -119,7 +119,7 @@ export function ReviewPage() {
     && (!prefs.data.email_smtp_config.username || prefs.data.email_smtp_password_set)
   )
   // 推送渠道是独立的顶层偏好(多选), 与定时 / 实时行情无关, 常驻可单独设置
-  // []=不推送; 可多选飞书、企微、第三方 Webhook 和邮件。
+  // []=不推送; 可多选飞书、企微、第三方回调 和邮件。
   const reviewPushChannels = prefs.data?.review_push_channels ?? []
   // 推送触发方式: auto=归档即推; manual=仅归档不自动外发.默认 manual。
   const reviewPushMode = prefs.data?.review_push_mode ?? 'manual'
@@ -302,7 +302,7 @@ export function ReviewPage() {
             <span className="tb-chip">龙虎榜 {lhbCount} 只</span>
           </>
         }
-        subtitle="MARKET RECAP"
+        subtitle="大盘复盘"
         right={
           <div className="flex items-center gap-1.5">
             <button
@@ -346,7 +346,7 @@ export function ReviewPage() {
             </div>
           ) : !data || !data.as_of ? (
             <div className="flex flex-col items-center justify-center gap-4 border border-border bg-surface px-6 py-14 text-center">
-              <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">NO MARKET DATA</span>
+              <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">暂无行情数据</span>
               <h2 className="font-serif text-[17px] font-medium text-foreground">暂无市场数据</h2>
               <p className="max-w-[42ch] text-[11.5px] leading-[1.8] text-secondary">复盘需要日 K 与指数，请先前往「数据」页同步</p>
               <Link
@@ -570,7 +570,7 @@ export function ReviewPage() {
                       {reviewPushChannels.includes('feishu') && <Check className="h-2.5 w-2.5" />}
                     </span>
                     <span className="text-[11px] text-foreground">飞书</span>
-                    <span className="text-[9px] text-muted">群推送 Webhook</span>
+                    <span className="text-[9px] text-muted">群机器人推送</span>
                     <span className={cn('ml-auto text-[9px]', feishuConfigured ? 'text-emerald-500' : 'text-warning')}>
                       {feishuConfigured ? '已配置' : '未配置'}
                     </span>
@@ -591,7 +591,7 @@ export function ReviewPage() {
                       {reviewPushChannels.includes('wecom') && <Check className="h-2.5 w-2.5" />}
                     </span>
                     <span className="text-[11px] text-foreground">企业微信</span>
-                    <span className="text-[9px] text-muted">群推送 Webhook</span>
+                    <span className="text-[9px] text-muted">群机器人推送</span>
                     <span className={cn('ml-auto text-[9px]', wecomConfigured ? 'text-emerald-500' : 'text-warning')}>
                       {wecomConfigured ? '已配置' : '未配置'}
                     </span>
@@ -611,7 +611,7 @@ export function ReviewPage() {
                       {reviewPushChannels.includes('custom') && <Check className="h-2.5 w-2.5" />}
                     </span>
                     <span className="text-[11px] text-foreground">第三方系统</span>
-                    <span className="text-[9px] text-muted">JSON Webhook</span>
+                    <span className="text-[9px] text-muted">自定义回调</span>
                     <span className={cn('ml-auto text-[9px]', customConfigured ? 'text-emerald-500' : 'text-warning')}>
                       {customConfigured ? '已配置' : '未配置'}
                     </span>
@@ -631,7 +631,7 @@ export function ReviewPage() {
                       {reviewPushChannels.includes('email') && <Check className="h-2.5 w-2.5" />}
                     </span>
                     <span className="text-[11px] text-foreground">邮件</span>
-                    <span className="text-[9px] text-muted">SMTP</span>
+                    <span className="text-[9px] text-muted">邮件服务器</span>
                     <span className={cn('ml-auto text-[9px]', emailConfigured ? 'text-emerald-500' : 'text-warning')}>
                       {emailConfigured ? '已配置' : '未配置'}
                     </span>
@@ -1049,7 +1049,7 @@ function ReportPanel({
   if (phase === 'error') {
     return (
       <div className="flex flex-col items-center justify-center gap-3 border border-border bg-surface px-6 py-12 text-center">
-        <span className="font-mono text-[9.5px] tracking-[0.2em] text-danger">REPORT FAILED</span>
+        <span className="font-mono text-[9.5px] tracking-[0.2em] text-danger">生成失败</span>
         <div className="font-serif text-[16px] font-medium text-foreground">复盘失败</div>
         <div className="max-w-md text-[11.5px] leading-[1.75] text-secondary">{error || '请检查 AI 配置后重试'}</div>
         <button
@@ -1066,7 +1066,7 @@ function ReportPanel({
     return (
       // 空态:纸面浅格 + 等宽小字题 + 生成/看提示词两个动作 (design/v2/22 的 .empty-rv)
       <div className="border border-border bg-surface px-6 py-12 text-center">
-        <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">NO REPORT</span>
+        <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">暂无报告</span>
         <h2 className="mt-2.5 font-serif text-[17px] font-medium text-foreground">还没有生成过复盘</h2>
         <p className="mx-auto mt-2 max-w-[42ch] text-[11.5px] leading-[1.8] text-secondary">
           复盘以当日的指数、涨跌分布、连板梯队、龙虎榜与板块轮动为材料，交给大模型写成一份中立的市场记录。下面这些材料今天就绪了，等一次生成。
@@ -1169,7 +1169,7 @@ function HistoryPanel({
         <div className="grid h-20 place-items-center"><RefreshCw className="h-[16px] w-[16px] animate-spin text-muted" /></div>
       ) : empty ? (
         <div className="flex flex-col items-center justify-center gap-2 border border-border bg-surface px-3 py-8 text-center">
-          <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">NO REPORT</span>
+          <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">暂无报告</span>
           <div className="font-serif text-[15px] font-medium text-foreground">还没有生成过复盘</div>
           <div className="text-[11px] leading-[1.75] text-muted">生成完成后自动归档, 在此按日回看</div>
         </div>

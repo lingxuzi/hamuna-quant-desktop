@@ -76,7 +76,7 @@ export function Financials() {
   if (!hasFinancial) {
     return (
       <>
-        <PageHeader seal="财" title="财务概况" subtitle="FINANCIALS" />
+        <PageHeader seal="财" title="财务概况" subtitle="财务概况" />
         {/* 设计稿 23 卷首下始终有工具条; 无财务能力时状态照实 (数据源/五表/同步) */}
         <Toolbar
           left={
@@ -132,7 +132,7 @@ export function Financials() {
             toast('财务数据正在同步中，请稍候', 'success')
           } else if (r.synced?.reason === 'no FINANCIAL capability') {
             // 能力未就绪:通常发生在升级/刷新 Key 后调度器状态未同步 —— 提示用户检查 Key
-            toast('财务数据能力未就绪，请检查 API Key 或刷新页面后重试', 'error')
+            toast('财务数据能力未就绪，请检查接口密钥或刷新页面后重试', 'error')
           } else {
             toast(`同步未能开始${r.synced?.reason ? `:${r.synced.reason}` : ''}`, 'error')
           }
@@ -191,7 +191,7 @@ export function Financials() {
     <>
       <PageHeader seal="财"
         title="财务概况"
-        subtitle="FINANCIALS"
+        subtitle="财务概况"
         titleExtra={
           <>
             <span className="tb-chip">数据源 {available ? '可用' : '不可用'}</span>
@@ -321,7 +321,7 @@ export function Financials() {
                 ) : tablesEmpty ? (
                   // 表全空分支 (design/v2/23 的 .empty-rv): 能力接通但从未同步 → 引导同步
                   <EmptyState
-                    eyebrow="TABLES EMPTY"
+                    eyebrow="暂无表格"
                     title="五张财务表都是空的"
                     hint="数据源能提供财务数据，但还没同步过。同步一次会把全市场的三张报表、核心指标和股本数据拉进本地库，之后搜任意一只就能看。"
                     action={

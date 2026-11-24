@@ -26,14 +26,14 @@ export const CATEGORY_OPTIONS: { key: string; label: string; desc: string; sensi
   { key: 'lots',               label: '批量持仓',       desc: '批量交易持仓记录' },
   { key: 'paper',              label: '模拟盘账户',     desc: '账户 / 持仓 / 成交台账' },
   { key: 'research_candidates', label: '挖掘候选',      desc: '挖掘入选清单' },
-  { key: 'data_sources',       label: '自定义数据源',   desc: '连接配置；API Key 需另选“密钥”' },
+  { key: 'data_sources',       label: '自定义数据源',   desc: '连接配置；接口密钥需另选“密钥”' },
   { key: 'analysis_menus',     label: '分析菜单',       desc: '自定义分析入口' },
   { key: 'ext_pages',          label: '独立页面插件',   desc: '单独导入的页面产物；不含完整包的配套页面' },
   { key: 'ext_data',           label: '扩展数据集配置', desc: '不含数据本体与 Key' },
   { key: 'sound_packs',        label: '语音包',         desc: '自定义提示音' },
   { key: 'history',            label: '历史记录',       desc: '告警历史与助手会话' },
   { key: 'preferences',        label: '偏好设置',       desc: '界面与通知偏好' },
-  { key: 'secrets',            label: '密钥（API Key）', desc: '当前生效的 AI / 数据源 / 扩展数据 Key 及通知密钥', sensitive: true },
+  { key: 'secrets',            label: '密钥（凭证）', desc: '当前生效的 AI / 数据源 / 扩展数据密钥 及通知密钥', sensitive: true },
   { key: 'auth',               label: '访问凭证',       desc: '访问密码与会话 — 导入后原密码在本机生效', sensitive: true },
 ]
 
@@ -215,7 +215,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
 
         {!exportSel.has('secrets') && (
           <p role="status" className="mt-2.5 text-xs leading-relaxed text-secondary">
-            当前备份不含 API Key。换机恢复时，请勾选下方“密钥（API Key）”。
+            当前备份不含接口密钥。换机恢复时，请勾选下方“密钥（凭证）”。
           </p>
         )}
 
@@ -276,7 +276,7 @@ export function SettingsBackupPanel({ mode = 'all' }: { mode?: 'all' | 'export' 
           <div className="mt-2 flex items-start gap-2 rounded-btn border border-warning/25 bg-warning/[0.07] px-3 py-2 text-[11px] leading-relaxed text-warning">
             <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" />
             <span>
-              已勾选敏感内容: 备份文件将包含明文密钥 (AI Key、数据源 Key、Webhook Secret)
+              已勾选敏感内容: 备份文件将包含明文密钥 (AI 密钥、数据源密钥、回调密钥)
               和/或访问凭证 (密码哈希与会话), 新设备导入后无需重新填写。
               请妥善保管, 切勿分享或上传到公开位置。
             </span>

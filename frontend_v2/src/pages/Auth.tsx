@@ -90,7 +90,7 @@ export function Auth() {
     <div className="page scroll-shell h-full overflow-auto scrollbar-gutter-stable">
       {/* 未登录时行情接口 401, 拿不到行情日期/收盘状态 → 用浏览器本地日期, 恒为非实时 */}
       <Inscription
-        title="登录" subtitle="AUTH" seal="凭"
+        title="登录" subtitle="身份核验" seal="凭"
         date={localDate()} running={false}
       />
 
@@ -176,7 +176,7 @@ export function Auth() {
         </div>
 
         <div className="auth-side">
-          <div className="fig-h">认 证 状 态 ｜ /api/auth/status</div>
+          <div className="fig-h">认 证 状 态</div>
           <table className="dt">
             <colgroup><col /><col style={{ width: 110 }} /></colgroup>
             <thead><tr><th>项</th><th>值</th></tr></thead>

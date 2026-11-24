@@ -651,7 +651,7 @@ function BatchDiscovery({
         )}
         {!results && !run.isPending && (
           <div className="bt-empty m-3">
-            <span className="em">DISCOVERY · 未检验</span>
+            <span className="em">挖 掘 · 未 检 验</span>
             <h2>三步找到有效因子</h2>
             <p>左侧选因子（或用预设）→ 点「筛选」批量检验 → 点击结果行看单因子详情。IC 衡量历史上因子值与后续涨跌的关联强度（绝对值越大关联越强），IR 是稳定度。</p>
             <button

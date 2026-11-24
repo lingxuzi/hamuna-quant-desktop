@@ -68,7 +68,7 @@ function LoadingPanel({ symbolsText }: { symbolsText: string }) {
 
       <div className="plot">
         <div className="plot-hd">
-          <b>分层净值预览</b><span>GROUP NAV</span>
+          <b>分层净值预览</b><span>分层净值</span>
           <div className="leg"><i className="m">等待后端返回完整结果</i></div>
         </div>
         <div className="plotbody p-4">
@@ -343,7 +343,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
                 className={INPUT_CLS} />
             </div>
             <div>
-              <label className="mb-1 block text-[10.5px] text-secondary">滑点 (bp)</label>
+              <label className="mb-1 block text-[10.5px] text-secondary">滑点（基点）</label>
               <input type="number" min="0" value={slippage} onChange={e => setSlippage(e.target.value)}
                 className={INPUT_CLS} />
             </div>
@@ -438,9 +438,9 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
                 note="日频横截面相关波动"
               />
               <ReadoutCell
-                label="ICIR"
+                label="IC 信 息 比"
                 value={result.ir != null ? result.ir.toFixed(2) : '—'}
-                note="|ICIR| > 0.5 视为稳定"
+                note="|IC 信息比| > 0.5 视为稳定"
                 tone={result.ir == null ? undefined : Math.abs(result.ir) > 0.5 ? (result.ir > 0 ? 'up' : 'down') : undefined}
               />
               <ReadoutCell
@@ -473,7 +473,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
                 {hasIC && (
                   <div className="plot">
                     <div className="plot-hd">
-                      <b>IC 时序</b><span>IC SERIES</span>
+                      <b>IC 时序</b><span>IC 时序</span>
                     </div>
                     <div className="plotbody p-2">
                       <FactorICChart result={result} />
@@ -483,7 +483,7 @@ export function FactorBacktest({ initialFactorName = 'momentum_20d', autoRun = f
                 {hasNav && (
                   <div className="plot">
                     <div className="plot-hd">
-                      <b>分层净值</b><span>GROUP NAV</span>
+                      <b>分层净值</b><span>分层净值</span>
                     </div>
                     <div className="plotbody p-2">
                       <FactorGroupNavChart result={result} />

@@ -229,7 +229,7 @@ export function SettingsPagePacksPanel() {
 
       <section className="mt-10 first:mt-0">
         <div className="grid grid-cols-[1fr_8rem_6rem_5rem_4rem] items-center border-b border-border px-4 py-2 text-[11px] text-muted">
-          <div>页面 / ID</div><div>路径</div><div>大小 / 时间</div><div className="text-center">启用</div><div className="text-center">操作</div>
+          <div>页面 / 编号</div><div>路径</div><div>大小 / 时间</div><div className="text-center">启用</div><div className="text-center">操作</div>
         </div>
         {packs.length === 0 && (
           <div className="px-4 py-10 text-center text-sm text-muted">暂无页面插件，用上方表单上传第一个。</div>

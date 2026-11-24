@@ -205,7 +205,7 @@ export function StrategyOptimizer() {
 
         <SweepParamList params={sweep.params} sweeps={sweep.sweeps} updateSweep={sweep.updateSweep} hiddenLabels={sweep.hiddenParamLabels} />
         <CombosHint show={!!sweep.strategyId} combos={sweep.combos} gridError={sweep.gridError} />
-        <div className="text-[11px] text-secondary">每组跑 K 段验证 + Top-20 全窗细化, 耗时约为旧版 1.7 倍</div>
+        <div className="text-[11px] text-secondary">每组跑 K 段验证 + 前 20 名全窗细化, 耗时约为旧版 1.7 倍</div>
 
         {task?.isPending ? (
           <button onClick={stopRobust} className="ctl ctl-sm ctl-ghost inline-flex w-full items-center justify-center gap-1.5 bg-red-500/90 px-1.5 hover:bg-red-500">
@@ -336,7 +336,7 @@ export function StrategyOptimizer() {
                     {Array.from({ length: result.k_segments }, (_, i) => (
                       <th key={i} className="px-2 py-1.5 text-right">V{i + 1}</th>
                     ))}
-                    <th className="px-2 py-1.5 text-right">全窗IS</th>
+                    <th className="px-2 py-1.5 text-right">全窗样本内</th>
                     <th className="px-2 py-1.5 text-right">退化</th>
                     <th className="px-2 py-1.5 text-right">交易数</th>
                   </tr>

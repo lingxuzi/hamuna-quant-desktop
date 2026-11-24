@@ -1514,7 +1514,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
               className="h-[12px] w-[12px] accent-accent cursor-pointer"
             />
             <span className="text-[11px] text-foreground">飞书</span>
-            <span className="text-[9px] text-muted">群推送 Webhook</span>
+            <span className="text-[9px] text-muted">群机器人推送</span>
             {(draft.webhook_channels ?? []).includes('feishu') && (
               <span className={`ml-auto text-[9px] ${feishuConfigured ? 'text-emerald-500' : 'text-warning'}`}>
                 {feishuConfigured ? '已配置' : '未配置'}
@@ -1530,7 +1530,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
               className="h-[12px] w-[12px] accent-accent cursor-pointer"
             />
             <span className="text-[11px] text-foreground">第三方系统</span>
-            <span className="text-[9px] text-muted">JSON Webhook</span>
+            <span className="text-[9px] text-muted">自定义回调</span>
             {(draft.webhook_channels ?? []).includes('custom') && (
               <span className={`ml-auto text-[9px] ${customConfigured ? 'text-emerald-500' : 'text-warning'}`}>
                 {customConfigured ? '已配置' : '未配置'}
@@ -1546,7 +1546,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
               className="h-[12px] w-[12px] accent-accent cursor-pointer"
             />
             <span className="text-[11px] text-foreground">邮件</span>
-            <span className="text-[9px] text-muted">SMTP</span>
+            <span className="text-[9px] text-muted">邮件服务器</span>
             {(draft.webhook_channels ?? []).includes('email') && (
               <span className={`ml-auto text-[9px] ${emailConfigured ? 'text-emerald-500' : 'text-warning'}`}>
                 {emailConfigured ? '已配置' : '未配置'}
@@ -1563,7 +1563,7 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
               className="h-[12px] w-[12px] accent-accent cursor-pointer"
             />
             <span className="text-[11px] text-foreground">企业微信</span>
-            <span className="text-[9px] text-muted">群推送 Webhook</span>
+            <span className="text-[9px] text-muted">群机器人推送</span>
             {(draft.webhook_channels ?? []).includes('wecom') && (
               <span className={`ml-auto text-[9px] ${wecomConfigured ? 'text-emerald-500' : 'text-warning'}`}>
                 {wecomConfigured ? '已配置' : '未配置'}

@@ -155,7 +155,7 @@ export function SettingsImportCenterPanel() {
         ] }
       } else if (review.kind === 'source') {
         const applied = await api.installSourcePackage(files[0], review.preview.digest, review.preview.revision)
-        next = { title: '数据源插件已处理', message: applied.message, target: 'source:' + applied.name, details: ['安装不会自动接管取数。请继续配置 API Key，再明确选择启用的数据能力。'] }
+        next = { title: '数据源插件已处理', message: applied.message, target: 'source:' + applied.name, details: ['安装不会自动接管取数。请继续配置接口密钥，再明确选择启用的数据能力。'] }
       } else if (review.kind === 'backup') {
         const applied = await api.configBackupApply(files[0], allowOverwrite, [...categories])
         const failed = applied.categories.flatMap(c => c.failed.map(f => c.label + ' · ' + f.file + '：' + f.error))
@@ -257,7 +257,7 @@ export function SettingsImportCenterPanel() {
                     <span className="min-w-0 flex-1"><span className="text-foreground">{category.label}</span><span className="mt-1 block text-xs text-secondary">{category.count} 项{category.conflicts ? ' · ' + category.conflicts + ' 项同名' : ''}</span></span>
                     {['secrets', 'auth'].includes(category.key) && <span className="text-xs text-amber-800 dark:text-amber-300">敏感项</span>}
                   </label>)}</div>
-                  <div className="mt-4"><Notice warning>密钥（API Key）和访问凭证需单独勾选。偏好与密钥按合并写入；恢复敏感项会覆盖本机同名值。</Notice></div>
+                  <div className="mt-4"><Notice warning>密钥（凭证）和访问凭证需单独勾选。偏好与密钥按合并写入；恢复敏感项会覆盖本机同名值。</Notice></div>
                   {!!review.preview.conflict_files && <label className="mt-4 flex items-start gap-2 text-xs leading-6 text-secondary"><input type="checkbox" checked={allowOverwrite} disabled={busy} onChange={e => setAllowOverwrite(e.target.checked)} className="mt-1 accent-accent" />允许覆盖已存在的同名文件（默认跳过）</label>}
                   {!!review.preview.out_of_scope_files && <p className="mt-3 text-xs text-secondary">{review.preview.out_of_scope_files} 个不受支持的文件不会恢复。</p>}
                 </section>}
@@ -268,7 +268,7 @@ export function SettingsImportCenterPanel() {
                   <Notice>{review.preview.manifest.frontend ? '后台启动成功后，新版本页面才会对外提供。确认安装时会先加载页面代码检查其前端契约。' : '新版本仅在主程序重启时加载；安装和预览阶段不会执行包内 Python 代码。'}</Notice>
                   <details className="text-xs leading-6 text-secondary"><summary className="cursor-pointer">查看包内文件与技术信息</summary><p className="mt-2">接口命名空间：/api/extensions/{review.preview.manifest.id}/</p><ul className="mt-2 break-all font-mono">{review.preview.files.map(file => <li key={file}>{file}</li>)}</ul></details>
                 </section>}
-                {review.kind === 'source' && <section className="space-y-4"><h4 className="text-sm font-semibold text-foreground">本次变更</h4><p className="text-sm leading-7 text-secondary">安装数据源卡片。支持能力：{review.preview.manifest.datasets.map(id => matrix.data?.capabilities.find(c => c.id === id)?.label || id).join('、')}。</p><Notice>安装后继续配置 API Key 和启用能力。新版本更新在重启后切换，安装不会自动更改当前行情来源。</Notice></section>}
+                {review.kind === 'source' && <section className="space-y-4"><h4 className="text-sm font-semibold text-foreground">本次变更</h4><p className="text-sm leading-7 text-secondary">安装数据源卡片。支持能力：{review.preview.manifest.datasets.map(id => matrix.data?.capabilities.find(c => c.id === id)?.label || id).join('、')}。</p><Notice>安装后继续配置接口密钥和启用能力。新版本更新在重启后切换，安装不会自动更改当前行情来源。</Notice></section>}
                 {isPage && <section className="space-y-4"><h4 className="text-sm font-semibold text-foreground">页面与菜单入口</h4><label className="block space-y-2 text-xs text-secondary"><span>页面标识</span><input aria-label="页面标识" value={pageId} disabled={busy} onChange={e => { setPageId(e.target.value); setAllowOverwrite(false) }} className={INPUT} /></label>
                   {invalidPageId && <p role="alert" className="text-xs text-danger">标识需为 1–64 位字母、数字或下划线。</p>}
                   {pageConflict && <label className="flex items-start gap-2 text-xs leading-6 text-secondary"><input className="mt-1 accent-accent" type="checkbox" disabled={busy} checked={allowOverwrite} onChange={e => setAllowOverwrite(e.target.checked)} />确认替换该标识现有的页面插件</label>}
@@ -297,7 +297,7 @@ export function SettingsImportCenterPanel() {
               <Upload className="mx-auto mb-4 h-[28px] w-[28px] text-secondary" aria-hidden="true" /><h3 className="text-lg font-semibold text-foreground">把文件放到这里</h3>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-secondary">自动识别策略与定义、配置备份、数据源插件、页面插件，以及后端或前后端完整扩展包。</p>
               <button type="button" className={cn(PRIMARY, 'mt-5')} disabled={busy} onClick={() => fileInput.current?.click()}>{busy ? <Loader2 className="h-[16px] w-[16px] animate-spin" /> : <FolderOpen className="h-[16px] w-[16px]" />}{busy ? '正在识别文件…' : '选择文件'}</button>
-              <p className="mt-3 text-xs leading-6 text-secondary">支持 ZIP、PY、JSON、JS、MJS、TSX。资源文件可多选；扩展和备份逐包处理。</p>
+              <p className="mt-3 text-xs leading-6 text-secondary">支持压缩包与源码文件。资源文件可多选；扩展和备份逐包处理。</p>
             </div>
             {!!namespaces.data?.length && <details className="border-b border-border pb-5 text-xs text-secondary"><summary className="cursor-pointer">从本项目的源码页面导入</summary><p className="mt-3 leading-6">把现有源码页面编译为独立页面插件；不会把它的后端代码一起打包。</p><div className="mt-3 flex flex-wrap items-center gap-2"><select aria-label="项目源码页面" className={cn(INPUT, 'w-auto sm:w-64')} value={namespace} onChange={e => setNamespace(e.target.value)} disabled={busy}><option value="">选择源码页面</option>{namespaces.data.map(ns => <option key={ns} value={ns}>{ns}</option>)}</select><button type="button" className={BUTTON} disabled={busy || !namespace} onClick={() => { setReview({ kind: 'project', preview: { namespace } }); setPageId(namespace.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64)); setTrusted(false); setAllowOverwrite(false) }}>预览项目页面</button></div></details>}
             <section className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">

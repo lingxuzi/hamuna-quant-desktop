@@ -257,7 +257,7 @@ export function FactorEditor({ editId = '' }: { editId?: string }) {
 
         <div>
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-            <label className="shrink-0 text-xs font-medium text-secondary">公式 (DSL)</label>
+            <label className="shrink-0 text-xs font-medium text-secondary">公式（表达式）</label>
             <select
               className="ctl ctl-md ctl-select shrink-0"
               onChange={event => {

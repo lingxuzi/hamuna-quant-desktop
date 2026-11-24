@@ -154,7 +154,7 @@ export function SettingsPageAdminPanel() {
         label: m.label,
         source: '扩展',
         subpages: 1,
-        desc: m.template === 'url' ? 'URL 嵌入页' : '扩展数据源分析页',
+        desc: m.template === 'url' ? '网页嵌入页' : '扩展数据源分析页',
         hidden: hidden.has(m.id),
       })
     }

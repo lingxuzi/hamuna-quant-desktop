@@ -167,7 +167,7 @@ function MinuteProbePanel({ days, base, onDays, onBase, results, onResults, minu
 
       {results.length === 0 && !error && (
         <EmptyState
-          eyebrow="PROBE · 尚未探测"
+          eyebrow="探测 · 尚未运行"
           title="还没有任何一天的探测结果"
           hint={minuteFiles > 0
             ? `探测逐日调用分钟K接口，打印每天的行数、来源与缺失日期。当前 minute_files = ${minuteFiles}，本地已有分钟分区，缺失的日期会落到「本地无数据」。`
@@ -403,7 +403,7 @@ function LadderTestPanel({ ladderCount }: { ladderCount: number }) {
       {/* 空态常驻: 没有封单规则时, 结果区始终是这句提示 (设计稿 29) */}
       {(!result || (result.triggered.length === 0 && result.not_triggered.length === 0)) && (
         <EmptyState
-          eyebrow={ladderCount > 0 ? 'DEPTH · 待评估' : `DEPTH · ${ladderCount} 条规则`}
+          eyebrow={ladderCount > 0 ? '深度 · 待评估' : `深度 · ${ladderCount} 条规则`}
           title={ladderCount === 0
             ? '连板梯队里还没有监控规则'
             : result ? '没有规则被命中' : '还没有运行评估'}
@@ -442,7 +442,7 @@ export function Dev() {
     <div className="flex flex-col h-full">
       <PageHeader seal="诊"
         title="开发工具"
-        subtitle="DEVELOPER"
+        subtitle="开发者"
         titleExtra={
           <>
             <span className={`tb-chip${minuteFiles > 0 ? '' : ' warn'}`}>{minuteFiles > 0 ? '分钟K 已就绪' : '分钟K 本地为空'}</span>
@@ -474,7 +474,7 @@ export function Dev() {
             <div>
               <span className="k">封 单 规 则</span>
               <div className="v">{ladderCount}</div>
-              <small>depth 数据已定版</small>
+              <small>盘口深度数据已定版</small>
             </div>
           </div>
 

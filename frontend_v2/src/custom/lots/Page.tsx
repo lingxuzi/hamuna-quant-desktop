@@ -138,7 +138,7 @@ export function Lots() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader seal="批" title="持仓提醒" subtitle="POSITION LOTS"
+      <PageHeader seal="批" title="持仓提醒" subtitle="持仓批次"
         titleExtra={(
           <>
             <span className={cn('tb-chip', lots.length === 0 && 'warn')}>批次 {lots.length} 条</span>
@@ -167,7 +167,7 @@ export function Lots() {
               </div>
             ) : lots.length === 0 ? (
               <div className="flex min-h-[200px] flex-col items-center justify-center border border-border bg-surface px-6 py-10 text-center">
-                <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">NO LOTS · 0</span>
+                <span className="font-mono text-[9.5px] tracking-[0.2em] text-accent">暂 无 持 仓</span>
                 <h2 className="mt-2 font-serif text-[16px] font-medium text-foreground">还没有记录持仓批次</h2>
                 <p className="mt-1.5 max-w-[38ch] text-[11.5px] leading-[1.75] text-secondary">
                   把每一笔买入记成一批：买入价、股数、买入日。之后这里按批显示成本、现价、浮盈和持有天数，卖出时自动按先进先出核销。

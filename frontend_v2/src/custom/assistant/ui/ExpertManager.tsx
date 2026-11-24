@@ -395,13 +395,13 @@ export function ExpertManager() {
       ) : experts.length === 0 ? (
         filter ? (
           <EmptyState
-            eyebrow="NO EXPERT"
+            eyebrow="暂无专家"
             title="这个分类下还没有专家"
             hint="换个分类看看, 或新建一个专家放进来"
           />
         ) : (
           <EmptyState
-            eyebrow="NO EXPERT"
+            eyebrow="暂无专家"
             title="还没有专家"
             hint="新建一个专家, 之后在对话里 @ 就能引用它"
             action={

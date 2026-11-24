@@ -1713,7 +1713,7 @@ export function LimitUpLadder() {
         <PageHeader
           seal="梯"
           title={direction === 'down' ? '连跌梯队' : '连板梯队'}
-          subtitle="LIMIT LADDER"
+          subtitle="涨停梯队"
           titleExtra={headerChips}
           right={headerRight}
         />
@@ -1722,7 +1722,7 @@ export function LimitUpLadder() {
         </LadderBar>
         <EmptyState
           icon={Flame}
-          eyebrow={`NO RESULT · ${dateValue}`}
+          eyebrow={`暂无所选日期数据 · ${dateValue}`}
           title={direction === 'down' ? '暂无连跌数据' : '暂无连板数据'}
           hint={direction === 'down' ? '该日期无跌停股或 enriched 数据未就绪' : '该日期无涨停股或 enriched 数据未就绪'}
         />
@@ -1745,7 +1745,7 @@ export function LimitUpLadder() {
       <PageHeader
         seal="梯"
         title={direction === 'down' ? '连跌梯队' : '连板梯队'}
-        subtitle="LIMIT LADDER"
+        subtitle="涨停梯队"
         titleExtra={headerChips}
         right={headerRight}
       />

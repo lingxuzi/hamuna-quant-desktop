@@ -180,7 +180,7 @@ export function EditExtDialog({ config, onClose }: { config: ExtDataConfig; onCl
                 exit={{ opacity: 0, height: 0 }}
                 className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 space-y-2"
               >
-                <div className="text-[10px] text-amber-500 font-medium">未找到 symbol 列，请选择哪一列作为标的代码</div>
+                <div className="text-[10px] text-amber-500 font-medium">未找到标的代码列，请选择哪一列作为标的代码</div>
                 <div className="flex flex-wrap gap-1.5">
                   {symbolMapping.candidates.map(col => (
                     <button

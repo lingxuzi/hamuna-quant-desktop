@@ -309,7 +309,7 @@ function CapabilityRoutingSection() {
   )
 }
 
-/** 插件 API Key 配置区块 (嵌入插件详情卡, 不再独立成卡)。
+/** 插件接口密钥配置区块 (嵌入插件详情卡, 不再独立成卡)。
  *  先探后存: 后端用候选 Key 实探一次, 无效不落盘; secrets.json 优先于 .env。 */
 export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
   const qc = useQueryClient()
@@ -344,8 +344,8 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
       if (data.ok) {
         toast(
           data.plugin_available
-            ? '已清除界面配置的 Key(.env 中的同名变量仍然生效)'
-            : 'Key 已清除，插件不再可用',
+            ? '已清除界面配置的密钥(.env 中的同名变量仍然生效)'
+            : '密钥已清除，插件不再可用',
           'success',
         )
       }
@@ -357,13 +357,13 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
         <KeyRound className="h-3.5 w-3.5 text-secondary" />
-        <h4 className="text-xs font-medium text-foreground">API Key</h4>
+        <h4 className="text-xs font-medium text-foreground">接口密钥</h4>
         <span className="break-all font-mono text-[11px] text-secondary">{plugin.api_key_env}</span>
       </div>
 
       <p className="text-xs text-secondary leading-relaxed mb-4">
-        向该数据源官方申请 API Key。
-        Key 保存在本地，验证和取数时发送给该数据源用于认证。环境变量可作为后备配置。
+        向该数据源官方申请接口密钥。
+        密钥保存在本地，验证和取数时发送给该数据源用于认证。环境变量可作为后备配置。
       </p>
 
       {/* 积分计费警示框 (manifest billing/billing_note 声明) */}
@@ -421,9 +421,9 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
       >
         <div className="relative">
           <input
-            aria-label={`${plugin.display_name} API Key`}
+            aria-label={`${plugin.display_name} 接口密钥`}
             type={revealing ? 'text' : 'password'}
-            placeholder={plugin.available ? '粘贴新 Key 替换当前' : `粘贴 ${plugin.display_name} API Key`}
+            placeholder={plugin.available ? '粘贴新密钥替换当前' : `粘贴 ${plugin.display_name} 接口密钥`}
             value={keyInput}
             onChange={(e) => { setKeyInput(e.target.value); if (saved) setSaved(false) }}
             autoComplete="off"
@@ -453,7 +453,7 @@ export function PluginKeyConfig({ plugin }: { plugin: PluginDataSourceItem }) {
       {save.data && !save.data.ok && (
         <div className="mt-3 text-xs text-danger flex items-center gap-1.5">
           <AlertCircle className="h-[12px] w-[12px] shrink-0" />
-          {save.data.error || 'Key 无效，未保存'}
+          {save.data.error || '密钥无效，未保存'}
         </div>
       )}
       {save.isError && (
@@ -747,10 +747,10 @@ export function SettingsDataSourcesPanel({ highlight }: { highlight?: string } =
                     {!customNames.has(item.name) && !isBuiltin && <span className="st">第三方</span>}
                   </span>
                   {/* 设计稿 27: 内置源就绪时恒为「内置」; 连通看源自身健康(available), 未路由能力不算失联;
-                      插件缺 Key 时如实说「缺少 API Key」, 不用笼统的「未就绪」 */}
+                      插件缺密钥时如实说「缺少接口密钥」, 不用笼统的「未就绪」 */}
                   <span className={`st ${pluginUnavailable ? 'no' : (isBuiltin || plugin || servingCount > 0) ? 'ok' : ''}`}>
                     {pluginUnavailable
-                      ? (plugin?.api_key_env ? '缺少 API Key' : '未就绪')
+                      ? (plugin?.api_key_env ? '缺少接口密钥' : '未就绪')
                       : isBuiltin
                         ? '内置'
                         : plugin
@@ -1062,7 +1062,7 @@ function PluginDetail({ plugin, isActive, matrixCaps, servingSet, refresh }: {
             </div>
           )}
 
-          {/* API Key 配置 (声明了 api_key_env 的插件) */}
+          {/* 接口密钥配置 (声明了 api_key_env 的插件) */}
           {plugin.api_key_env && plugin.enabled !== false && (
             <div className={plugin.available ? 'mt-4' : ''}>
               <PluginKeyConfig plugin={plugin} />

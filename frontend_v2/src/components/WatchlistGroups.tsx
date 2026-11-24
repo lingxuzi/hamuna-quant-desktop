@@ -161,7 +161,7 @@ export function WatchlistGroupBar({
                           {item.name}
                         </span>
                         {item.asset_type === 'etf' && (
-                          <span className="shrink-0 rounded border border-accent/40 px-1 text-[10px] leading-none text-accent">ETF</span>
+                          <span className="shrink-0 rounded border border-accent/40 px-1 text-[10px] leading-none text-accent">基金</span>
                         )}
                         {item.asset_type === 'index' && (
                           <span className="shrink-0 rounded border border-sky-500/40 px-1 text-[10px] leading-none text-sky-400">指数</span>

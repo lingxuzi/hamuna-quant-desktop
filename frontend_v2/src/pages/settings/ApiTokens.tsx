@@ -124,7 +124,7 @@ export function SettingsApiTokensPanel() {
         {/* 明文一次性展示 */}
         {plaintext && (
           <div className="mt-4 border-y border-warning/40 py-3">
-            <div className="text-xs font-medium text-warning">Token 已创建 — 明文只显示这一次, 请立即保存</div>
+            <div className="text-xs font-medium text-warning">令牌已创建 — 明文只显示这一次, 请立即保存</div>
             <div className="mt-2 flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate bg-elevated px-2 py-1.5 font-mono text-xs">{plaintext}</code>
               <button

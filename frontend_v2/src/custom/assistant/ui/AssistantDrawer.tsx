@@ -510,7 +510,7 @@ function EmptyState({ status, suggests }: { status: AssistantStatus | null; sugg
           <Settings2 className="h-[16px] w-[16px]" />
           AI 未配置
         </div>
-        <p className="mt-1.5 text-secondary">AI 助手需要先配置 AI 供应商和 API Key 才能对话。</p>
+        <p className="mt-1.5 text-secondary">AI 助手需要先配置 AI 供应商和接口密钥才能对话。</p>
         <button
           type="button"
           onClick={() => navigate('/settings?tab=ai')}

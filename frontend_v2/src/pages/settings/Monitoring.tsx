@@ -180,7 +180,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
     mutationFn: ({ url, secret }: { url: string; secret: string }) => api.updateFeishuWebhook(url, secret),
     onSuccess: () => {
       setFeishuError('')
-      toast('飞书 Webhook 已保存', 'success')
+      toast('飞书 推送地址已保存', 'success')
       qc.invalidateQueries({ queryKey: QK.preferences })
     },
     onError: (err: any) => setFeishuError(String(err?.message ?? '保存失败')),
@@ -200,7 +200,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
     mutationFn: (url: string) => api.updateWecomWebhook(url),
     onSuccess: () => {
       setWecomError('')
-      toast('企业微信 Webhook 已保存', 'success')
+      toast('企业微信 推送地址已保存', 'success')
       qc.invalidateQueries({ queryKey: QK.preferences })
     },
     onError: (err: any) => setWecomError(String(err?.message ?? '保存失败')),
@@ -210,7 +210,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
     const url = wecomDraft.trim()
     // 允许完整 URL 或纯 key (36位UUID样式)
     if (url && !url.startsWith(WECOM_PREFIX) && url.length < 20) {
-      setWecomError('请输入完整 Webhook 地址或纯 key (至少 20 位)')
+      setWecomError('请输入完整 推送地址或纯 key (至少 20 位)')
       return
     }
     saveWecomWebhook.mutate(url)
@@ -228,7 +228,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
     onSuccess: () => {
       setCustomError('')
       setCustomSecretDraft('')
-      toast('第三方 Webhook 已保存', 'success')
+      toast('第三方 推送地址已保存', 'success')
       qc.invalidateQueries({ queryKey: QK.preferences })
     },
     onError: (err: any) => setCustomError(String(err?.message ?? '保存失败')),
@@ -236,7 +236,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   const submitCustom = useCallback(() => {
     const url = customDraft.trim()
     if (url && !/^https?:\/\//i.test(url)) {
-      setCustomError('请输入完整的 HTTP(S) URL')
+      setCustomError('请输入完整的网页地址')
       return
     }
     saveCustomWebhook.mutate({
@@ -557,7 +557,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
         </Card>
 
         {/* 推送通知 — 监控告警的外部推送渠道 (全局配置)。
-            飞书 / 企业微信 / 第三方 Webhook / 邮件。
+            飞书 / 企业微信 / 第三方回调 / 邮件。
             每个渠道合并成一行: 勾选=新建规则默认推送, 点行展开地址配置。 */}
         <Card icon={Webhook} title="推送通知" anchor="webhooks">
           <p className="text-xs text-secondary mb-3">
@@ -582,7 +582,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   className="h-[12px] w-[12px] accent-accent cursor-pointer"
                 />
                 <span className="text-[11px] font-medium text-foreground">飞书</span>
-                <span className="text-[9px] text-muted">群推送 Webhook</span>
+                <span className="text-[9px] text-muted">群机器人推送</span>
                 {webhookDefaultChannels.includes('feishu') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
@@ -596,7 +596,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
               {channelOpen && (
                 <div className="border-t border-border/60 bg-base/30 p-3">
                   <label className="block space-y-1.5">
-                    <span className="text-[11px] text-muted">Webhook 地址</span>
+                    <span className="text-[11px] text-muted">推送地址</span>
                     <input
                       value={feishuDraft}
                       onChange={e => { setFeishuDraft(e.target.value); if (!testFeishu.isPending) testFeishu.reset() }}
@@ -636,11 +636,11 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   </div>
 
                   <details className="mt-3 text-[10px] text-muted">
-                    <summary className="cursor-pointer hover:text-secondary">如何获取飞书 Webhook 地址?</summary>
+                    <summary className="cursor-pointer hover:text-secondary">如何获取飞书 推送地址?</summary>
                     <ol className="mt-1.5 space-y-1 pl-4 list-decimal leading-relaxed">
-                      <li>打开飞书,进入目标群聊 → 群设置 → <b>群推送 Webhook</b></li>
+                      <li>打开飞书,进入目标群聊 → 群设置 → <b>群机器人推送</b></li>
                       <li>点击「添加机器人」→ 选择「<b>自定义机器人</b>」</li>
-                      <li>填写机器人名称后添加,复制生成的 Webhook 地址</li>
+                      <li>填写机器人名称后添加,复制生成的 推送地址</li>
                       <li>安全设置若启用了「<b>签名校验</b>」,把密钥一并复制填到「签名密钥」框</li>
                       <li>粘贴到上方输入框并保存</li>
                     </ol>
@@ -655,7 +655,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
               )}
             </div>
 
-            {/* 企业微信群推送 Webhook (可用): 与飞书并列, 勾选默认 + 展开地址配置 */}
+            {/* 企业微信群机器人推送 (可用): 与飞书并列, 勾选默认 + 展开地址配置 */}
             <div className="rounded-btn border border-border/60 bg-base/40 overflow-hidden">
               <div
                 onClick={() => setWecomOpen(o => !o)}
@@ -670,7 +670,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   className="h-[12px] w-[12px] accent-accent cursor-pointer"
                 />
                 <span className="text-[11px] font-medium text-foreground">企业微信</span>
-                <span className="text-[9px] text-muted">群推送 Webhook</span>
+                <span className="text-[9px] text-muted">群机器人推送</span>
                 {webhookDefaultChannels.includes('wecom') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
@@ -683,7 +683,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
               {wecomOpen && (
                 <div className="border-t border-border/60 bg-base/30 p-3">
                   <label className="block space-y-1.5">
-                    <span className="text-[11px] text-muted">Webhook 地址 或 Key</span>
+                    <span className="text-[11px] text-muted">推送地址或密钥</span>
                     <input
                       value={wecomDraft}
                       onChange={e => { setWecomDraft(e.target.value); if (!testWecom.isPending) testWecom.reset() }}
@@ -712,18 +712,18 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   </div>
 
                   <details className="mt-3 text-[10px] text-muted">
-                    <summary className="cursor-pointer hover:text-secondary">如何获取企业微信 Webhook 地址?</summary>
+                    <summary className="cursor-pointer hover:text-secondary">如何获取企业微信 推送地址?</summary>
                     <ol className="mt-1.5 space-y-1 pl-4 list-decimal leading-relaxed">
-                      <li>打开企业微信,进入目标群聊 → 右上角「...」→ <b>群推送 Webhook</b></li>
+                      <li>打开企业微信,进入目标群聊 → 右上角「...」→ <b>群机器人推送</b></li>
                       <li>点击「添加」→ 选择「<b>消息推送</b>」→ 填写名字</li>
-                      <li>复制生成的 <b>Webhook 地址</b>(含 key 参数),粘贴到上方输入框</li>
+                      <li>复制生成的 <b>推送地址</b>(含 key 参数),粘贴到上方输入框</li>
                       <li>也可只复制 key 参数部分(= 后面的内容)填入</li>
                       <li>企业微信群的消息可同步到绑定的个人微信,实现"微信推送"</li>
                     </ol>
                     <p className="mt-1.5 pl-4 text-muted/70">
                       📖 官方文档:
                       <a href="https://developer.work.weixin.qq.com/document/path/91770" target="_blank" rel="noreferrer" className="text-accent hover:text-accent/80">
-                        群推送 Webhook 使用指南 ↗
+                        群机器人推送 使用指南 ↗
                       </a>
                     </p>
                   </details>
@@ -746,7 +746,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   className="h-[12px] w-[12px] accent-accent cursor-pointer"
                 />
                 <span className="text-[11px] font-medium text-foreground">第三方系统</span>
-                <span className="text-[9px] text-muted">JSON Webhook</span>
+                <span className="text-[9px] text-muted">自定义回调</span>
                 {webhookDefaultChannels.includes('custom') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
@@ -759,7 +759,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
               {customOpen && (
                 <div className="border-t border-border/60 bg-base/30 p-3">
                   <label className="block space-y-1.5">
-                    <span className="text-[11px] text-muted">接收端 URL</span>
+                    <span className="text-[11px] text-muted">接收端地址</span>
                     <input
                       value={customDraft}
                       onChange={e => { setCustomDraft(e.target.value); if (!testCustom.isPending) testCustom.reset() }}
@@ -815,7 +815,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   className="h-[12px] w-[12px] accent-accent cursor-pointer"
                 />
                 <span className="text-[11px] font-medium text-foreground">邮件</span>
-                <span className="text-[9px] text-muted">SMTP</span>
+                <span className="text-[9px] text-muted">邮件服务器</span>
                 {webhookDefaultChannels.includes('email') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
@@ -829,8 +829,8 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                 <div className="border-t border-border/60 bg-base/30 p-3">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6rem_8rem]">
                     <label className="space-y-1.5">
-                      <span className="text-[11px] text-muted">SMTP 主机</span>
-                      <input value={emailDraft.host} onChange={e => setEmailDraft(d => ({ ...d, host: e.target.value }))} placeholder="smtp.example.com" className="ctl ctl-lg ctl-input w-full px-3.5 font-mono bg-base" />
+                      <span className="text-[11px] text-muted">邮件服务器地址</span>
+                      <input value={emailDraft.host} onChange={e => setEmailDraft(d => ({ ...d, host: e.target.value }))} placeholder="mail.example.com" className="ctl ctl-lg ctl-input w-full px-3.5 font-mono bg-base" />
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-[11px] text-muted">端口</span>
@@ -875,7 +875,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
               )}
             </div>
 
-            {/* 企业微信智能机器人 (BotID + Secret): 长连接通道, 与群推送 Webhook 并列 */}
+            {/* 企业微信智能机器人 (BotID + Secret): 长连接通道, 与群机器人推送 并列 */}
             <div className="rounded-btn border border-border/60 bg-base/40 overflow-hidden">
               <div
                 onClick={() => setBotOpen(o => !o)}
@@ -905,7 +905,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     WebSocket 连接)。保存凭证后需勾选才会连接, 取消勾选则立即断开。
                   </p>
                   <label className="block space-y-1.5">
-                    <span className="text-[11px] text-muted">BotID</span>
+                    <span className="text-[11px] text-muted">机器人标识</span>
                     <input
                       value={botIdDraft}
                       onChange={e => setBotIdDraft(e.target.value)}
@@ -947,15 +947,15 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   </div>
 
                   <details className="mt-3 text-[10px] text-muted">
-                    <summary className="cursor-pointer hover:text-secondary">如何获取 BotID 和 Secret?</summary>
+                    <summary className="cursor-pointer hover:text-secondary">如何获取机器人标识与密钥?</summary>
                     <ol className="mt-1.5 space-y-1 pl-4 list-decimal leading-relaxed">
                       <li>登录<b>企业微信管理后台</b> → 应用管理 → <b>智能机器人</b> → 创建机器人</li>
                       <li>填写名称、头像后进入机器人配置页</li>
-                      <li>开启「<b>API 模式</b>」→ 选择「<b>长连接</b>」方式(另一项"回调URL"需公网IP)</li>
-                      <li>页面显示 <b>BotID</b> 和 <b>Secret</b>, 复制填到上方输入框</li>
+                      <li>开启「<b>接口模式</b>」→ 选择「<b>长连接</b>」方式(另一项"回调URL"需公网IP)</li>
+                      <li>页面显示 <b>机器人标识</b> 和 <b>密钥</b>, 复制填到上方输入框</li>
                     </ol>
                     <p className="mt-1.5 pl-4 text-muted/70">
-                      💡 智能机器人支持 @交互和流式回复, 与群推送 Webhook(单向推送)互补。
+                      💡 智能机器人支持 @交互和流式回复, 与群机器人推送(单向推送)互补。
                       保存后后端会自动建立 WebSocket 长连接保活。
                     </p>
                     <p className="mt-1.5 pl-4 text-muted/70">

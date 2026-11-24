@@ -683,7 +683,7 @@ export function Data() {
       <div ref={topRef} />
       <PageHeader seal="存"
         title="数据"
-        subtitle="DATA"
+        subtitle="数据管理"
         titleExtra={
           <>
             <span className={`tb-chip${dailyRows ? '' : ' warn'}`}>日K {dailyRows ? `${dailyRows.toLocaleString()} 行` : '行数为空'}</span>
@@ -829,7 +829,7 @@ export function Data() {
         <table className="dt">
           <colgroup><col /><col style={{ width: 78 }} /><col style={{ width: 92 }} /></colgroup>
           <thead>
-            <tr><th>分区</th><th>文件数</th><th>体积 MB</th></tr>
+            <tr><th>分区</th><th>文件数</th><th>体积（兆字节）</th></tr>
           </thead>
           <tbody>
             {storageRows.map(r => (
@@ -845,7 +845,7 @@ export function Data() {
             <tr>
               <td>
                 <b>合计</b>
-                <span>total</span>
+                <span>全部</span>
               </td>
               <td><b>{totalFiles.toLocaleString()}</b></td>
               <td><b>{storage ? storage.total_size_mb.toFixed(2) : '—'}</b></td>
@@ -971,7 +971,7 @@ export function Data() {
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted">时区</span>
-                  <span className="font-mono text-secondary">Asia/Shanghai</span>
+                  <span className="text-secondary">北京时间（东八区）</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
                   <div className="flex items-center gap-1">
@@ -1251,7 +1251,7 @@ export function Data() {
 
       <AnimatePresence>
         {openSettings === 'enriched' && (
-          <SettingsModal title="Enriched · 计算设置" onClose={() => setOpenSettings(null)}>
+          <SettingsModal title="增强指标 · 计算设置" onClose={() => setOpenSettings(null)}>
             <EnrichedRebuildPanel
               isRunning={!!activeJobId}
               onStart={(jobId) => { setActiveJobId(jobId); setOpenSettings(null) }}
@@ -1309,7 +1309,7 @@ export function Data() {
               <div className="rounded-card border border-border bg-base/30 p-4 space-y-3">
                 <div>
                   <div className="text-sm font-medium text-foreground">指数日 K</div>
-                  <div className="text-[11px] text-muted mt-1">获取数据时会先刷新 CN_Index 维表，再向前扩展指数历史；指数不需要复权。</div>
+                  <div className="text-[11px] text-muted mt-1">获取数据时会先刷新指数维表，再向前扩展指数历史；指数不需要复权。</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center">
@@ -1599,7 +1599,7 @@ export function Data() {
                   </p>
                   <ul className="mt-2 text-[11px] text-muted leading-relaxed space-y-0.5">
                     <li>· 个股维表、日 K、除权因子</li>
-                    <li>· Enriched 指标数据、分钟 K</li>
+                    <li>· 增强指标数据、分钟 K</li>
                     <li>· 财务数据、指数、ETF</li>
                   </ul>
                   <p className="mt-2 text-[11px] text-danger/90">

@@ -114,7 +114,7 @@ export function EnrichedRebuildPanel({
               : 'border-warning/20 bg-warning/10 text-warning'
           }`}>
             {canRebuild
-              ? `已检测到 ${historicalShareRows.toLocaleString()} 条历史股本记录。重算会按公告可用日匹配历史流通股本，并覆盖全部 Enriched 分区。`
+              ? `已检测到 ${historicalShareRows.toLocaleString()} 条历史股本记录。重算会按公告可用日匹配历史流通股本，并覆盖全部增强指标分区。`
               : '未检测到历史股本数据，请先在财务概况页面同步“股本表”，再执行重算。'}
           </div>
         )}

@@ -515,7 +515,7 @@ const StockCard = React.memo(function StockCard({
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted leading-relaxed">
           <span title="换手率">换手<span className={`font-mono ml-0.5 ${turnoverColor(r.turnover_rate)}`}>{r.turnover_rate != null ? `${r.turnover_rate.toFixed(2)}%` : '—'}</span></span>
           <span title="量比">量比<span className="font-mono ml-0.5">{fmtPrice(r.vol_ratio_5d)}</span></span>
-          <span title="RSI14">RSI<span className="font-mono ml-0.5">{r.rsi_14 != null ? r.rsi_14.toFixed(1) : '—'}</span></span>
+          <span title="相对强弱指标（14 日）">强弱<span className="font-mono ml-0.5">{r.rsi_14 != null ? r.rsi_14.toFixed(1) : '—'}</span></span>
           {/* 扩展数据列展示在卡片中 */}
           {extCols.map(col => {
             if (col.source.type !== 'ext') return null
@@ -1407,7 +1407,7 @@ export function Watchlist() {
     <div className="flex flex-col min-h-full">
       <PageHeader seal="选"
         title="自选"
-        subtitle="WATCHLIST"
+        subtitle="自选观察"
         titleExtra={
           <span className="inline-flex items-center gap-[9px]">
             <span className="tb-chip">{sortedRows.length} 只</span>
@@ -1611,7 +1611,7 @@ export function Watchlist() {
             <EmptyState
               icon={Star}
               title="自选为空"
-              hint="点击右上角搜索添加标的，或用「更多」里的导入从券商自选 CSV / 截图批量导入、粘贴代码。"
+              hint="点击右上角搜索添加标的，或用「更多」里的导入从券商导出的表格或截图批量导入、粘贴代码。"
             />
           ) : visibleGroupRows.length === 0 ? (
             <EmptyState

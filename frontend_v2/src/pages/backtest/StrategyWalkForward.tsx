@@ -67,7 +67,7 @@ function OosEquityChart({ curve }: { curve: { fold: number; date: string; value:
   const up = last >= 1
   return (
     <div>
-      <div className="mb-1 text-xs font-medium text-secondary">OOS 拼接净值 (逐折复利)</div>
+      <div className="mb-1 text-xs font-medium text-secondary">样本外拼接净值（逐折复利）</div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: 120 }}>
         <line x1={pad} y1={y(1)} x2={W - pad} y2={y(1)} stroke="currentColor" strokeWidth="0.5" className="text-border" strokeDasharray="3 3" />
         <path d={d} fill="none" stroke={up ? 'hsl(var(--bull))' : 'hsl(var(--bear))'} strokeWidth="1.5" />
@@ -343,9 +343,9 @@ export function StrategyWalkForward() {
                     <th className="px-2 py-1.5 text-left">折</th>
                     <th className="px-2 py-1.5 text-left">测试区间</th>
                     <th className="px-2 py-1.5 text-left">最优参数</th>
-                    <th className="px-2 py-1.5 text-right">IS 目标</th>
-                    <th className="px-2 py-1.5 text-right">OOS 目标</th>
-                    <th className="px-2 py-1.5 text-right">OOS 收益</th>
+                    <th className="px-2 py-1.5 text-right">样本内目标</th>
+                    <th className="px-2 py-1.5 text-right">样本外目标</th>
+                    <th className="px-2 py-1.5 text-right">样本外收益</th>
                   </tr>
                 </thead>
                 <tbody>

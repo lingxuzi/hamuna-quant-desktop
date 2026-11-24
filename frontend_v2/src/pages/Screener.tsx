@@ -934,7 +934,7 @@ export function Screener() {
     <>
       <PageHeader seal="策"
         title="策略选股"
-        subtitle="SCREENER"
+        subtitle="条件选股"
         titleExtra={(
           /* 设计稿 03 的工具条左侧: 状态签 + 口径读注 */
           <>
@@ -1390,7 +1390,7 @@ export function Screener() {
             /* 设计稿 03 的 .empty: 宽标记 + 题头 + 归因 + 可执行动作 */
             <div className="pt-8">
               <EmptyState
-                eyebrow={`${pool.length === 0 ? 'NO STRATEGY' : 'NO RESULT'} · ${asOf || '—'}`}
+                eyebrow={`${pool.length === 0 ? '暂无策略' : '暂无结果'} · ${asOf || '—'}`}
                 title={pool.length === 0 ? '还没有策略，先添加或创建一个' : '今天还没有跑过选股'}
                 hint={pool.length === 0
                   ? '用工具栏「创建策略 · AI」生成一个策略，或按仓库文档手写；加入策略池后这里会按命中数排序列出候选。'

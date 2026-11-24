@@ -378,7 +378,7 @@ export function SettingsMenuSettingsPanel() {
     <div className="max-w-5xl space-y-6">
       {/* 卷首题头: 不加卡片底, 只用一条重线把题头与正文分开 */}
       <section className="border-b border-border-strong pb-3.5">
-        <div className="font-mono text-[9.5px] uppercase tracking-[0.3em] text-muted">MENU</div>
+        <div className="font-mono text-[9.5px] uppercase tracking-[0.3em] text-muted">菜单配置</div>
         <h2 className="mt-1.5 font-serif text-[22px] font-semibold tracking-[0.08em] text-foreground">调整左侧菜单顺序</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-secondary">
           拖动左侧手柄调整菜单排列顺序，点击眼睛图标控制菜单在侧边栏中的显示或隐藏。

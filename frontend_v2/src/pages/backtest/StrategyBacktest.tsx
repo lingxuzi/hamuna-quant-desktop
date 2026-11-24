@@ -1999,7 +1999,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
               <option value="close_t">信号日收盘（推荐）</option>
               <option value="open_t+1">次日开盘</option>
               {highGranularity && minuteExitTriggerSupported && !isMinuteStrategy && (
-                <option value="signal_next_minute">信号触发卖出 BETA</option>
+                <option value="signal_next_minute">信号触发卖出（内测）</option>
               )}
             </select>
           </FillField>
@@ -2390,7 +2390,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
             {/* 累计超额曲线 (复用 StrategyNavChart) */}
             {result.equity_curve.length > 1 && (
               <div className="plot">
-                <div className="plot-hd"><b>累计收益曲线</b><span>NAV · 日均复利</span></div>
+                <div className="plot-hd"><b>累计收益曲线</b><span>净值 · 日均复利</span></div>
                 <div className="plotbody p-3">
                   <StrategyNavChart result={result} />
                 </div>
@@ -2555,7 +2555,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
             {/* 净值曲线 */}
             {result.equity_curve.length > 0 && (
               <div className="plot">
-                <div className="plot-hd"><b>净值曲线</b><span>NAV</span></div>
+                <div className="plot-hd"><b>净值曲线</b><span>策略净值</span></div>
                 <div className="plotbody p-3">
                   <StrategyNavChart result={result} />
                 </div>
@@ -2565,7 +2565,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
             {Array.isArray(result.stats.return_distribution) && result.stats.return_distribution.length > 0 && (
               <div className="plot">
                 <div className="plot-hd">
-                  <b>独立候选交易收益分布</b><span>RETURN DIST</span>
+                  <b>独立候选交易收益分布</b><span>收益分布</span>
                   <div className="leg"><i className="u">红=正收益</i><i className="d">绿=负收益</i></div>
                 </div>
                 <div className="plotbody p-3">
@@ -3163,7 +3163,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
                   <div>成交口径可分别设置建仓/清仓：默认建仓次日开盘（避免未来函数）、清仓当日收盘（持仓中可盘中/收盘卖）。</div>
                   <div>退出优先级：止损/移动止损 &gt; 卖点信号 &gt; 到期平仓；到期只作兜底，不抢占卖点或风控。</div>
                   <div>最大持仓数控制同时持股数量，最大总仓位控制资金投入比例；剩余现金不等于可新增持仓名额。</div>
-                  {matrixStrategy && <div className="text-accent">当前为 Matrix 策略，进出场信号由策略公式生成，不能用列信号覆盖。</div>}
+                  {matrixStrategy && <div className="text-accent">当前为矩阵策略，进出场信号由策略公式生成，不能用列信号覆盖。</div>}
                 </div>
 
                 <ConfigSection title="风控与持仓纪律">
@@ -3281,7 +3281,7 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
                         </button>
                       ))}
                     </div>
-                    <span className="text-[11px] text-muted/70">ETF 仅技术类策略，读 ETF enriched</span>
+                    <span className="text-[11px] text-muted/70">ETF 仅技术类策略，读 ETF 增强指标</span>
                   </div>
                   <StockPoolPicker value={symbols} onChange={setSymbols} assetType={assetType} />
                   <div className="text-[11px] leading-5 text-muted">需要单票调试或自选池回测时再限定股票池；默认由基础过滤、策略条件与买卖触发器在全市场筛选。</div>

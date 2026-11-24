@@ -74,7 +74,7 @@ export function Onboarding() {
 
   return (
     <div className="page scroll-shell h-full overflow-auto scrollbar-gutter-stable">
-      <Inscription title="引导" subtitle="ONBOARDING" seal="引" date={date} running={running} />
+      <Inscription title="引导" subtitle="初次引导" seal="引" date={date} running={running} />
 
       <nav className="stepbar" aria-label="初始设置进度">
         {STEPS.map((label, i) => (
@@ -197,7 +197,7 @@ function WelcomeStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 
 // ===== Step 2: 配置数据源 =====
 // 两个条目行 = 各数据源的全部信息聚合 (名称 / 数据集 / 说明 / 操作):
-// 内置源 easytdx 装好依赖即可用 (免 Key), 第三方源 fuyao 填 Key 后启用。
+// 内置源 easytdx 装好依赖即可用 (免 Key), 第三方源 fuyao 填好密钥后启用。
 // 每项能力最终用哪个源, 由「设置 → 数据源」逐项选择, 本步只负责把源接通。
 
 /** datasets 标签的中文名 (与能力注册表口径一致) */
@@ -250,13 +250,13 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
       qc.invalidateQueries({ queryKey: QK.capabilityMatrix })
       qc.invalidateQueries({ queryKey: QK.capabilities })
       if (!data.ok) {
-        setFyError(data.error || (data.reason === 'invalid' ? 'Key 验证失败，请检查后重试' : '保存失败，请重试'))
+        setFyError(data.error || (data.reason === 'invalid' ? '密钥验证失败，请检查后重试' : '保存失败，请重试'))
         return
       }
       setFyKey('')
       setFyExpanded(false)
       setFyError(null)
-      setFyMsg('同花顺接口 Key 已保存，财务能力默认使用同花顺接口；其他能力可在数据源页单独选择来源')
+      setFyMsg('同花顺接口密钥已保存，财务能力默认使用同花顺接口；其他能力可在数据源页单独选择来源')
     },
     onError: (e: Error) => setFyError(`保存失败：${e.message}`),
   })
@@ -267,8 +267,8 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
   return (
     <div>
       <section className="thesis">
-        <h1>数据源与 <em>Key</em></h1>
-        <p>内置源装好依赖即可用，第三方源填 Key 后启用。所有 Key 仅存本机，保存前会先验证。</p>
+        <h1>数据源与 <em>密钥</em></h1>
+        <p>内置源装好依赖即可用，第三方源填好密钥后启用。所有密钥仅存本机，保存前会先验证。</p>
       </section>
 
       {sources.isLoading ? (
@@ -289,7 +289,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
                 {(easyPlugin?.datasets ?? []).map(ds => <span key={ds}>{DATASET_LABELS[ds] ?? ds}</span>)}
               </div>
               <small>
-                内置直连行情源，提供日K、除权因子、实时行情、分钟K、五档盘口与全量分钟，无需 Key 与计费。
+                内置直连行情源，提供日K、除权因子、实时行情、分钟K、五档盘口与全量分钟，无需密钥与计费。
               </small>
               {!easyReady && <small>依赖尚未就绪，点「安装依赖」自动补齐（需几分钟）。</small>}
               {installMsg && <p className="mt-1 text-[10.5px] text-bear">{installMsg}</p>}
@@ -304,7 +304,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
             </div>
           </div>
 
-          {/* 第三方源 (同花顺接口): 填 Key 启用 */}
+          {/* 第三方源 (同花顺接口): 填密钥启用 */}
           <div className="r">
             <div className="lab">
               <b>
@@ -318,7 +318,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
                 同花顺金融数据 API，补充财务数据。
                 {' · '}
                 <a href="https://fuyao.aicubes.cn" target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                  前往官网申请 Key ↗
+                  前往官网申请密钥 ↗
                 </a>
               </small>
               {fyError && <p className="mt-1 text-[10.5px] text-danger">{fyError}</p>}
@@ -329,7 +329,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
               {fyConfigured && !fyExpanded ? (
                 <>
                   <code className="v">{fyPlugin?.api_key_masked}</code>
-                  <button type="button" className="ctl-btn ctl-sm" onClick={() => setFyExpanded(true)}>替换 Key</button>
+                  <button type="button" className="ctl-btn ctl-sm" onClick={() => setFyExpanded(true)}>替换密钥</button>
                 </>
               ) : (
                 <form
@@ -343,9 +343,9 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
                     type="password"
                     value={fyKey}
                     onChange={e => { setFyKey(e.target.value); setFyError(null) }}
-                    placeholder="粘贴同花顺接口 API Key"
+                    placeholder="粘贴同花顺接口密钥"
                     autoComplete="off"
-                    aria-label="同花顺接口 API Key"
+                    aria-label="同花顺接口密钥"
                     className="ctl ctl-sm ctl-input min-w-0 flex-1"
                   />
                   <button type="submit" className="ctl-btn ctl-sm pri" disabled={!fyKey.trim() || saveKey.isPending}>

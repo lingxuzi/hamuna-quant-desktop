@@ -549,7 +549,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
-                <div className="text-[10px] text-muted mb-1">Headers（JSON，可选）</div>
+                <div className="text-[10px] text-muted mb-1">请求头（JSON，可选）</div>
                 <textarea
                   value={headerStr} onChange={e => setHeaderStr(e.target.value)}
                   placeholder='{"X-Custom": "value"}'
@@ -715,9 +715,9 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
             </div>
           </section>
 
-          {/* 03 接口鉴权 (API Key) */}
+          {/* 03 接口鉴权（接口密钥） */}
           <section>
-            <SectionHead num="03" title="接口鉴权（API Key）">
+            <SectionHead num="03" title="接口鉴权">
               {authType !== 'none' && keyInfo && (
                 <span className={`text-[10px] ${keyInfo.key_set ? 'text-emerald-500' : 'text-amber-500'}`}>
                   {keyInfo.key_set ? `已设置 ${keyInfo.masked_key}` : '未设置 Key'}
@@ -759,13 +759,13 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
               )}
               {authType !== 'none' && (
                 <div>
-                  <div className="text-[11px] font-medium text-secondary mb-1.5">API Key</div>
+                  <div className="text-[11px] font-medium text-secondary mb-1.5">接口密钥</div>
                   <input
                     type="password"
                     value={apiKey}
                     onChange={e => { setApiKey(e.target.value); setKeyDirty(true) }}
                     autoComplete="new-password"
-                    placeholder={keyInfo?.key_set ? '输入新 Key 覆盖 · 清空保存 = 删除' : '输入 API Key'}
+                    placeholder={keyInfo?.key_set ? '输入新密钥覆盖 · 清空保存 = 删除' : '输入接口密钥'}
                     className={`${INPUT_CLS} font-mono`}
                   />
                 </div>
@@ -781,7 +781,7 @@ function ExtPullConfigDialog({ config, onSaved, onClose }: {
           {/* 04 数据解析 */}
           <section>
             <SectionHead num="04" title="数据解析">
-              <span className="text-[10px] text-muted/70">从响应 JSON 到表行的映射</span>
+              <span className="text-[10px] text-muted/70">从响应内容到表行的映射</span>
             </SectionHead>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">

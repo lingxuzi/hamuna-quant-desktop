@@ -10,7 +10,7 @@ import { ExpertManager } from './ui/ExpertManager'
 export function Experts() {
   return (
     <div className="flex min-h-0 flex-col">
-      <PageHeader seal="专" title="专家" subtitle="EXPERTS" />
+      <PageHeader seal="专" title="专家" subtitle="专家团" />
       <ExpertManager />
     </div>
   )

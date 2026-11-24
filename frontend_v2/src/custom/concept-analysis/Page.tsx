@@ -428,7 +428,7 @@ export function ConceptAnalysis() {
     <>
       <PageHeader seal="概"
         title="概念板块"
-        subtitle="SECTOR · CONCEPT"
+        subtitle="板块 · 概念"
         titleExtra={
           <>
             <span className="tb-chip">{stats.length} 个概念</span>
@@ -761,7 +761,7 @@ function PulseList({
           {mode === 'up' ? <TrendingUp className="h-[12px] w-[12px]" /> : <TrendingDown className="h-[12px] w-[12px]" />}
           {title}
         </div>
-        <span className="font-mono text-[9px] text-muted">Top 10</span>
+        <span className="font-mono text-[9px] text-muted">前 10</span>
       </div>
       <div className="space-y-1">
         {items.map((item, idx) => {

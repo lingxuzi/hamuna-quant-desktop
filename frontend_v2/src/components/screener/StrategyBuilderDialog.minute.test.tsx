@@ -135,7 +135,7 @@ it('shows a failed generation and keeps the chosen backend for retry', async () 
 it('keeps manual minute authoring available when AI is not configured', async () => {
   vi.mocked(api.strategyAiStatus).mockResolvedValueOnce({ configured: false, has_key: false, has_model: false })
   await render()
-  expect(container.textContent).toContain('AI API Key 未配置')
+  expect(container.textContent).toContain('AI 接口密钥未配置')
   await click('自定义编写')
   await click('一分钟策略')
   expect((container.querySelector('textarea') as HTMLTextAreaElement).value).toBe(minuteCode)

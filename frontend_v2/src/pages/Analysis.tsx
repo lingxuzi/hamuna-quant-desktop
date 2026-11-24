@@ -131,7 +131,7 @@ export function Analysis() {
     <>
       <PageHeader seal="析"
         title="扩展分析"
-        subtitle="ANALYSIS"
+        subtitle="分析中心"
         right={
           <button
             onClick={() => { resetForm(); setShowCreate(v => !v) }}

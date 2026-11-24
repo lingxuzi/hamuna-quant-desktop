@@ -18,7 +18,7 @@ const VARIANTS: Variant[] = [
   {
     id: 'pulsar',
     name: 'H-Quant',
-    tagline: 'A-SHARE · SIGNAL TERMINAL',
+    tagline: 'A 股 · 信号终端',
     hint: '脉冲星、雷达波纹 — 青绿强调色，字重黑体，中等字距',
     nameStyle: 'font-sans font-extrabold tracking-[0.10em]',
     glow: '#3DD68C',
@@ -26,7 +26,7 @@ const VARIANTS: Variant[] = [
   {
     id: 'vanta',
     name: 'H-Quant',
-    tagline: 'MARKET · INTELLIGENCE',
+    tagline: '市场 · 智能研判',
     hint: 'Vantablack — 纯白单色，字重最重，字距最宽，单色高级感',
     nameStyle: 'font-sans font-black tracking-[0.18em]',
     glow: '#FAFAFA',
@@ -34,7 +34,7 @@ const VARIANTS: Variant[] = [
   {
     id: 'helix',
     name: 'H-Quant',
-    tagline: 'QUANT · TERMINAL',
+    tagline: '量化 · 终端',
     hint: 'DNA 螺旋 — 紫色强调，等宽字体，赛博朋克经典意象',
     nameStyle: 'font-mono font-bold tracking-[0.08em]',
     glow: '#B7410E',
@@ -42,7 +42,7 @@ const VARIANTS: Variant[] = [
   {
     id: 'aurora',
     name: 'H-Quant',
-    tagline: 'A-SHARE · DASHBOARD',
+    tagline: 'A 股 · 行情看板',
     hint: '极光 — 青色强调，细字优雅，适中字距，与涨跌语义色不冲突',
     nameStyle: 'font-sans font-light tracking-[0.12em]',
     glow: '#22D3EE',
@@ -78,7 +78,7 @@ export function Branding() {
     <div className="pb-24">
       <PageHeader seal="牌"
         title="品牌"
-        subtitle="BRANDING"
+        subtitle="品牌外观"
         titleExtra={
           <>
             <span className="tb-chip">{VARIANTS.length} 个方向</span>
@@ -145,7 +145,7 @@ function Sample({ v, active }: { v: Variant; active: boolean }) {
           style={{ background: `linear-gradient(90deg, ${v.glow}66, transparent)` }}
         />
         <div className="text-[8.5px] opacity-60">
-          档位 · <b className="font-mono font-normal opacity-100">Pro</b>
+          档位 · <b className="font-normal opacity-100">专业版</b>
         </div>
         <ul className="mt-2.5 list-none border-t border-[hsl(var(--base)/0.14)] p-0">
           {MOCK_NAV.map((label, i) => (

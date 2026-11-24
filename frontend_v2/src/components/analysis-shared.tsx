@@ -481,7 +481,7 @@ export function PresetFetchState({
 }) {
   const errMsg = error instanceof Error ? error.message : error ? String(error) : ''
   // 缺 Key 是「配置问题」而非「拉取失败」: 换引导文案 + 直达设置
-  const needKey = /API Key|凭据|未配置.*Key/i.test(errMsg)
+  const needKey = /接口密钥|凭据|未配置.*Key/i.test(errMsg)
   return (
     <div className="h-full grid place-items-center px-8 py-16">
       <div className="text-center max-w-md">
@@ -505,7 +505,7 @@ export function PresetFetchState({
               <p className="flex items-start gap-1.5 text-xs text-warning">
                 <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
                 <span>
-                  该数据源需要 <span className="font-mono font-medium">同花顺接口 API Key</span>
+                  该数据源需要 <span className="font-mono font-medium">同花顺接口密钥</span>
                   ；其余功能不受影响。
                 </span>
               </p>

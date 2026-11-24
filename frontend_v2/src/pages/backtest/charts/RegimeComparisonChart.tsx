@@ -84,7 +84,7 @@ export function RegimeComparisonChart({ rows }: RegimeComparisonChartProps) {
             <div style="display:flex;justify-content:space-between;gap:18px"><span>交易日</span><span style="font-family:monospace">${row.nDates.toLocaleString('zh-CN')}</span></div>
             <div style="display:flex;justify-content:space-between;gap:18px"><span>收益</span><span style="font-family:monospace">${row.return == null ? '—' : `${(row.return * 100).toFixed(2)}%`}</span></div>
             <div style="display:flex;justify-content:space-between;gap:18px"><span>最大回撤</span><span style="font-family:monospace">${row.maxDrawdown == null ? '—' : `${(row.maxDrawdown * 100).toFixed(2)}%`}</span></div>
-            <div style="display:flex;justify-content:space-between;gap:18px"><span>Sharpe</span><span style="font-family:monospace">${row.sharpe == null ? '—' : row.sharpe.toFixed(2)}</span></div>${status}`
+            <div style="display:flex;justify-content:space-between;gap:18px"><span>夏普比</span><span style="font-family:monospace">${row.sharpe == null ? '—' : row.sharpe.toFixed(2)}</span></div>${status}`
         },
       },
       xAxis: {
