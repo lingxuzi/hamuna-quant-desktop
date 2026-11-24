@@ -1,12 +1,16 @@
-"""版本号统一派生 — 从 frontend_v2/package.json 同步三处伴生版本标记。
+"""版本号统一派生 — 从 frontend_v2/package.json 同步四处伴生版本标记。
 
 版本号唯一权威 = frontend_v2/package.json (issue #513: 发版只改它时, VERSION /
 backend/pyproject.toml / _FALLBACK_VERSION 三处伴生标记会漂移; Docker 部署
 下运行时读不到 frontend_v2/package.json, 实际生效的是 _FALLBACK_VERSION, 于是
 界面/日志/version API 显示旧版本)。
 
+第四处 = release.yml 的发版输入默认值: workflow_dispatch 的 default 只能写
+静态值, 无法从 package.json 求值 —— 不跟着同步就会漂移到旧版本, 而 prepare
+作业会拿它跟 package.json 校验, 于是发版直接失败 (v0.3.17 vs v0.3.31)。
+
 用法:
-    python3 scripts/sync_versions.py            # 幂等写回三处 (无变化则零写入)
+    python3 scripts/sync_versions.py            # 幂等写回四处 (无变化则零写入)
     python3 scripts/sync_versions.py --check    # 只校验不一致并退出码 1 (CI 可选)
 
 release.yml / docker.yml 在检出后调用本脚本, 保证构建产物内版本一致;
@@ -22,9 +26,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PKG = ROOT / "frontend_v2" / "package.json"
-VERSION_FILE = ROOT / "VERSION"
-PYPROJECT = ROOT / "backend" / "pyproject.toml"
-APP_INIT = ROOT / "backend" / "app" / "__init__.py"
 
 
 def pkg_version() -> str:
@@ -38,20 +39,26 @@ def _replace_once(text: str, pattern: str, repl: str, path: Path) -> str:
     return new
 
 
-def sync(ver: str, *, check: bool = False) -> list[str]:
-    """幂等写回三处伴生标记, 返回发生变化的文件 (相对仓库根)。"""
+def sync(ver: str, *, check: bool = False, root: Path = ROOT) -> list[str]:
+    """幂等写回四处伴生标记, 返回发生变化的文件 (相对 root)。
+
+    root 可指向别处 —— 自检脚本在临时目录里造一份假仓库来验证, 不碰真仓库。
+    """
     # (路径, 匹配单行的正则, 写回的整行)
     targets = [
-        (VERSION_FILE, r"^[^\n]*\n?", f"v{ver}\n"),
-        (PYPROJECT, r'^version = "[^"]*"\n', f'version = "{ver}"\n'),
-        (APP_INIT, r'^_FALLBACK_VERSION = "[^"]*"\n', f'_FALLBACK_VERSION = "{ver}"\n'),
+        (root / "VERSION", r"^[^\n]*\n?", f"v{ver}\n"),
+        (root / "backend" / "pyproject.toml", r'^version = "[^"]*"\n', f'version = "{ver}"\n'),
+        (root / "backend" / "app" / "__init__.py", r'^_FALLBACK_VERSION = "[^"]*"\n', f'_FALLBACK_VERSION = "{ver}"\n'),
+        # release.yml 里唯一以 v 开头的 default 就是 version 输入的默认值
+        # (platforms 是 'windows', prerelease 是 False) —— 按 v 前缀精确命中。
+        (root / ".github" / "workflows" / "release.yml", r"^(?P<pre>\s*default: ')v[\d.]+(?P<post>')$", f"\\g<pre>v{ver}\\g<post>"),
     ]
     changed: list[str] = []
     for path, pattern, want_line in targets:
         old = path.read_text(encoding="utf-8")
         new = _replace_once(old, pattern, want_line, path)
         if new != old:
-            changed.append(str(path.relative_to(ROOT)))
+            changed.append(str(path.relative_to(root)))
             if not check:
                 path.write_text(new, encoding="utf-8")
     return changed
@@ -78,7 +85,7 @@ def main() -> int:
         if args.check:
             return 1
     else:
-        print(f"版本一致: v{ver} (VERSION / pyproject / _FALLBACK_VERSION)")
+        print(f"版本一致: v{ver} (VERSION / pyproject / _FALLBACK_VERSION / release.yml)")
     return 0
 
 
