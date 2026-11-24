@@ -9,6 +9,11 @@ name: 桌面客户端发布
 #   - 手动触发可精确控制 "今天只发 Windows, 明天补 mac"
 #   - 版本号通过 input 传入, 与 tag 解耦, 更灵活
 #
+# 注册提醒: GitHub 只注册「随某次 push 新增或修改过」的 workflow 文件。
+# 本文件最初随「创建默认分支」那次 push 进入仓库, 而那次 GitHub 不注册任何
+# workflow —— 于是它一直不在 Actions 列表里 (只有 workflow_dispatch 触发器,
+# 没被注册就没法手动跑)。改动本文件即可补注册; 新增 workflow 文件同理。
+#
 # 使用:
 #   gh workflow run release.yml -f version=v0.2.0 -f platforms=windows
 #   或 GitHub 网页 Actions → 桌面客户端发布 → Run workflow
