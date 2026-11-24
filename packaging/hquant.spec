@@ -78,6 +78,18 @@ hiddenimports += [
     "app.plugins.easytdx.provider",
 ]
 
+# ── 内置数据源的运行库 (easy_tdx) ─────────────────────────────────
+# app/plugins/easytdx/client.py 用 __import__("easy_tdx.mac.client") 动态加载,
+# 静态分析看不见 —— 不显式收集, 冻结包里就没有它, 桌面端内置数据源直接不可用,
+# 而冻结包内根本装不了依赖 (用户只会看到一个点了必失败的「安装依赖」按钮)。
+# easy-tdx-plus 是后端主依赖 (backend/pyproject.toml), 构建环境必然有。
+# include_py_files=False: 源码已进 PYZ, 不必再当数据文件重复塞一份。
+if find_spec("easy_tdx") is not None:
+    d, b, h = collect_all("easy_tdx", include_py_files=False)
+    datas += d
+    binaries += b
+    hiddenimports += h
+
 # ── 后端源码扩展 (app/custom/*) ──────────────────────────────────────
 # extensions/loader.py 运行时用 importlib.import_module + pkgutil.iter_modules
 # 发现 app/custom/* — 与插件同样对静态分析不可见, 必须双声明 (issue #459:
@@ -185,6 +197,14 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+# 构建期硬断言: 内置数据源的运行库必须在 PYZ 里 (a.pure 条目 = (模块名, 源路径, 类型码))。
+# 收集声明被误删时在这里就炸, 而不是等用户装好客户端才发现内置源不可用。
+if not any(n == "easy_tdx" or n.startswith("easy_tdx.") for n in (e[0] for e in a.pure)):
+    raise SystemExit(
+        "easy_tdx 未打进 PYZ —— 桌面端内置数据源将不可用。"
+        "检查 packaging/hquant.spec 的收集声明, 以及构建环境的 easy-tdx-plus 依赖。"
+    )
 
 exe = EXE(
     pyz,

@@ -39,6 +39,16 @@ def test_spec_declares_builtin_plugin_easytdx():
     assert '"plugins" / "easytdx" / "plugin.yaml"' in SPEC_CODE  # 源路径必须指向现存目录
 
 
+def test_spec_collects_easytdx_runtime():
+    """内置数据源的运行库必须进冻结包。
+
+    app/plugins/easytdx/client.py 用 __import__("easy_tdx.mac.client") 动态加载,
+    静态分析看不见 —— 不显式收集则桌面端内置数据源不可用, 而冻结包内装不了依赖
+    (用户只会看到一个点了必失败的「安装依赖」按钮)。
+    """
+    assert 'collect_all("easy_tdx"' in SPEC_CODE
+
+
 def test_installer_launches_desktop_only_once():
     """重复 postinstall 条目会同时拉起两个桌面后端。"""
     text = (REPO_ROOT / "packaging" / "hquant.iss").read_text(encoding="utf-8")
