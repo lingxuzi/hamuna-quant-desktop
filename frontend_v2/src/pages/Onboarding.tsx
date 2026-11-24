@@ -304,11 +304,11 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
             </div>
           </div>
 
-          {/* 第三方源 (同花顺官方): 填 Key 启用 */}
+          {/* 第三方源 (同花顺接口): 填 Key 启用 */}
           <div className="r">
             <div className="lab">
               <b>
-                同花顺官方
+                同花顺接口
                 <span className="ml-1.5 text-[10px] font-normal text-muted/60">第三方</span>
               </b>
               <div className="tag-row mt-1.5">
@@ -363,7 +363,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
 
       <p className="mt-3 flex items-start gap-2 text-[10.5px] leading-[1.75] text-muted">
         <Puzzle aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-accent/70" />
-        <span>内部数据源覆盖行情，同花顺官方补充财务数据；每个能力可在数据源页单独选择来源。</span>
+        <span>内部数据源覆盖行情，同花顺接口补充财务数据；每个能力可在数据源页单独选择来源。</span>
       </p>
 
       <div className="foot">

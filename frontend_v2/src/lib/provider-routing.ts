@@ -7,7 +7,7 @@ export const BUILTIN_PROVIDER_LABEL = '内部数据源'
 /** 全部可路由偏好字段的默认生效源。
  *
  *  行情类 (日K/除权/分钟/全量分钟/五档/实时) 跟随内置源,
- *  财务跟随同花顺官方插件 —— 与后端 capabilities 注册表同口径。
+ *  财务跟随同花顺接口插件 —— 与后端 capabilities 注册表同口径。
  */
 export const DEFAULT_ROUTING: Record<ProviderField, string> = {
   daily_data_provider: BUILTIN_PROVIDER,
