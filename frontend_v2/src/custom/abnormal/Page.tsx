@@ -204,8 +204,8 @@ function AuctionView({ onOpenStock }: {
           <Compass className="mx-auto h-[20px] w-[20px] text-accent" />
           <div className="mt-3 font-serif text-[16px] font-medium text-foreground">竞价数据源未配置</div>
           <p className="mx-auto mt-2 max-w-[38ch] text-[11.5px] leading-[1.75] text-secondary">
-            竞价异动 (同花顺盘前风向标与全市场竞价扫描) 依赖 fuyao 数据源,
-            复盘页的龙虎榜同样来自该数据源。在「设置 → 数据源」配置 fuyao API Key 后即可使用。
+            竞价异动 (同花顺盘前风向标与全市场竞价扫描) 依赖同花顺接口,
+            复盘页的龙虎榜同样来自该数据源。在「设置 → 数据源」配置同花顺接口 Key 后即可使用。
           </p>
           <Link to="/settings?tab=data-sources" className="ctl-btn ctl-sm pri mt-4">
             前往配置数据源
@@ -1276,7 +1276,7 @@ function AuctionBenchmarkTable() {
   if (q.isLoading || q.isError || items.length === 0) {
     return (
       <p className="py-3 text-[11px] text-muted">
-        {q.isLoading ? '正在加载竞价基准…' : '竞价基准暂不可用 (需配置 fuyao 数据源)'}
+        {q.isLoading ? '正在加载竞价基准…' : '竞价基准暂不可用 (需配置同花顺接口)'}
       </p>
     )
   }

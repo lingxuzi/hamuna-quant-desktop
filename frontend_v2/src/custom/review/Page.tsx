@@ -1530,7 +1530,7 @@ export function DragonTigerCard({ date, onOpenStock }: {
         <span className="grid h-[28px] w-[28px] shrink-0 place-items-center border border-border bg-elevated/60">
           <Trophy className="h-3.5 w-3.5 text-muted/50" />
         </span>
-        <span className="text-[11px] text-muted">龙虎榜需要 fuyao 数据源 (同花顺特色数据)</span>
+        <span className="text-[11px] text-muted">龙虎榜需要同花顺接口 (同花顺特色数据)</span>
         <Link to="/settings?tab=data-sources" className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-accent hover:underline">
           前往配置 <ChevronRight className="h-[12px] w-[12px]" />
         </Link>

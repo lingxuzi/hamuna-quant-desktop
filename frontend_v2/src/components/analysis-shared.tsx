@@ -505,7 +505,7 @@ export function PresetFetchState({
               <p className="flex items-start gap-1.5 text-xs text-warning">
                 <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
                 <span>
-                  该数据源需要 <span className="font-mono font-medium">fuyao API Key</span>
+                  该数据源需要 <span className="font-mono font-medium">同花顺接口 API Key</span>
                   ；其余功能不受影响。
                 </span>
               </p>

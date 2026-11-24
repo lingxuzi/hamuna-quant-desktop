@@ -256,7 +256,7 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
       setFyKey('')
       setFyExpanded(false)
       setFyError(null)
-      setFyMsg('fuyao Key 已保存，财务能力默认使用 fuyao；其他能力可在数据源页单独选择来源')
+      setFyMsg('同花顺接口 Key 已保存，财务能力默认使用同花顺接口；其他能力可在数据源页单独选择来源')
     },
     onError: (e: Error) => setFyError(`保存失败：${e.message}`),
   })
@@ -343,9 +343,9 @@ function DataSourceStep({ onNext, onBack }: { onNext: () => void; onBack: () => 
                     type="password"
                     value={fyKey}
                     onChange={e => { setFyKey(e.target.value); setFyError(null) }}
-                    placeholder="粘贴 fuyao API Key"
+                    placeholder="粘贴同花顺接口 API Key"
                     autoComplete="off"
-                    aria-label="fuyao API Key"
+                    aria-label="同花顺接口 API Key"
                     className="ctl ctl-sm ctl-input min-w-0 flex-1"
                   />
                   <button type="submit" className="ctl-btn ctl-sm pri" disabled={!fyKey.trim() || saveKey.isPending}>
@@ -396,7 +396,7 @@ function ResultStep({ onNext, onBack }: { onNext: () => void; onBack: () => void
       <section className="thesis">
         <h1>能力路由 <em>检测</em></h1>
         <p>
-          下方是每项能力当前由哪个数据源提供、是否可用。默认行情类能力走内置源、财务走 fuyao；后续可随时在「设置 → 数据源」按能力单独改选。
+          下方是每项能力当前由哪个数据源提供、是否可用。默认行情类能力走内置源、财务走同花顺接口；后续可随时在「设置 → 数据源」按能力单独改选。
         </p>
       </section>
 
