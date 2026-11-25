@@ -70,6 +70,11 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Uninstallable=yes
 CreateUninstallRegKey=yes
 
+; 安装前强制关闭正在运行的 H-Quant (见 [Code] KillRunningApp)。
+; 不用 Inno 的 CloseApplications: 它靠 Restart Manager 发关闭请求并等响应,
+; 应用不理会时照样继续, 然后卡在「_internal 里的 pyd 被占用」上失败。
+CloseApplications=no
+
 [Languages]
 ; 简中语言包内置在 packaging/ 下 (从 Inno Setup 官方仓库获取),
 ; 不依赖安装目录是否含该文件 (CI 友好)。
@@ -120,6 +125,35 @@ Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runh
 ; 生成的 data\ 目录。是否清理 data\ 由下方 [Code] 的卸载询问逻辑决定。
 
 [Code]
+// ── 安装前强制关闭正在运行的应用 ───────────────────────────────
+// 升级时报「无法替换 HQuant.exe / _internal 里的文件被占用」, 用户得自己
+// 去任务管理器结束进程再重装。这里在写文件之前先处理掉。
+//
+// 分两步, 不直接 /F:
+//   1. taskkill 不带 /F 只向窗口发 WM_CLOSE —— 应用看到窗口关闭会走正常退出
+//      流程 (停 uvicorn、落盘), 强行 /F 可能打断正在写的 parquet。
+//   2. 等 4 秒仍未退出才 /F 兜底 (应用卡死/弹了模态框的情况)。
+// 返回非空字符串 = 安装中止并把它显示给用户。
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Cmd: String;
+begin
+  Result := '';
+  Cmd := ExpandConstant('{cmd}');
+  // 退出码 0 = 确实杀到了进程 (没在运行返回 128), 没杀到就不用等
+  if Exec(Cmd, '/C taskkill /IM {#MyAppExeName} /T', '',
+          SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+  begin
+    Sleep(4000);
+    // 仍在运行 (正常关闭没成功) → 强制结束。已经退出则这一步返回非 0, 无害。
+    Exec(Cmd, '/C taskkill /F /IM {#MyAppExeName} /T', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode = 0 then
+      Sleep(1500);  // 等句柄释放, 避免紧接着的文件替换仍撞占用
+  end;
+end;
+
 // ── 辅助函数: 判断目录是否为空 ─────────────────────────────────
 // Inno Setup 内置无 IsDirEmpty, 用 FindFirst/FindNext 自行实现。
 // 用于卸载后清理空的 {app} 壳目录。

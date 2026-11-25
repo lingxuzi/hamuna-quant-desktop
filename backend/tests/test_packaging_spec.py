@@ -81,3 +81,24 @@ def test_installer_deploys_dotnet_config_beside_executable():
     setting = config.find("./runtime/loadFromRemoteSources")
     assert setting is not None
     assert setting.get("enabled") == "true"
+
+
+def test_installer_kills_running_app_before_writing_files():
+    """升级时应用还在跑 → _internal 里的文件被占用, 替换失败。
+
+    Inno 自带的 CloseApplications 靠 Restart Manager 请求关闭并等待,
+    应用不理会时照样继续往下写。必须在写文件前自己 taskkill。
+    顺序也重要: PrepareToInstall 走的是 [Code], 而 /F 兜底必须先尝试
+    正常关闭 (不带 /F), 否则正在落盘的 parquet 会被打断。
+    """
+    text = (REPO_ROOT / "packaging" / "hquant.iss").read_text(encoding="utf-8")
+    code = text.split("[Code]", 1)[1]
+
+    assert "function PrepareToInstall(" in code, "缺少安装前钩子, 应用运行时会装不上"
+    hook = code.split("function PrepareToInstall(", 1)[1].split("end;", 1)[0]
+    assert "taskkill /IM {#MyAppExeName}" in hook, "先发正常关闭请求, 不能用 /F 直接杀"
+    assert "taskkill /F /IM {#MyAppExeName}" in hook, "正常关闭失败要有 /F 兜底"
+    assert hook.index("taskkill /IM") < hook.index("taskkill /F"), "强行结束必须在正常关闭之后"
+
+    # CloseApplications 交给 Restart Manager, 与本钩子重复且会先弹窗询问
+    assert "CloseApplications=no" in text
