@@ -83,6 +83,21 @@ def test_installer_deploys_dotnet_config_beside_executable():
     assert setting.get("enabled") == "true"
 
 
+def _pascal_function(code: str, name: str) -> str:
+    """截出 [Code] 里名为 name 的函数体 (到下一个顶格 function/procedure 为止)。
+
+    不能只 split("end;") —— 函数体内有 if/for 的 end;, 会提前截断。
+    """
+    start = code.index(f"function {name}(")
+    rest = code[start + 1:]
+    end = len(rest)
+    for marker in ("\nfunction ", "\nprocedure "):
+        idx = rest.find(marker)
+        if idx != -1:
+            end = min(end, idx)
+    return rest[:end]
+
+
 def test_installer_kills_running_app_before_writing_files():
     """升级时应用还在跑 → _internal 里的文件被占用, 替换失败。
 
@@ -95,10 +110,39 @@ def test_installer_kills_running_app_before_writing_files():
     code = text.split("[Code]", 1)[1]
 
     assert "function PrepareToInstall(" in code, "缺少安装前钩子, 应用运行时会装不上"
-    hook = code.split("function PrepareToInstall(", 1)[1].split("end;", 1)[0]
+    hook = _pascal_function(code, "PrepareToInstall")
     assert "taskkill /IM {#MyAppExeName}" in hook, "先发正常关闭请求, 不能用 /F 直接杀"
     assert "taskkill /F /IM {#MyAppExeName}" in hook, "正常关闭失败要有 /F 兜底"
     assert hook.index("taskkill /IM") < hook.index("taskkill /F"), "强行结束必须在正常关闭之后"
 
     # CloseApplications 交给 Restart Manager, 与本钩子重复且会先弹窗询问
     assert "CloseApplications=no" in text
+
+
+def test_installer_force_kill_is_not_gated_on_soft_kill_success():
+    """回归: 0.3.35 装 0.3.35 时应用根本没被关掉。
+
+    taskkill 不加 /F 时, 找不到可见窗口会返回 128。上一版把 /F 兜底写在
+    `if Exec(软杀) and (ResultCode = 0) then` 里, 于是那个分支永远进不去,
+    一次 /F 都没执行过。这里断言 /F 的执行不受软杀返回码约束。
+    """
+    text = (REPO_ROOT / "packaging" / "hquant.iss").read_text(encoding="utf-8")
+    code = text.split("[Code]", 1)[1]
+    body = _pascal_function(code, "PrepareToInstall")
+
+    # 防回归的核心: 强杀不能挂在软杀的返回值上。
+    # 上一版的写法是 `if Exec(...软杀...) and (ResultCode = 0) then begin ... /F ... end;`
+    assert "and (ResultCode = 0) then" not in body, (
+        "强制结束又被软杀的返回码门控了 —— taskkill 不带 /F 找不到窗口时返回 128, "
+        "这个分支永远不会进"
+    )
+    # 强杀必须存在且出现在软杀之后
+    assert "taskkill /F /IM {#MyAppExeName}" in body
+    assert body.index("taskkill /IM") < body.index("taskkill /F /IM")
+
+    # 必须有独立于 taskkill 返回码的运行检测
+    assert "function IsAppRunning" in code
+    assert "tasklist" in code
+
+    # 确认真的关不掉时要中止安装并说明原因, 不能静默失败
+    assert "Result := " in body

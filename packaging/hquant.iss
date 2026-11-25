@@ -70,7 +70,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Uninstallable=yes
 CreateUninstallRegKey=yes
 
-; 安装前强制关闭正在运行的 H-Quant (见 [Code] KillRunningApp)。
+; 安装前强制关闭正在运行的 H-Quant (见 [Code] PrepareToInstall)。
 ; 不用 Inno 的 CloseApplications: 它靠 Restart Manager 发关闭请求并等响应,
 ; 应用不理会时照样继续, 然后卡在「_internal 里的 pyd 被占用」上失败。
 CloseApplications=no
@@ -125,32 +125,69 @@ Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runh
 ; 生成的 data\ 目录。是否清理 data\ 由下方 [Code] 的卸载询问逻辑决定。
 
 [Code]
+// ── 应用是否仍在运行 ──────────────────────────────────────────
+// tasklist 带过滤时, 没有匹配进程会打印「没有运行的任务匹配指定标准」,
+// 不含 exe 名 → find 找不到 → 退出码 1。据此判断比 taskkill 的退出码可靠
+// (taskkill 的各种失败码分不清「没在跑」和「没权限杀」)。
+function IsAppRunning(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{cmd}'),
+       '/C tasklist /FI "IMAGENAME eq {#MyAppExeName}" /NH | find /I "{#MyAppExeName}" >nul',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := (ResultCode = 0);
+  Log(Format('HQuant 运行检测: %d (True=仍在运行)', [ResultCode]));
+end;
+
 // ── 安装前强制关闭正在运行的应用 ───────────────────────────────
 // 升级时报「无法替换 HQuant.exe / _internal 里的文件被占用」, 用户得自己
 // 去任务管理器结束进程再重装。这里在写文件之前先处理掉。
 //
-// 分两步, 不直接 /F:
-//   1. taskkill 不带 /F 只向窗口发 WM_CLOSE —— 应用看到窗口关闭会走正常退出
-//      流程 (停 uvicorn、落盘), 强行 /F 可能打断正在写的 parquet。
-//   2. 等 4 秒仍未退出才 /F 兜底 (应用卡死/弹了模态框的情况)。
-// 返回非空字符串 = 安装中止并把它显示给用户。
+// 上一版把 /F 挂在 `if 软杀成功 then` 里, 结果一次都没执行到, 应用纹丝不动:
+// taskkill 不加 /F 时找不到可见窗口会返回 128, 而判定条件只看返回码。
+// 现在改成: 软杀 (只发 WM_CLOSE, 让应用正常退出并落盘) → 无条件 /F 重试
+// → 最后用 tasklist 确认真的没了, 仍在就明确告诉用户原因。
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
   Cmd: String;
+  I: Integer;
 begin
   Result := '';
-  Cmd := ExpandConstant('{cmd}');
-  // 退出码 0 = 确实杀到了进程 (没在运行返回 128), 没杀到就不用等
-  if Exec(Cmd, '/C taskkill /IM {#MyAppExeName} /T', '',
-          SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+  // 日志落到 %TEMP%\Setup Log*.txt —— 没有 Windows 开发机, 只能靠它事后定位
+  Log('HQuant 安装前钩子进入');
+  if not IsAppRunning() then
   begin
+    Log('HQuant 未运行, 跳过关闭步骤');
+    Exit;
+  end;
+
+  Cmd := ExpandConstant('{cmd}');
+  // 1) 请求正常关闭: 不加 /F, 应用收到窗口关闭会走正常退出流程 (停后端、落盘)。
+  //    强行 /F 可能打断正在写的 parquet, 所以先给一次机会。
+  Exec(Cmd, '/C taskkill /IM {#MyAppExeName} /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log(Format('软关闭返回码 %d', [ResultCode]));
+  if ResultCode = 0 then
     Sleep(4000);
-    // 仍在运行 (正常关闭没成功) → 强制结束。已经退出则这一步返回非 0, 无害。
-    Exec(Cmd, '/C taskkill /F /IM {#MyAppExeName} /T', '',
-         SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    if ResultCode = 0 then
-      Sleep(1500);  // 等句柄释放, 避免紧接着的文件替换仍撞占用
+
+  // 2) 无条件强制结束, 失败就重试 —— 不看上一步返回码
+  for I := 1 to 5 do
+  begin
+    if not IsAppRunning() then
+      Exit;
+    Exec(Cmd, '/C taskkill /F /IM {#MyAppExeName} /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Log(Format('强制结束第 %d 次, 返回码 %d', [I, ResultCode]));
+    Sleep(1000);
+  end;
+
+  // 3) 仍在运行 → 中止安装并说明原因 (常见: 应用以管理员身份启动, 安装器没有权限关闭)
+  if IsAppRunning() then
+  begin
+    Log('HQuant 强制结束失败, 中止安装');
+    Result := 'H-Quant 仍在运行，无法完成安装。' + #13#10 + #13#10 +
+              '请先手动退出 H-Quant，然后重试安装。' + #13#10 +
+              '如果它是以管理员身份启动的，本次安装没有权限关闭它。';
   end;
 end;
 
