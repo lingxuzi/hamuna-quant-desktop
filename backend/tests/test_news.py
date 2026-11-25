@@ -147,8 +147,11 @@ def test_refresh_merges_with_existing_cache(tmp_path, monkeypatch):
     ids = {r["id"] for r in second}
     assert "abc123" in ids and fresh[0]["id"] in ids
 
-    payload = json.loads((tmp_path / "news" / "date=2026-11-24.json").read_text("utf-8"))
-    assert payload["date"] == "2026-11-24"
+    # 落盘日期取的是 cn_today() —— 这里写死 2026-11-24 会在跨天后必挂
+    # (CI 红过一次: 2026-11-25 当天就找不到 date=2026-11-24.json)
+    today = news.cn_today().isoformat()
+    payload = json.loads((tmp_path / "news" / f"date={today}.json").read_text("utf-8"))
+    assert payload["date"] == today
 
 
 def test_list_recent_filters_by_symbol_and_reads_yesterday(tmp_path):
