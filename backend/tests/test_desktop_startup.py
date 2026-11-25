@@ -221,7 +221,7 @@ def test_main_proceeds_when_mining_lock_precheck_conflicts(
         lambda port, timeout, done_event: True,
     )
     opened = []
-    monkeypatch.setattr(desktop, "_open_window", lambda url: opened.append(url))
+    monkeypatch.setattr(desktop, "_open_window", lambda url, *a: opened.append(url))
 
     def _fake_uvmicorn(port, ready):
         ready.set()
@@ -336,3 +336,288 @@ def test_open_window_does_not_clear_existing_browser_profile(data_dir, monkeypat
     desktop._open_window("http://127.0.0.1:3018")
 
     assert marker.read_bytes() == b"keep me"
+
+
+# ---------- 关窗 → 进程真的退出 ----------
+# 用户反馈 (2026-11-25): 「关闭应用程序并没有退出」。根因不是窗口没关, 而是
+# 解释器收尾时 join 非 daemon 线程 (ThreadPoolExecutor worker) 和 spawn 子进程
+# (回测/挖掘, daemon=False), 长任务在跑时那个 join 永不返回。
+
+def test_stop_backend_signals_uvicorn_and_waits_for_shutdown(monkeypatch):
+    """关窗后必须置 should_exit 并等 lifespan shutdown 跑完 (不然锁/调度器不收尾)。"""
+    server = SimpleNamespace(should_exit=False)
+    joined: list[float | None] = []
+
+    class _Thread:
+        def join(self, timeout=None):
+            joined.append(timeout)
+
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(desktop, "_backend_server", server)
+    desktop._stop_backend(_Thread())
+
+    assert server.should_exit is True
+    assert joined == [desktop._BACKEND_STOP_TIMEOUT]
+
+
+def test_stop_backend_warns_when_shutdown_hangs(monkeypatch, caplog):
+    """后端 10s 内没停下要留日志 (否则用户只看到「关不掉」, 无从排查)。"""
+    import logging
+
+    server = SimpleNamespace(should_exit=False)
+
+    class _StuckThread:
+        def join(self, timeout=None):
+            pass
+
+        def is_alive(self):
+            return True
+
+    monkeypatch.setattr(desktop, "_backend_server", server)
+    with caplog.at_level(logging.WARNING, logger="app.desktop"):
+        desktop._stop_backend(_StuckThread())
+
+    assert server.should_exit is True
+    assert "未收尾" in caplog.text
+
+
+def test_hard_exit_kills_process_when_thread_pool_worker_would_block_exit(monkeypatch):
+    """ThreadPoolExecutor worker 是非 daemon 线程 —— 它不收尾, 解释器退出就会挂住。
+
+    这里让 worker 永远不结束, 断言 _hard_exit_if_stragglers 走 os._exit 而不是
+    傻等 (真实场景: 全市场同步/回测正在 worker 里跑)。
+    """
+    stop = threading.Event()
+    worker = threading.Thread(target=stop.wait, name="ThreadPoolExecutor-0_0")
+    worker.start()
+    exits: list[int] = []
+    monkeypatch.setattr(desktop.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(desktop.logging, "shutdown", lambda: None)
+    try:
+        desktop._hard_exit_if_stragglers(grace=0.05)
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+    assert exits == [0], "还有非 daemon 线程在跑时必须硬退出, 否则进程挂在后台"
+
+
+def test_hard_exit_defers_to_normal_teardown_when_threads_finish(monkeypatch):
+    """后台线程能在宽限期内自己结束时不抢跑 os._exit, 让 atexit 正常收尾。"""
+    stop = threading.Event()
+    worker = threading.Thread(target=stop.wait, name="ThreadPoolExecutor-0_1")
+    worker.start()
+    exits: list[int] = []
+    monkeypatch.setattr(desktop.os, "_exit", lambda code: exits.append(code))
+    threading.Timer(0.05, stop.set).start()
+    try:
+        desktop._hard_exit_if_stragglers(grace=5.0)
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+    assert exits == []
+
+
+# ---------- 应用内自动更新 ----------
+# 需求 (2026-11-25): 「下载不要用户保存, 更新自动下载, 然后自动关闭程序, 自动启动安装」。
+# 下载/校验/停后端/起安装器都在桌面进程里做, 前端只点一次「立即更新」。
+
+def test_split_urls_supports_multiple_endpoints():
+    """R2 公开域名是随机子域, 换域名时老客户端只有旧地址 → 清单可放多条兜底。"""
+    assert desktop._split_urls("https://a/x.exe, https://b/x.exe  https://c/x.exe") == [
+        "https://a/x.exe", "https://b/x.exe", "https://c/x.exe",
+    ]
+    assert desktop._split_urls("") == []
+
+
+def test_download_installer_writes_into_temp_and_verifies_sha256(monkeypatch, tmp_path):
+    """下载落临时目录 (无「另存为」), 并按清单的 size/sha256 校验, 损坏即失败。"""
+    import hashlib
+    import io
+
+    payload = b"installer-bytes" * 100
+    sha = hashlib.sha256(payload).hexdigest()
+
+    class _Resp(io.BytesIO):
+        headers = {"content-length": str(len(payload))}  # noqa: RUF012
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda url, timeout=0: _Resp(payload)
+    )
+
+    path = desktop._download_installer(
+        ["https://r2.example.com/x.exe"], "0.3.37", sha, len(payload)
+    )
+
+    assert path.parent == tmp_path / "HQuant-Update" / "0.3.37"
+    assert path.name == "HQuant-Setup-x64-0.3.37.exe"
+    assert path.read_bytes() == payload
+
+
+def test_download_installer_rejects_corrupted_payload(monkeypatch, tmp_path):
+    """sha256 不符必须失败 —— 否则装到一半才炸, 用户会以为更新把软件弄坏了。"""
+    import io
+
+    class _Resp(io.BytesIO):
+        headers = {"content-length": "4"}  # noqa: RUF012
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr("urllib.request.urlopen", lambda url, timeout=0: _Resp(b"abcd"))
+
+    with pytest.raises(ValueError, match="sha256"):
+        desktop._download_installer(["https://r2.example.com/x.exe"], "0.3.37", "deadbeef", 4)
+
+
+def test_download_installer_falls_back_to_next_url(monkeypatch, tmp_path):
+    """第一个地址失败要换下一个, 而不是直接报错 (域名迁移期的关键)。"""
+    import io
+
+    payload = b"ok"
+
+    class _Resp(io.BytesIO):
+        headers = {"content-length": "2"}  # noqa: RUF012
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    tried: list[str] = []
+
+    def _urlopen(url, timeout=0):
+        tried.append(url)
+        if "old-domain" in url:
+            raise OSError("dns failure")
+        return _Resp(payload)
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+
+    path = desktop._download_installer(
+        ["https://old-domain/x.exe", "https://new-domain/x.exe"], "0.3.37", "", 2
+    )
+
+    assert tried == ["https://old-domain/x.exe", "https://new-domain/x.exe"]
+    assert path.read_bytes() == payload
+
+
+def test_update_bridge_downloads_then_stops_backend_and_launches_installer(
+    monkeypatch, tmp_path
+):
+    """更新桥: 下载 → 停后端 → 起安装器, 成功后由定时器强退进程。"""
+    installer = tmp_path / "HQuant-Setup-x64-0.3.37.exe"
+    installer.write_bytes(b"x")
+    stopped: list[bool] = []
+    launched: list = []
+    exited: list[float] = []
+
+    monkeypatch.setattr(desktop, "_can_auto_install", lambda: True)
+    monkeypatch.setattr(desktop, "_split_urls", lambda raw: ["https://r2/x.exe"])
+    monkeypatch.setattr(desktop, "_download_installer", lambda *a, **k: installer)
+    monkeypatch.setattr(
+        desktop, "_stop_backend", lambda thread=None, hard_exit=True: stopped.append(hard_exit)
+    )
+    monkeypatch.setattr(desktop, "_launch_installer", lambda exe: launched.append(exe))
+    monkeypatch.setattr(
+        desktop.threading, "Timer", lambda delay, fn: type(
+            "_T", (), {"start": lambda self: exited.append(delay)}
+        )()
+    )
+
+    result = desktop._UpdateBridge().install_update("https://r2/x.exe", "0.3.37", "", 0)
+
+    assert result == {"ok": True, "error": ""}
+    assert launched == [installer]
+    # 更新路径不能提前 os._exit (还要起安装器), 所以 hard_exit=False
+    assert stopped == [False]
+    assert exited == [1.0]
+
+
+def test_update_bridge_reports_download_failure_without_quitting(monkeypatch):
+    """下载失败要回传原因, 绝不能退出进程 (用户还在用着旧版本)。"""
+    launched: list = []
+    monkeypatch.setattr(desktop, "_can_auto_install", lambda: True)
+    monkeypatch.setattr(desktop, "_split_urls", lambda raw: ["https://r2/x.exe"])
+
+    def _boom(*a, **k):
+        raise OSError("network down")
+
+    monkeypatch.setattr(desktop, "_download_installer", _boom)
+    monkeypatch.setattr(desktop, "_launch_installer", lambda exe: launched.append(exe))
+
+    bridge = desktop._UpdateBridge()
+    result = bridge.install_update("https://r2/x.exe", "0.3.37", "", 0)
+
+    assert result["ok"] is False
+    assert "network down" in result["error"]
+    assert launched == []
+    assert bridge.last_error() == "network down"
+
+
+def test_update_bridge_is_not_reentrant(monkeypatch):
+    """连点两次「立即更新」不能并发下载两个安装包。"""
+    monkeypatch.setattr(desktop, "_can_auto_install", lambda: True)
+    bridge = desktop._UpdateBridge()
+    bridge._busy = True
+
+    result = bridge.install_update("https://r2/x.exe", "0.3.37", "", 0)
+
+    assert result == {"ok": False, "error": "更新正在进行中"}
+
+
+def test_download_installer_rejects_path_traversal_version(monkeypatch, tmp_path):
+    """version 来自清单并直接拼进路径 —— "../.." 能把安装包写到任意位置。"""
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    with pytest.raises(ValueError, match="版本号不合法"):
+        desktop._download_installer(["https://r2/x.exe"], "../../evil")
+
+
+def test_download_installer_rejects_non_http_scheme(monkeypatch, tmp_path):
+    """urlopen 认 file://; 清单被篡改时不能变成读本地任意文件。"""
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    with pytest.raises(ValueError, match="协议"):
+        desktop._download_installer(["file:///etc/passwd"], "0.3.37")
+
+
+def test_auto_install_is_windows_only():
+    """macOS 的产物是 .dmg, 没有静默安装 —— 起它再退出进程会让界面凭空消失。"""
+    import sys as _sys
+
+    original = _sys.platform
+    try:
+        _sys.platform = "darwin"
+        assert desktop._can_auto_install() is False
+        _sys.platform = "win32"
+        assert desktop._can_auto_install() is True
+    finally:
+        _sys.platform = original
+
+
+def test_update_bridge_refuses_install_on_unsupported_platform(monkeypatch):
+    """误调用时也必须拒绝: 退出进程却不安装, 用户以为软件坏了。"""
+    monkeypatch.setattr(desktop, "_can_auto_install", lambda: False)
+    called: list = []
+    monkeypatch.setattr(desktop, "_download_installer", lambda *a, **k: called.append(1))
+
+    result = desktop._UpdateBridge().install_update("https://r2/x.exe", "0.3.37")
+
+    assert result["ok"] is False
+    assert "不支持应用内自动更新" in result["error"]
+    assert called == []

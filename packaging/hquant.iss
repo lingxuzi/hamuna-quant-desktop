@@ -113,7 +113,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; shellexec: 部分机器对 exe 路径存有「以管理员身份运行」兼容标志/策略要求提权,
 ; CreateProcess 无法弹 UAC 会直接报错误码 740; ShellExecute 遇提权正常弹 UAC,
 ; asInvoker 场景行为不变。
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent shellexec
+; 不加 skipifsilent: 应用内自动更新以 /SILENT 跑安装器, 装完必须自己把新版本
+; 拉起来 (用户点的是「立即更新」, 期望的是自动重启, 不是回来自己找图标)。
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall shellexec
 
 [UninstallRun]
 ; 卸载前先关闭正在运行的应用 (否则 exe 被占用删不掉)

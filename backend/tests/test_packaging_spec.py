@@ -146,3 +146,19 @@ def test_installer_force_kill_is_not_gated_on_soft_kill_success():
 
     # 确认真的关不掉时要中止安装并说明原因, 不能静默失败
     assert "Result := " in body
+
+
+def test_installer_relaunches_app_after_silent_update():
+    """应用内自动更新以 /SILENT 跑安装器, 装完必须自动拉起新版本。
+
+    0.3.37 前 [Run] 带 skipifsilent: 静默安装装完什么都不做, 用户点完
+    「立即更新」后应用消失, 得自己去找图标 —— 与「自动重启」的承诺不符。
+    """
+    text = (REPO_ROOT / "packaging" / "hquant.iss").read_text(encoding="utf-8")
+    run_section = text.split("[Run]", 1)[1].split("[UninstallRun]", 1)[0]
+    launches = [line for line in run_section.splitlines() if line.startswith("Filename:")]
+    assert len(launches) == 1
+    assert "skipifsilent" not in launches[0], (
+        "静默安装 (应用内自动更新) 装完后不会启动新版本"
+    )
+    assert "shellexec" in launches[0]

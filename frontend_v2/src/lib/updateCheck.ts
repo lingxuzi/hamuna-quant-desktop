@@ -32,6 +32,9 @@ export interface UpdateInfo {
   latest: string
   /** 安装包直链 (清单 channels 里本平台那条; 取不到时为空) */
   downloadUrl: string
+  /** 清单里登记的安装包大小与 sha256, 桌面版下载后据此校验 */
+  size: number
+  sha256: string
   /** 更新内容 (清单 notes, 每条一行); 老清单没有这个字段 → 空数组 */
   notes: string[]
   /** Release 页 —— 仅兜底, 正常情况下用户不需要去这里 */
@@ -93,6 +96,8 @@ interface CacheBlob {
   current: string
   latest: string
   downloadUrl: string
+  size: number
+  sha256: string
   notes: string[]
   url: string
   found: boolean
@@ -118,6 +123,8 @@ function readCache(): CacheBlob | null {
     return {
       ...v,
       downloadUrl: typeof v.downloadUrl === 'string' ? v.downloadUrl : '',
+      size: typeof v.size === 'number' ? v.size : 0,
+      sha256: typeof v.sha256 === 'string' ? v.sha256 : '',
       notes: Array.isArray(v.notes) ? v.notes.filter((n): n is string => typeof n === 'string') : [],
     } as CacheBlob
   } catch {
@@ -141,17 +148,18 @@ async function fetchLatest(): Promise<UpdateInfo> {
   const latest = String(manifest.version ?? manifest.tag ?? '').trim()
   if (!latest) throw new Error('no release info')
   // 安装包直链: 优先本平台渠道, 退化到清单里任意一条 (单平台发布时也能下)
-  const channels = (manifest.channels ?? {}) as Record<string, { url?: string }>
-  const downloadUrl = String(
-    channels[currentChannel()]?.url ??
-      Object.values(channels)[0]?.url ??
-      '',
-  )
+  type Channel = { url?: string; size?: number; sha256?: string }
+  const channels = (manifest.channels ?? {}) as Record<string, Channel>
+  const ch = channels[currentChannel()] ?? Object.values(channels)[0]
+  const downloadUrl = String(ch?.url ?? '')
+  // 桌面版自动更新用这两项校验下载结果 (浏览器里只是普通链接, 用不到)
+  const size = Number(ch?.size ?? 0) || 0
+  const sha256 = String(ch?.sha256 ?? '')
   const notes = Array.isArray(manifest.notes)
     ? manifest.notes.map((n: unknown) => String(n).trim()).filter(Boolean)
     : []
   // notes_url 只是兜底: 国内访问不了 GitHub, 主入口是 downloadUrl
-  return { latest, downloadUrl, notes, url: String(manifest.notes_url ?? '') || RELEASES_URL }
+  return { latest, downloadUrl, size, sha256, notes, url: String(manifest.notes_url ?? '') || RELEASES_URL }
 }
 
 let inFlight = false
@@ -168,7 +176,10 @@ export async function checkForUpdate(
     if (c && c.current === cur && Date.now() - c.checkedAt < CACHE_TTL_MS) {
       setState({
         status: c.found ? 'found' : 'latest',
-        info: { latest: c.latest, downloadUrl: c.downloadUrl, notes: c.notes, url: c.url },
+        info: {
+          latest: c.latest, downloadUrl: c.downloadUrl, size: c.size,
+          sha256: c.sha256, notes: c.notes, url: c.url,
+        },
         checkedAt: c.checkedAt,
       })
       return
@@ -185,6 +196,8 @@ export async function checkForUpdate(
       current: cur,
       latest: info.latest,
       downloadUrl: info.downloadUrl,
+      size: info.size,
+      sha256: info.sha256,
       notes: info.notes,
       url: info.url,
       found,

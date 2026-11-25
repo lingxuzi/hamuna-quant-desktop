@@ -43,7 +43,12 @@ function mockFetchFullManifest(version: string) {
       notes: ['修复登录偶发失败', '  ', '导出更快'],
       notes_url: 'https://example.com/notes',
       channels: {
-        windows: { name: `HQuant-Setup-x64-${version}.exe`, url: `https://r2.example.com/HQuant-Setup-x64-${version}.exe` },
+        windows: {
+          name: `HQuant-Setup-x64-${version}.exe`,
+          url: `https://r2.example.com/HQuant-Setup-x64-${version}.exe`,
+          size: 134217728,
+          sha256: 'abc123',
+        },
         'macos-arm64': { name: `HQuant-macos-arm64-${version}.dmg`, url: `https://r2.example.com/mac.dmg` },
       },
     }),
@@ -174,10 +179,15 @@ describe('checkForUpdate', () => {
     expect(info?.notes).toEqual(['修复登录偶发失败', '导出更快'])
     // 直链指向清单里本平台的安装包 (jsdom 的 navigator.platform 为空 → 退化到第一条)
     expect(info?.downloadUrl).toContain('HQuant-')
+    // 桌面版自动更新要用 size/sha256 校验下载结果
+    expect(info?.size).toBe(134217728)
+    expect(info?.sha256).toBe('abc123')
     // 缓存也要带上, 否则 24h 内重启会退化成只有版本号
     expect(JSON.parse(readCacheRaw() ?? '{}')).toMatchObject({
       latest: '0.4.0',
       notes: ['修复登录偶发失败', '导出更快'],
+      size: 134217728,
+      sha256: 'abc123',
     })
   })
 
@@ -195,6 +205,8 @@ describe('checkForUpdate', () => {
     expect(getUpdateState().status).toBe('found')
     expect(getUpdateState().info?.notes).toEqual([])
     expect(getUpdateState().info?.downloadUrl).toBe('')
+    expect(getUpdateState().info?.size).toBe(0)
+    expect(getUpdateState().info?.sha256).toBe('')
   })
 
   it('版本未知时空操作 (不请求不落缓存)', async () => {

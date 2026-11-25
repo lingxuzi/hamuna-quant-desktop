@@ -15,15 +15,19 @@
 """
 from __future__ import annotations
 
+import contextlib
 import errno
 import html
 import logging
 import os
+import re
 import socket
 import sys
+import tempfile
 import threading
 import time
 import traceback
+from pathlib import Path
 from typing import BinaryIO
 
 logger = logging.getLogger(__name__)
@@ -32,6 +36,12 @@ _APP_NAME = "H-Quant"
 _BASE_PORT = 3018
 _PORT_PROBE_RANGE = 50  # 从 3018 起最多试 50 个端口
 _instance_lock: BinaryIO | None = None
+
+# 窗口关闭后要显式让后端停下并等它收尾 (见 _stop_backend)。
+# 后端线程本身是 daemon, 但解释器退出时仍会 join 非 daemon 的线程池 worker
+# 和 spawn 子进程, 长任务在跑时窗口关了进程还在。
+_backend_server = None  # type: ignore[var-annotated]
+_BACKEND_STOP_TIMEOUT = 10.0
 
 
 def _failed_html(reason: str | None = None) -> str:
@@ -275,6 +285,185 @@ def _find_free_port(start: int, count: int = _PORT_PROBE_RANGE) -> int:
     return start
 
 
+def _split_urls(raw: str) -> list[str]:
+    """清单里的 urls 字段 → 逐个尝试的地址列表。
+
+    发布流水线的 R2 公开域名是随机子域 (pub-<hash>.r2.dev), 换桶/换域名时
+    老客户端手里只有旧地址; 清单里放多条 (新域名在前, 旧域名兜底) 让存量
+    客户端至少还能拿到安装包。任一成功即止, 不要求全部可达。
+    """
+    return [u.strip() for u in (raw or "").replace(",", " ").split() if u.strip()]
+
+
+def _download_installer(
+    urls: list[str], version: str, sha256: str = "", size: int = 0
+) -> Path:
+    """把安装包下到临时目录, 返回本地路径。失败抛异常 (由调用方回传前端)。
+
+    用户不需要选保存位置: 桌面版是「点更新 → 全自动」, 落地路径固定为
+    %TEMP%\\HQuant-Update\\<version>\\HQuant-Setup-x64-<version>.exe。
+
+    先试 urls 里每个地址, 任一成功即止。下完按清单的 size/sha256 校验 ——
+    截断或下错文件会装到一半才炸, 用户只会觉得「更新把软件弄坏了」。
+    """
+    import hashlib
+    import urllib.parse
+    import urllib.request
+
+    if not urls:
+        raise ValueError("更新清单里没有可用的下载地址")
+    # version 来自清单 (经前端传回), 会直接拼进文件路径 —— 只接受版本号字符,
+    # 否则 "../.." 能把安装包写到任意位置。
+    if not re.fullmatch(r"[0-9A-Za-z.\-_]{1,32}", version or ""):
+        raise ValueError(f"版本号不合法: {version!r}")
+    # urlopen 认 file:// 等协议; 更新地址只该是 http(s), 清单被篡改时不能
+    # 变成「读本地任意文件」
+    for url in urls:
+        scheme = urllib.parse.urlparse(url).scheme.lower()
+        if scheme not in ("http", "https"):
+            raise ValueError(f"不支持的下载地址协议: {scheme or '(空)'}")
+
+    target_dir = Path(tempfile.gettempdir()) / "HQuant-Update" / version
+    target_dir.mkdir(parents=True, exist_ok=True)
+    # 文件名带版本号: 安装器按 OutputBaseFilename=HQuant-Setup-<version> 自我识别,
+    # 同名会撞上仍在被占用的旧安装包。
+    exe = target_dir / f"HQuant-Setup-x64-{version}.exe"
+    tmp = exe.with_suffix(".part")
+
+    last: Exception | None = None
+    for url in urls:
+        try:
+            logger.info("下载更新包: %s", url)
+            digest = hashlib.sha256()
+            total = 0
+            with urllib.request.urlopen(url, timeout=30) as r, tmp.open("wb") as out:
+                while True:  # 边下边写, 安装包 130MB+ 不能进内存
+                    chunk = r.read(1 << 20)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    digest.update(chunk)
+                    total += len(chunk)
+            if size and total != size:
+                raise ValueError(f"安装包大小不符: 期望 {size}, 实际 {total}")
+            if sha256 and digest.hexdigest().lower() != sha256.lower():
+                raise ValueError("安装包 sha256 校验失败, 可能下载不完整或被篡改")
+            tmp.replace(exe)
+            logger.info("更新包就绪: %s (%d 字节)", exe, total)
+            return exe
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            with contextlib.suppress(Exception):
+                tmp.unlink(missing_ok=True)
+            logger.warning("下载失败 (%s): %s", url, exc)
+    raise last or RuntimeError("下载失败")
+
+
+def _can_auto_install() -> bool:
+    """能否应用内自动安装。只有 Windows 的 Setup.exe 能静默装完自动重启。
+
+    macOS 的产物是 .dmg —— 挂载后要用户把 .app 拖进应用程序目录, 没有静默
+    安装这回事。在那里起 .dmg 再退出进程, 用户会看到「点了更新, 界面没了,
+    什么也没装上」。非 Windows 一律退回浏览器下载。
+    """
+    return sys.platform == "win32"
+
+
+def _launch_installer(exe: Path) -> None:
+    """启动安装包并退出当前进程。
+
+    安装器自己带 [Code] PrepareToInstall 结束残留进程, 但这里必须先把后端和
+    子进程停干净再起它 —— 否则安装器杀进程的时机和 Python 收尾重叠, 会删到
+    正在被写的文件。
+
+    /SILENT: 用户已经点过「立即更新」, 再弹一遍向导是多余的; [Run] 段不带
+    skipifsilent, 所以静默装完会自己拉起新版本。
+    用 DETACHED_PROCESS 起, 安装器和本进程脱钩后才能删本进程的 exe。
+    调用前须确认 _can_auto_install()。
+    """
+    import subprocess
+
+    DETACHED_PROCESS = 0x00000008  # noqa: N806 — Win32 常量, 按原样写更好查
+    CREATE_NEW_PROCESS_GROUP = 0x00000200  # noqa: N806
+    subprocess.Popen(
+        [str(exe), "/SILENT", "/NORESTART"],
+        close_fds=True,
+        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+    )
+    logger.info("安装器已启动, 本进程退出")
+
+
+def _stop_backend(
+    server_thread: threading.Thread | None = None, *, hard_exit: bool = True
+) -> None:
+    """请求后端优雅退出并等它收尾。窗口关掉后调用 (hard_exit=True)。
+
+    不这么做的话: 窗口关了 main() 返回, 后端线程 (daemon) 被丢弃, 然后解释器
+    收尾时对 ThreadPoolExecutor 的 worker 和 spawn 子进程 (回测/挖掘, daemon=False)
+    逐个 join —— 两者都在跑长任务时无限期等待, 表现为「点了关闭, 进程还在
+    任务管理器里」, 用户只能去结束进程。
+
+    uvicorn 的 server.should_exit 会让它跑完 lifespan 的 shutdown (停调度器、
+    释放挖掘锁、落盘), 这是必要的收尾, 因此先给 _BACKEND_STOP_TIMEOUT 秒。
+    超时说明有任务卡住 (如 lifespan 里等挖掘锁), 此时不能再等, 直接杀子进程
+    退出 —— 用户点了关闭, 进程必须消失。
+
+    hard_exit=False 用于自动更新: 停完后端还要起安装器, 不能提前 os._exit。
+    """
+    server = _backend_server
+    if server is not None:
+        server.should_exit = True
+    if server_thread is not None:
+        server_thread.join(timeout=_BACKEND_STOP_TIMEOUT)
+        if server_thread.is_alive():
+            logger.warning(
+                "后端 %ss 内未收尾, 强制结束 (残留的后台任务不写入)", _BACKEND_STOP_TIMEOUT
+            )
+    # spawn 出来的回测/挖掘子进程 daemon=False, 解释器退出时会 join 它们;
+    # 在这里先终结, 否则关窗后进程照样挂着。
+    try:
+        import multiprocessing as mp
+
+        for child in mp.active_children():
+            with contextlib.suppress(Exception):
+                child.terminate()
+                child.join(timeout=3.0)
+    except Exception:  # 子进程表可能已被 teardown 改过, 失败不影响退出
+        logger.exception("结束残留子进程失败")
+    if hard_exit:
+        _hard_exit_if_stragglers()
+
+
+def _hard_exit_if_stragglers(grace: float = 3.0) -> None:
+    """等非 daemon 后台线程一小会儿, 还有没结束的就硬退出进程。
+
+    ThreadPoolExecutor 的 worker 是非 daemon 线程, 解释器退出时 concurrent.futures
+    的 atexit 钩子会无条件 join 它们 (_python_exit)。全市场同步、回测这类长任务
+    正在 worker 里跑时, 那个 join 永不返回 —— 窗口关了、后端也停了, 进程却一直
+    挂在任务管理器里, 用户只能手动结束。
+
+    这里先给 grace 秒让快到期的任务自己收尾 (正常的解释器收尾, atexit 照跑),
+    超时才是真卡住: 直接 os._exit, 跳过 atexit。用户按下关闭的意图优先于
+    「让任务跑完」—— 数据落盘的收尾已经在后端 shutdown 阶段完成。
+    """
+    current = threading.current_thread()
+    deadline = time.monotonic() + grace
+    stragglers = [
+        t for t in threading.enumerate()
+        if t is not current and not t.daemon and t.is_alive()
+    ]
+    for thread in stragglers:
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    alive = [t for t in stragglers if t.is_alive()]
+    if alive:
+        logger.warning(
+            "仍有 %d 个后台线程未结束 (%s), 强制退出进程",
+            len(alive), ", ".join(t.name for t in alive[:5]),
+        )
+        logging.shutdown()
+        os._exit(0)
+
+
 def _run_uvmicorn(port: int, ready_event: threading.Event) -> None:
     """后台线程: 启动 uvicorn 服务。ready_event 在线程退出时置位 (通知主线程)。"""
     import uvicorn
@@ -303,6 +492,10 @@ def _run_uvmicorn(port: int, ready_event: threading.Event) -> None:
         log_config=None,
     )
     server = uvicorn.Server(config)
+    # 暴露给 _stop_backend: 窗口关闭时要主动置 should_exit, 后端才会跑完
+    # lifespan 的 shutdown 再退出, 而不是被 daemon 线程直接丢弃。
+    global _backend_server
+    _backend_server = server
 
     # 线程结束时通知主线程 (无论正常退出还是异常)
     def _signal_done(*exc):
@@ -349,21 +542,96 @@ def _wait_for_server(
     return False
 
 
-def _open_window(url: str) -> None:
+class _UpdateBridge:
+    """暴露给前端 window.pywebview.api 的更新入口。
+
+    前端 updateCheck 检测到新版本 → 用户点「立即更新」→ 这里下载安装包,
+    校验 sha256/size, 然后停后端、起安装器、退出进程。前端不再出现保存
+    文件对话框, 也不需要用户自己双击安装包。
+
+    只在桌面版存在 (浏览器里没有 pywebview 对象), 所以前端必须先探测。
+    """
+
+    def __init__(self) -> None:
+        self._busy = False
+        self._error = ""
+
+    def can_auto_install(self) -> bool:
+        """前端据此决定显示「立即更新」还是普通下载链接 (浏览器里永远 false)。"""
+        return _can_auto_install()
+
+    def install_update(self, urls: str, version: str, sha256: str = "", size: int = 0) -> dict:
+        """下载并安装指定版本。返回 {ok, error}; 成功时进程会自行退出。"""
+        if not _can_auto_install():
+            # 前端理论上不会调到这里 (先问 can_auto_install), 兜住误调用:
+            # 在这里退出进程又不装, 用户会以为软件被更新弄坏了。
+            return {"ok": False, "error": "当前平台不支持应用内自动更新"}
+        if self._busy:
+            return {"ok": False, "error": "更新正在进行中"}
+        self._busy = True
+        try:
+            exe = _download_installer(_split_urls(urls), version, sha256, int(size or 0))
+        except Exception as exc:
+            self._busy = False
+            self._error = str(exc)
+            logger.exception("更新包下载失败")
+            return {"ok": False, "error": str(exc)}
+
+        # 下载完成 → 停后端 (让 lifespan 收尾、释放数据目录锁), 再起安装器。
+        # 安装器随后会调用自己的 PrepareToInstall 兜底结束残留进程。
+        logger.info("更新包下载完成, 停止后端并启动安装器")
+        try:
+            _stop_backend(_server_thread_ref[0], hard_exit=False)
+        except Exception:
+            logger.exception("停止后端失败, 继续启动安装器")
+
+        try:
+            _launch_installer(exe)
+        except Exception as exc:
+            self._busy = False
+            logger.exception("启动安装器失败")
+            return {"ok": False, "error": f"无法启动安装程序: {exc}"}
+
+        # 安装器已脱离本进程, 现在必须真的退出 (否则文件被占, 安装失败)。
+        # 给前端一点时间收到 {ok: True} 再退出 —— 前端点完就显示「正在重启」。
+        threading.Timer(1.0, _force_exit).start()
+        return {"ok": True, "error": ""}
+
+    def last_error(self) -> str:
+        return self._error
+
+
+def _force_exit() -> None:
+    """更新流程专用: 跳过所有收尾, 直接结束进程。"""
+    logger.info("安装器已启动, 进程退出")
+    with contextlib.suppress(Exception):
+        logging.shutdown()
+    os._exit(0)
+
+
+# 主线程持有的后端线程, 供 _UpdateBridge 在更新时停后端 (类在 main 之前定义)
+_server_thread_ref: list[threading.Thread | None] = [None]
+
+
+def _open_window(url: str, server_thread: threading.Thread | None = None) -> None:
     """主线程: 用 pywebview 打开桌面窗口。"""
     import webview  # type: ignore[import-not-found]
 
     from app.config import settings
 
+    _server_thread_ref[0] = server_thread
     # 默认隐私模式会在退出后丢弃 localStorage；用户目录中的固定 profile 才能跨重启保留。
     storage_path = settings.data_dir / "webview"
     storage_path.mkdir(parents=True, exist_ok=True)
     # pywebview 5.0 起默认取消所有文件下载 (Edge WebView2 / WKWebView 一致):
     # 配置备份导出、回测 CSV 等 <a download> 直链会点击无反应, 必须在 start() 前显式开启。
     webview.settings["ALLOW_DOWNLOADS"] = True
+    # 桥始终注入 (can_auto_install 在桥上回答平台能力), 前端据此决定显示
+    # 「立即更新」还是普通下载链接 —— 迁移到别的平台不必改前端。
     window = webview.create_window(
         _APP_NAME,
         url,
+        js_api=_UpdateBridge(),
         width=1440,
         height=900,
         min_size=(1024, 700),
@@ -446,14 +714,21 @@ def main() -> int:
                         "".join(traceback.format_stack(frame)),
                     )
             _open_static_window(_failed_html(reason))
+            # 超时但线程还活着时, 后端仍在跑 (lifespan 可能卡在某一步),
+            # 同样要停下来, 否则用户关掉失败页后进程照样赖在后台。
+            _stop_backend(server_thread)
             return 1
 
         url = f"http://127.0.0.1:{port}"
         logger.info("打开桌面窗口: %s", url)
-        _open_window(url)
+        _open_window(url, server_thread)
 
-        # 窗口关闭后, 进程退出 (daemon 线程会被回收)
-        logger.info("窗口已关闭, 桌面版退出")
+        # 窗口关闭 → 后端优雅收尾后进程退出。不能只靠 daemon 线程被回收:
+        # 线程池 worker 与 spawn 子进程在解释器收尾时被 join, 长任务在跑时
+        # 进程会一直挂在任务管理器里 (用户以为没退出)。
+        logger.info("窗口已关闭, 停止后端")
+        _stop_backend(server_thread)
+        logger.info("桌面版退出")
         return 0
     except KeyboardInterrupt:
         return 0
