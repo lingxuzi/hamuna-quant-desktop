@@ -23,7 +23,7 @@ on:
       version:
         description: '版本号 (如 v0.1.33, 用作 Release tag 和标题; 必须与 frontend_v2/package.json 的 version 一致, 否则流水线直接失败)'
         required: true
-        default: 'v0.3.33'
+        default: 'v0.3.34'
       platforms:
         description: '要构建的平台 (逗号分隔: windows,macos,linux)'
         required: true
@@ -308,6 +308,18 @@ jobs:
             --clobber || true
           cd ..
           RELEASE_JSON=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")
+          # 更新日志写进 latest.json: 客户端在应用内直接显示, 不跳 GitHub
+          # (国内访问不了, notes_url 只作兜底)。取上一个 Release 到本 tag 的
+          # commit 标题; 首个版本没有上一个发布 → 空数组。
+          PREV_TAG=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=20" \
+            --jq "[.[] | select(.tag_name != \"$TAG\")][0].tag_name // empty")
+          if [ -n "$PREV_TAG" ]; then
+            NOTES_JSON=$(gh api "repos/$GITHUB_REPOSITORY/compare/$PREV_TAG...$TAG" --jq \
+              '[.commits[] | .commit.message | split("\n")[0]] | .[-30:]')
+          else
+            NOTES_JSON='[]'
+          fi
+          export NOTES_JSON
           TAG="$TAG" REPO="$GITHUB_REPOSITORY" RELEASE_JSON="$RELEASE_JSON" python3 - <<'EOF'
           import hashlib, json, os, sys
           from pathlib import Path
@@ -354,11 +366,16 @@ jobs:
               for ch in channels.values():
                   ch["url"] = f"{base}/{ch['name']}"
 
+          # 更新内容直接内嵌, 客户端在应用内显示 —— 不引导用户去 GitHub
+          # (国内访问不了)。notes 是 commit 标题列表, notes_url 仅作兜底跳转。
+          notes = json.loads(os.environ.get("NOTES_JSON") or "[]")
+
           manifest = {
               "version": version,
               "tag": tag,
               "released_at": rel.get("published_at") or rel.get("created_at"),
               "prerelease": bool(rel.get("prerelease")),
+              "notes": notes,
               "notes_url": f"https://github.com/{repo}/releases/tag/{tag}",
               "channels": channels,
           }

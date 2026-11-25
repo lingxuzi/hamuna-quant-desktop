@@ -11,6 +11,7 @@ import { AiReportBubble } from '@/components/financials/AiReportBubble'
 import { DailyDataHealthNotice } from '@/components/data/DailyDataHealthNotice'
 import { StockAnalysisHost } from '@/components/stock-analysis/StockAnalysisHost'
 import { StockPreviewHost } from '@/components/StockPreviewHost'
+import { UpdateDialog } from '@/components/UpdateDialog'
 import { StockAnalysisBubble } from '@/components/stock-analysis/StockAnalysisBubble'
 import { MarketAwareHost } from '@/components/screener/MarketAwareHost'
 import {
@@ -20,7 +21,7 @@ import {
   useQuoteStatus,
   useVersion,
 } from '@/lib/useSharedQueries'
-import { useUpdateCheck, RELEASES_URL } from '@/lib/updateCheck'
+import { useUpdateCheck } from '@/lib/updateCheck'
 import {
   useToggleRealtimeQuotes,
 } from '@/lib/useSharedMutations'
@@ -389,6 +390,8 @@ export function Layout() {
   // 更新检查 (单例 store): 启动静默查一次 GitHub Releases, 供左下角版本号徽标
   const update = useUpdateCheck()
   const hasUpdate = update.status === 'found'
+  // 更新弹窗: 版本徽标点击打开 (应用内展示更新内容 + 直链下载)
+  const [updateOpen, setUpdateOpen] = useState(false)
   const { data: prefs } = usePreferences()
   // 批量端点单请求上限 = 前端分块大小 (与后端校验同源, 见 lib/klineBatchLimits)。
   // 在渲染期写入而非 effect: 分块助手在子组件 queryFn 内调用, 而 queryFn 早于
@@ -986,32 +989,22 @@ export function Layout() {
             />
             <span>沪深京<b>{universeCount != null ? universeCount.toLocaleString('zh-CN') : '—'}</b></span>
             {/* 版本行: 有新版本时把版本号换成「→ 新版本号」并挂下载图标。
-                只放图标不写版本号, 用户看不出「新版本是哪个」, 还得点进去猜。 */}
+                只放图标不写版本号, 用户看不出「新版本是哪个」, 还得点进去猜。
+                点击开应用内弹窗看更新内容并直接下载 —— 不跳 GitHub (国内访问不了)。 */}
             <span>
               版本
-              {hasUpdate ? (() => {
-                // 清单没给 notes_url 且未配置下载页时只提示不可点, 避免 href="" 空跳转
-                const href = update.info?.url || RELEASES_URL
-                const latest = update.info?.latest ?? ''
-                const cls = 'inline-flex items-center gap-1 text-amber-400 animate-breath'
-                const title = href
-                  ? `发现新版本 ${latest}，点击前往下载`
-                  : `发现新版本 ${latest}`
-                const inner = (
-                  <>
-                    {latest || '新版本'}
-                    <Download aria-hidden="true" className="h-[11px] w-[11px]" />
-                  </>
-                )
-                return href ? (
-                  <a href={href} target="_blank" rel="noreferrer" className={cls}
-                     title={title} aria-label={`前往下载新版本 ${latest}`}>
-                    {inner}
-                  </a>
-                ) : (
-                  <b className={cls} title={title} aria-label={`有新版本 ${latest}`}>{inner}</b>
-                )
-              })() : (
+              {hasUpdate ? (
+                <button
+                  type="button"
+                  onClick={() => setUpdateOpen(true)}
+                  className="inline-flex items-center gap-1 text-amber-400 animate-breath"
+                  title={`发现新版本 ${update.info?.latest ?? ''}，点击查看更新内容`}
+                  aria-label={`查看新版本 ${update.info?.latest ?? ''}`}
+                >
+                  {update.info?.latest || '新版本'}
+                  <Download aria-hidden="true" className="h-[11px] w-[11px]" />
+                </button>
+              ) : (
                 <b>{version || '—'}</b>
               )}
             </span>
@@ -1153,6 +1146,14 @@ export function Layout() {
       <StockAnalysisBubble />
       <MarketAwareHost />
       <StockPreviewHost />
+      {/* 更新弹窗: 应用内显示更新内容并直链下载 (不跳 GitHub) */}
+      {updateOpen && update.info && (
+        <UpdateDialog
+          info={update.info}
+          current={version ?? ''}
+          onClose={() => setUpdateOpen(false)}
+        />
+      )}
       {/* 入口闸门: 本地日K有未完成的修补/重算时, 阻塞到修完为止 */}
       <BootGate />
 

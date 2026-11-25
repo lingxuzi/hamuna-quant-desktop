@@ -33,6 +33,23 @@ function mockFetchManifest(version: string) {
   }))
 }
 
+/** 模拟新版清单: 带内嵌更新内容与各平台安装包直链 */
+function mockFetchFullManifest(version: string) {
+  return vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      version,
+      tag: `v${version}`,
+      notes: ['修复登录偶发失败', '  ', '导出更快'],
+      notes_url: 'https://example.com/notes',
+      channels: {
+        windows: { name: `HQuant-Setup-x64-${version}.exe`, url: `https://r2.example.com/HQuant-Setup-x64-${version}.exe` },
+        'macos-arm64': { name: `HQuant-macos-arm64-${version}.dmg`, url: `https://r2.example.com/mac.dmg` },
+      },
+    }),
+  }))
+}
+
 beforeEach(() => {
   localStorage.clear()
 })
@@ -144,6 +161,40 @@ describe('checkForUpdate', () => {
     expect(getUpdateState().status).toBe('found')
     expect(getUpdateState().info?.latest).toBe('1.0.0')
     expect(getUpdateState().info?.url).toBe('https://example.com/notes')
+  })
+
+  it('清单带 notes 与 channels 时解析出更新内容与安装包直链', async () => {
+    vi.stubGlobal('fetch', mockFetchFullManifest('0.4.0'))
+
+    await checkForUpdate('0.3.33')
+
+    const info = getUpdateState().info
+    expect(getUpdateState().status).toBe('found')
+    // notes 过滤空白项, 保留顺序
+    expect(info?.notes).toEqual(['修复登录偶发失败', '导出更快'])
+    // 直链指向清单里本平台的安装包 (jsdom 的 navigator.platform 为空 → 退化到第一条)
+    expect(info?.downloadUrl).toContain('HQuant-')
+    // 缓存也要带上, 否则 24h 内重启会退化成只有版本号
+    expect(JSON.parse(readCacheRaw() ?? '{}')).toMatchObject({
+      latest: '0.4.0',
+      notes: ['修复登录偶发失败', '导出更快'],
+    })
+  })
+
+  it('老缓存没有 downloadUrl/notes 也照常命中 (不丢缓存)', async () => {
+    seedCache({
+      current: '0.3.2', latest: '0.3.3', url: 'u',
+      found: true, checkedAt: Date.now() - 1000,
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await checkForUpdate('0.3.2')
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getUpdateState().status).toBe('found')
+    expect(getUpdateState().info?.notes).toEqual([])
+    expect(getUpdateState().info?.downloadUrl).toBe('')
   })
 
   it('版本未知时空操作 (不请求不落缓存)', async () => {
